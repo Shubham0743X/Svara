@@ -266,17 +266,18 @@ app.get('/api/album', async (req, res) => {
   try {
     const youtube = await getYt();
     const a = await youtube.music.getAlbum(id);
-    const thumb = bestUrl(a.thumbnail?.contents);
-    const artistRaw = a.artist;
-    const artist = Array.isArray(artistRaw)
-      ? artistRaw.map(x => txt(x.name || x.text || x)).join(', ')
-      : txt(artistRaw);
-    const tracks = (a.tracks || [])
+    // youtubei.js 18 has no `tracks`/`title`/`thumbnail` on Album — it exposes
+    // header + contents + sections. header is MusicResponsiveHeader (current pages)
+    // or MusicDetailHeader (older pages, which uses `thumbnails` and `author`).
+    const h = a.header || {};
+    const thumb = bestUrl(h.thumbnail?.contents || h.thumbnails) || '';
+    const artist = txt(h.strapline_text_one) || txt(h.author?.name) || '';
+    const tracks = collectItems(a.contents || a.tracks || [], [])
       .map(t => mapTrack(t, thumb, false))
-      .filter(Boolean)
+      .filter(t => t && t.id)
       .map(t => ({ ...t, thumb: t.thumb || thumb, artist: t.artist || artist }));
     if (!tracks.length) return res.json({ tracks: [], error: 'Album has no playable tracks' });
-    res.json({ id: a.id, title: txt(a.title), artist, thumb, tracks });
+    res.json({ id: a.id || id, title: txt(h.title), artist, thumb, tracks });
   } catch (e) {
     console.error('album error:', e.message);
     res.json({ tracks: [], error: String(e.message || e) });
