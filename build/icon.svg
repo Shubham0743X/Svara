@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="512" height="512" viewBox="0 0 512 512">
+
+  <defs>
+    <!-- the mark: your sampled mint → spring green, top to bottom -->
+    <linearGradient id="mkGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#20E7AC"/>
+      <stop offset="1" stop-color="#1DE582"/>
+    </linearGradient>
+
+    <!-- the rim: bright at the top edge, gone by ~60% down -->
+    <linearGradient id="rimGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="512">
+      <stop offset="0"    stop-color="#2BE7A6" stop-opacity=".95"/>
+      <stop offset=".28"  stop-color="#25E39B" stop-opacity=".45"/>
+      <stop offset=".60"  stop-color="#20E7AC" stop-opacity=".08"/>
+      <stop offset="1"    stop-color="#20E7AC" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- light spilling in from the top -->
+    <linearGradient id="washGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="300">
+      <stop offset="0" stop-color="#16E79C" stop-opacity=".20"/>
+      <stop offset="1" stop-color="#16E79C" stop-opacity="0"/>
+    </linearGradient>
+
+    <clipPath id="tile"><rect x="0" y="0" width="512" height="512" rx="116"/></clipPath>
+
+    <!-- your mark's five blades, lifted straight out of the trace -->
+    <path id="mk" fill-rule="evenodd" d="M0 2495 m2666 2140 c30 -18 49 -40 68 -77 l26 -52 0 -470 c0 -612 -16 -931 -66 -1366 -39 -336 -115 -803 -129 -788 -4 4 -60 312 -84 463 -38 239 -71 563 -91 895 -16 264 -25 1217 -11 1266 15 54 49 103 90 131 49 33 139 32 197 -2z m-595 -518 c70 -46 69 -40 69 -544 0 -249 -3 -453 -7 -453 -3 0 -28 14 -54 31 -107 68 -202 205 -228 327 -15 72 -15 502 1 554 6 22 28 53 50 73 32 30 45 35 87 35 33 0 58 -7 82 -23z m1145 4 c17 -11 41 -39 53 -63 20 -42 21 -59 21 -299 0 -206 -3 -266 -16 -310 -36 -121 -110 -224 -206 -288 -33 -23 -64 -41 -69 -41 -5 0 -9 194 -9 448 0 419 2 450 20 489 11 25 33 51 52 63 43 26 113 26 154 1z m-1892 -624 c62 -121 179 -233 353 -338 164 -98 238 -152 314 -229 121 -122 188 -254 224 -443 16 -82 21 -363 8 -466 l-6 -53 -27 73 c-54 149 -171 305 -313 417 -34 27 -134 95 -221 151 -88 56 -186 125 -218 153 -103 89 -191 234 -217 356 -14 65 -14 202 -1 260 10 43 65 172 73 172 3 0 17 -24 31 -53z m2540 5 c44 -87 59 -165 53 -287 -5 -130 -30 -207 -102 -316 -76 -114 -137 -162 -447 -359 -121 -77 -272 -222 -337 -323 -25 -38 -59 -105 -77 -150 -27 -65 -35 -77 -41 -62 -4 11 -8 119 -8 240 1 174 4 234 18 289 27 107 65 194 123 282 83 126 182 210 402 340 167 98 297 222 359 341 15 29 29 53 30 53 2 0 14 -22 27 -48z"/>
+  </defs>
+
+  <!-- the tile -->
+  <rect x="0" y="0" width="512" height="512" rx="116" fill="#05150e"/>
+
+  <g clip-path="url(#tile)">
+    <rect x="0" y="0" width="512" height="300" fill="url(#washGrad)"/>
+
+    <!-- the glow: two stepped rim strokes (no filters, so any rasteriser copes) -->
+    <rect x="6" y="6" width="500" height="500" rx="112" fill="none"
+          stroke="url(#rimGrad)" stroke-width="16" opacity=".30"/>
+    <rect x="6" y="6" width="500" height="500" rx="112" fill="none"
+          stroke="url(#rimGrad)" stroke-width="5" opacity=".85"/>
+
+    <!-- the mark: two soft halos, then the real shape -->
+    <g transform="translate(-78.75,24.28) scale(1.339) translate(0,499) scale(0.1,-0.1)">
+      <use href="#mk" xlink:href="#mk" fill="none" stroke="#2BE7A6" stroke-width="90" stroke-opacity=".14"/>
+      <use href="#mk" xlink:href="#mk" fill="none" stroke="#2BE7A6" stroke-width="36" stroke-opacity=".18"/>
+      <use href="#mk" xlink:href="#mk" fill="url(#mkGrad)"/>
+    </g>
+  </g>
+</svg>

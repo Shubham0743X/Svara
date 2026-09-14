@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.exe
+*.backup.*
+*.working-2.*
+index.backup*.html
+server.backup.js

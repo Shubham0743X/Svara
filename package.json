@@ -1,0 +1,33 @@
+{
+  "name": "svara",
+  "version": "1.1.0",
+  "description": "Svara — YouTube Music player for PC, no login",
+  "main": "electron/main.js",
+  "author": "Shubham0743X",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "youtubei.js": "latest"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.shubham0743x.svara",
+    "productName": "Svara",
+    "extraResources": [
+      { "from": "yt-dlp.exe", "to": "yt-dlp.exe" }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "build/icon.svg"
+    }
+  }
+}
