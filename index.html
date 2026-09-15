@@ -2230,11 +2230,15 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
 </script>
 
 <style id="v3wcss">
-/* ===== Svara wordmark (sidebar) ===== */
-:root{--wmw:150px}                    /* ← the only size knob (try 130–160) */
-#sb .logo{display:none!important}     /* retire the old pink "Svara" text */
-#sbWord{display:block;width:var(--wmw);margin:2px 0 8px;color:#f4f4f7;cursor:pointer}
-#sbWord svg{display:block;width:100%;height:auto;aspect-ratio:370/69}
+/* ===== Svara sidebar lockup: SVG wordmark + green glyph ===== */
+:root{--wmw:150px}                    /* wordmark width knob */
+#sb .logo{display:none!important}     /* the old pink "Svara" text stays retired */
+#sbWord{display:flex;align-items:center;gap:9px;margin:2px 0 8px;color:#f4f4f7;cursor:pointer}
+#sbWord svg{display:block;flex:0 0 auto;width:var(--wmw);height:auto;aspect-ratio:370/69}
+#sbWord::after{content:"";flex:0 0 auto;width:26px;height:26px;
+  background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='83 68 363 372'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%2320E7AC'/><stop offset='1' stop-color='%231DE582'/></linearGradient></defs><g transform='translate(-78.75,24.28) scale(1.339) translate(0,499) scale(0.1,-0.1)'><path fill='url(%23g)' fill-rule='evenodd' d='M0 2495 m2666 2140 c30 -18 49 -40 68 -77 l26 -52 0 -470 c0 -612 -16 -931 -66 -1366 -39 -336 -115 -803 -129 -788 -4 4 -60 312 -84 463 -38 239 -71 563 -91 895 -16 264 -25 1217 -11 1266 15 54 49 103 90 131 49 33 139 32 197 -2z m-595 -518 c70 -46 69 -40 69 -544 0 -249 -3 -453 -7 -453 -3 0 -28 14 -54 31 -107 68 -202 205 -228 327 -15 72 -15 502 1 554 6 22 28 53 50 73 32 30 45 35 87 35 33 0 58 -7 82 -23z m1145 4 c17 -11 41 -39 53 -63 20 -42 21 -59 21 -299 0 -206 -3 -266 -16 -310 -36 -121 -110 -224 -206 -288 -33 -23 -64 -41 -69 -41 -5 0 -9 194 -9 448 0 419 2 450 20 489 11 25 33 51 52 63 43 26 113 26 154 1z m-1892 -624 c62 -121 179 -233 353 -338 164 -98 238 -152 314 -229 121 -122 188 -254 224 -443 16 -82 21 -363 8 -466 l-6 -53 -27 73 c-54 149 -171 305 -313 417 -34 27 -134 95 -221 151 -88 56 -186 125 -218 153 -103 89 -191 234 -217 356 -14 65 -14 202 -1 260 10 43 65 172 73 172 3 0 17 -24 31 -53z m2540 5 c44 -87 59 -165 53 -287 -5 -130 -30 -207 -102 -316 -76 -114 -137 -162 -447 -359 -121 -77 -272 -222 -337 -323 -25 -38 -59 -105 -77 -150 -27 -65 -35 -77 -41 -62 -4 11 -8 119 -8 240 1 174 4 234 18 289 27 107 65 194 123 282 83 126 182 210 402 340 167 98 297 222 359 341 15 29 29 53 30 53 2 0 14 -22 27 -48z'/></g></svg>");
+  background-size:contain;background-position:center;background-repeat:no-repeat;
+  filter:drop-shadow(0 -1.5px 2.5px rgba(43,231,166,.55))}
 #sbWord:hover{opacity:.85}
 </style>
 
