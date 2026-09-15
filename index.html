@@ -1324,7 +1324,7 @@ insertNext=function(it){
   var qi=queue.findIndex(function(x){return x.id===it.id});
   if(qi<0){queue.push(it);register([it]);qi=queue.length-1}
   seq=seq.filter(function(s){return s!==qi});
-  if(cur<0||!curIt){seq.unshift(qi);cur=0}
+  if(cur<0||!curIt){seq.unshift(qi);cur=0;loadAt(0,true)}
   else{
     var ci=queue.findIndex(function(x){return x.id===curIt.id});
     var at=seq.indexOf(ci);
