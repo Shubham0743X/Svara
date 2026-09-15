@@ -3,6 +3,7 @@
   "version": "1.1.0",
   "description": "Svara — YouTube Music player for PC, no login",
   "main": "electron/main.js",
+  "icon": "build/icon.png",
   "author": "Shubham0743X",
   "license": "MIT",
   "scripts": {
@@ -27,7 +28,7 @@
     ],
     "win": {
       "target": "portable",
-      "icon": "build/icon.svg"
+      "icon": "build/icon.png"
     }
   }
 }

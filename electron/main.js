@@ -31,6 +31,7 @@ function createWindow(){
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#050507',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     autoHideMenuBar: true,
     show: false,
     title: 'Svara'
