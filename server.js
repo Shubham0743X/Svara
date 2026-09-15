@@ -1,5 +1,5 @@
 const express = require('express');
-const { Innertube } = require('youtubei.js');
+const { Innertube, Parser, YTNodes } = require('youtubei.js');
 const { Readable } = require('stream');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -53,6 +53,23 @@ function extractArtist(item){
   if (parts.length > 1) return parts.slice(1).join('•').trim();
   return '';
 }
+// artist objects WITH channel ids, alongside the flat `artist` string (never replaces it).
+// youtubei.js 18 shapes: song rows -> `artists[]`, video rows -> `authors[]`,
+// album/playlist rows -> a single `author`. Each entry: { name, channel_id }.
+function artistList(item){
+  try {
+    const src = Array.isArray(item.artists) && item.artists.length ? item.artists
+      : Array.isArray(item.authors) && item.authors.length ? item.authors
+      : item.author ? [item.author] : [];
+    return src.map(a => {
+      if (typeof a === 'string') return { name: a, id: null };
+      return {
+        name: txt(a && (a.name != null ? a.name : a.text)) || '',
+        id: (a && (a.channel_id || a.browse_id || a.id)) || null
+      };
+    }).filter(a => a.name || a.id);
+  } catch (e) { return []; }
+}
 function mapTrack(i, fallbackThumb, isAlbum){
   try {
     const th = i.thumbnail?.contents || [];
@@ -61,6 +78,7 @@ function mapTrack(i, fallbackThumb, isAlbum){
       kind: isAlbum ? 'album' : 'track',
       title: txt(i.title),
       artist: extractArtist(i),
+      artists: artistList(i),
       sub: txt(i.subtitle) || txt(i.album) || '',
       thumb: bestUrl(th) || fallbackThumb || '',
       duration: i.duration?.text ? String(i.duration.text) : ''
@@ -229,6 +247,7 @@ app.get('/api/radio', async (req, res) => {
             kind: 'track',
             title: txt(it.title),
             artist: byline(it),
+            artists: artistList(it),
             sub: '',
             thumb: art || ytStill(vid),
             duration: txt(it.length_text) || txt(it.duration?.text) || ''
@@ -281,6 +300,105 @@ app.get('/api/album', async (req, res) => {
   } catch (e) {
     console.error('album error:', e.message);
     res.json({ tracks: [], error: String(e.message || e) });
+  }
+});
+
+/* ================= artist (Wave 2 §9.1 — server-side only) ================= */
+// Two-row carousel entry (album/EP) → track/album-shaped object
+function mapCarouselItem(i){
+  try {
+    return {
+      id: i.id,
+      kind: i.item_type === 'album' ? 'album' : 'track',
+      title: txt(i.title),
+      artist: (i.artists || []).map(a => txt(a && a.name)).filter(Boolean).join(', '),
+      artists: artistList(i),
+      sub: '',
+      thumb: bestUrl(Array.isArray(i.thumbnail) ? i.thumbnail : (i.thumbnail && i.thumbnail.contents) || i.thumbnails || []),
+      year: i.year || ''
+    };
+  } catch (e) { return null; }
+}
+// related-artist carousel entry → { name, id, audience, thumb }
+function mapRelatedArtist(i){
+  try {
+    return {
+      name: txt(i.title),
+      id: i.id || null,
+      audience: txt(i.subtitle),
+      thumb: bestUrl(Array.isArray(i.thumbnail) ? i.thumbnail : (i.thumbnail && i.thumbnail.contents) || i.thumbnails || [])
+    };
+  } catch (e) { return null; }
+}
+app.get('/api/artist', async (req, res) => {
+  const wantId = String(req.query.id || '').trim();
+  const wantName = String(req.query.name || '').trim();
+  if (!wantId && !wantName) return res.json({ id: null, error: 'missing id or name' });
+  try {
+    const youtube = await getYt();
+
+    // name → browseId: ONE artist search, exact-name first. Failure ⇒ { id: null }.
+    let id = wantId;
+    if (!id) {
+      const s = await youtube.music.search(wantName, { type: 'artist' });
+      const rows = collectItems(s.contents || [], []).filter(r => r && r.id && String(r.id).startsWith('UC'));
+      const nm = r => txt(r.name) || txt(r.title);
+      const hit = rows.find(r => nm(r).toLowerCase() === wantName.toLowerCase()) || rows[0];
+      id = (hit && hit.id) || '';
+      if (!id) return res.json({ id: null });
+    }
+    if (!/^UC/.test(id) && !id.startsWith('FEmusic_library_privately_owned_artist')) {
+      return res.json({ id: null, error: 'invalid artist id' });
+    }
+
+    // ONE browse: parsed for structure, raw for the fields 18.0.0's parser drops
+    const raw = await youtube.actions.execute('/browse', { browseId: id, client: 'YTMUSIC' });
+    const data = raw && raw.data;
+    if (!data || data.header == null) return res.json({ id: null, error: 'artist not found' });
+    const page = Parser.parseResponse(data);
+    const header = (page.header && page.header.item && page.header.item()) || null;
+    const hdrRaw = data.header.musicImmersiveHeaderRenderer
+      || data.header.musicVisualHeaderRenderer
+      || data.header.musicHeaderRenderer || {};
+    const ht = header && header.thumbnail;
+    const thumbSrc = Array.isArray(ht) ? ht : (ht && ht.contents) || (header && header.thumbnails) || [];
+    const memo = page.contents_memo;
+
+    const shelves = memo && YTNodes.MusicShelf ? memo.getType(YTNodes.MusicShelf) : [];
+    const carousels = memo && YTNodes.MusicCarouselShelf ? memo.getType(YTNodes.MusicCarouselShelf) : [];
+
+    const topShelf = shelves.find(s => s.title && s.title.text === 'Top songs') || shelves[0];
+    const topSongs = topShelf ? (topShelf.contents || []).map(i => mapTrack(i, '', false)).filter(t => t && t.id) : [];
+
+    // classify carousels by item type (language-independent): album → Albums & singles, artist → related
+    const albums = [], related = [], seenAlbum = new Set();
+    for (const c of carousels) {
+      const items = c.contents || [];
+      const t0 = items[0] && items[0].item_type;
+      if (t0 === 'album') {
+        for (const it of items) {
+          const m = mapCarouselItem(it);
+          if (m && m.id && !seenAlbum.has(m.id)) { seenAlbum.add(m.id); albums.push(m); }
+        }
+      } else if (t0 === 'artist') {
+        for (const it of items) { const r = mapRelatedArtist(it); if (r && r.id) related.push(r); }
+      }
+    }
+
+    res.json({
+      id,
+      name: txt(header && header.title) || wantName,
+      description: txt(header && header.description),
+      monthlyAudience: txt(hdrRaw.monthlyListenerCount),
+      banner: bestUrl(thumbSrc),
+      thumb: bestUrl((header && header.foreground_thumbnail) || thumbSrc),
+      topSongs,
+      albums,
+      related
+    });
+  } catch (e) {
+    console.error('artist error:', e.message);
+    res.json({ id: null, error: String(e.message || e) });
   }
 });
 
