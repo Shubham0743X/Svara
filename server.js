@@ -658,7 +658,7 @@ app.get('/api/download', async (req, res) => {
     const ext = path.extname(file);
     const nice = safeName(wantTitle || path.basename(file, ext), 'track') + ext;
     const cleanup = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} };
-    res.download(file, nice, (err) => { cleanup(); if (err && !res.headersSent) res.status(500).json({ error: 'download failed' }); });
+    res.download(file, nice, (err) => { cleanup(); if (err && !res.headersSent) res.status(500).json({ error: String(err.message || err) }); });
   } catch (e) {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e2) {}
     console.error('download error:', e.message);
