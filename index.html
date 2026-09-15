@@ -1695,10 +1695,10 @@ if(!$('#homeSec').hidden)renderHome();
 /* bug #6 — Up Next playback-order rows */
 #pvQueue .row .rsub .np{color:var(--acc);font-weight:700}
 /* bug #8 — bigger dice button */
-#diceBtn{padding:10px!important;border-radius:13px!important;
+#diceBtn{width:43px!important;height:43px!important;box-sizing:border-box;padding:0!important;display:inline-flex;align-items:center;justify-content:center;border-radius:13px!important;
   background:linear-gradient(135deg,rgba(var(--amb),.20),rgba(var(--amb2),.18))!important;
   border:1px solid rgba(var(--amb),.35);transition:.15s}
-#diceBtn .ic{width:21px!important;height:21px!important;color:var(--acc)}
+#diceBtn .ic{width:27px!important;height:27px!important;color:var(--acc)}
 #diceBtn:hover{background:linear-gradient(135deg,rgba(var(--amb),.34),rgba(var(--amb2),.30))!important;transform:translateY(-1px)}
 #diceBtn.busy{opacity:.55;pointer-events:none}
 /* bug #5 + #9 extras */
