@@ -402,6 +402,86 @@ app.get('/api/artist', async (req, res) => {
   }
 });
 
+/* ================= artist songs (Wave 4A — full catalogue for "Play all" / "Mix") ================= */
+// GET /api/artist/songs?id=<UC…>  →  { id, name, total, songs: [Track] }
+// Verified live on youtubei.js 18.0.0 (`Artist.getAllSongs()` → MusicPlaylistShelf):
+//   • 100 MusicResponsiveListItem rows arrive in ONE request, + a ContinuationItem.
+//   • every row carries a playable video id (`playlistItemData.videoId` → `i.id`) and `duration.text`.
+//   • channel ids are on `artists[].channel_id` (song rows) / `authors[]` / `author`.
+//   • NOT parsed on these rows: album name and play count. The album is `flex_columns[3]`,
+//     the play count `flex_columns[2]` (§6 decision 7: play counts dropped).
+//   • ONE continuation request returns the remaining ~50 rows, then the list ends
+//     (observed 148–150 total per artist, 83 for a small catalogue). Capped at 2 extra requests.
+function flexText(item, i){
+  try { return txt((item.flex_columns || [])[i] && (item.flex_columns || [])[i].title); }
+  catch (e) { return ''; }
+}
+// the artist line always sits in flex_columns[1]; `artists` is the id-bearing source but YouTube
+// occasionally serves a row whose parsed `artists` is empty — then this is the only name text left.
+function flexArtistLine(item){
+  try {
+    const runs = ((((item.flex_columns || [])[1] || {}).title) || {}).runs || [];
+    return runs.map(r => txt(r.text)).join('').replace(/\s+/g, ' ').trim();
+  } catch (e) { return ''; }
+}
+// mapTrack's frozen Track shape, with the album name folded into `sub` (the under-title line).
+function mapArtistSongRow(i, artistName){
+  const t = mapTrack(i, '', false);
+  if (!t) return null;
+  if (!t.artist) t.artist = flexArtistLine(i) || artistName || '';
+  // flex_columns[3] is the album on `song` rows; on `video` rows it is a title duplicate, so skip those.
+  if (!t.sub && i.item_type === 'song') t.sub = flexText(i, 3);
+  return t;
+}
+async function artistSongRows(youtube, artist){
+  const shelf = await artist.getAllSongs();                       // throws when there is no Top songs shelf
+  const nodes = (shelf && shelf.contents) || [];
+  const seen = new Set();
+  const out = [];
+  const push = list => {
+    for (const it of list) if (it && it.id && !seen.has(it.id)) { seen.add(it.id); out.push(it); }
+  };
+  push(nodes.filter(n => n && n.type === 'MusicResponsiveListItem'));
+  let cont = nodes.find(n => n && n.type === 'ContinuationItem') || null;
+  let pages = 1;
+  while (cont && pages < 3 && out.length < 300) {
+    const resp = await cont.endpoint.call(youtube.actions, { client: 'YTMUSIC', parse: true });
+    const memo = resp && (resp.on_response_received_actions_memo || resp.contents_memo);
+    if (!memo || typeof memo.getType !== 'function') break;
+    const items = YTNodes.MusicResponsiveListItem ? memo.getType(YTNodes.MusicResponsiveListItem) : [];
+    if (!items.length) break;
+    push(items);
+    cont = YTNodes.ContinuationItem ? (memo.getType(YTNodes.ContinuationItem)[0] || null) : null;
+    pages++;
+  }
+  return out;
+}
+app.get('/api/artist/songs', async (req, res) => {
+  const id = String(req.query.id || '').trim();
+  const wantName = String(req.query.name || '').trim();
+  if (!id) return res.json({ id: null, name: wantName, total: 0, songs: [], error: 'missing id' });
+  try {
+    if (!/^UC/.test(id) && !id.startsWith('FEmusic_library_privately_owned_artist')) {
+      return res.json({ id: null, name: wantName, total: 0, songs: [], error: 'invalid artist id' });
+    }
+    const youtube = await getYt();
+    const artist = await youtube.music.getArtist(id);
+    const name = txt(artist && artist.header && artist.header.title) || wantName;
+    let rows = [];
+    try {
+      rows = await artistSongRows(youtube, artist);
+    } catch (e) {
+      // no Top songs shelf (very small artist) or the shelf endpoint failed — soft-fail, never 500
+      return res.json({ id, name, total: 0, songs: [], error: String(e.message || e) });
+    }
+    const songs = rows.map(i => mapArtistSongRow(i, name)).filter(t => t && t.id);
+    res.json({ id, name, total: songs.length, songs });
+  } catch (e) {
+    console.error('artist songs error:', e.message);
+    res.json({ id, name: wantName, total: 0, songs: [], error: String(e.message || e) });
+  }
+});
+
 /* ================= search suggestions ================= */
 app.get('/api/suggest', async (req, res) => {
   const q = String(req.query.q || '').trim();
