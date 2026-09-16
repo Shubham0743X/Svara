@@ -1717,23 +1717,22 @@ if(!$('#homeSec').hidden)renderHome();
 .art-back{margin:8px 2px 4px;font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 10px;display:inline-flex;align-items:center;gap:7px}
 .art-back:hover{border-color:var(--tx);color:var(--tx)}
 .art-back .ic{width:16px;height:16px}
-/* Wave 4B — full-bleed hero (no box, no stretched square). Every rule scoped to #artSec
-   so it cannot reach #pv, the mini player or Home. −24px === #scroll's inline padding (line 67). */
-#artSec .art-hero{position:relative;overflow:hidden;margin:10px -24px 18px;background:var(--panel)}
-#artSec .art-herobg{position:absolute;inset:-70px;background-position:center;background-size:cover;filter:blur(40px) saturate(1.2);transform:scale(1.2);opacity:.5}
-#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 34%;opacity:.92}
-#artSec .art-hero::after{content:'';position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(180deg,rgba(7,7,10,.42) 0%,rgba(7,7,10,.14) 28%,rgba(7,7,10,.66) 64%,var(--bg) 100%)}
-#artSec .art-head{position:relative;z-index:2;display:flex;flex-direction:column;gap:14px;padding:128px 26px 26px}
-#artSec .art-top{display:flex;align-items:flex-end;gap:20px;min-width:0}
-#artSec .art-av{width:126px;height:126px;flex-shrink:0;border-radius:50%;object-fit:cover;
-  background:linear-gradient(145deg,#232330,#101016);border:1px solid rgba(255,255,255,.12);box-shadow:0 16px 44px rgba(0,0,0,.55)}
-#artSec .art-tx{min-width:0}
-#artSec .art-name{font-size:40px;font-weight:800;letter-spacing:-1px;line-height:1.05;text-shadow:0 2px 18px rgba(0,0,0,.55)}
-#artSec .art-aud{font-size:13px;color:var(--dim);margin-top:8px;text-shadow:0 1px 10px rgba(0,0,0,.6)}
+/* Wave 4C — hero = the CLEAR, unblurred banner, full-bleed, no circular avatar.
+   Scoped to #artSec so it cannot reach #pv, the mini player or Home.
+   −24px === #scroll's inline padding (line 67); #scroll itself is untouched. */
+#artSec .art-hero{position:relative;overflow:hidden;margin:10px -24px 0;height:clamp(240px,34vh,430px);background:var(--panel)}
+#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 38%}
+#artSec .art-hero::after{content:'';position:absolute;inset:0;pointer-events:none;   /* soft BOTTOM fade only */
+  background:linear-gradient(180deg,rgba(7,7,10,0) 46%,rgba(7,7,10,.42) 74%,rgba(7,7,10,.82) 92%,var(--bg) 100%)}
+#artSec .art-hero.nopic{background:linear-gradient(160deg,#191922,#0a0a0f)}   /* banner failed: no empty box */
+#artSec .art-hero.nopic::after{display:none}
+#artSec .art-head{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:0 26px 16px}
+#artSec .art-name{font-size:clamp(26px,3.4vw,42px);font-weight:800;letter-spacing:-1px;line-height:1.05;text-shadow:0 2px 16px rgba(0,0,0,.7)}
+#artSec .art-aud{font-size:13px;color:#dcdce4;margin-top:7px;text-shadow:0 1px 10px rgba(0,0,0,.75)}
+#artSec .art-meta{margin-top:18px}
 #artSec .art-desc{font-size:13.5px;color:var(--dim);line-height:1.7;max-width:760px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 #artSec .art-desc.open{display:block;-webkit-line-clamp:unset;overflow:visible}
-#artSec .art-more{margin-top:8px;align-self:flex-start;font-size:11.5px;font-weight:700;letter-spacing:.6px;color:var(--dim);
+#artSec .art-more{display:block;width:max-content;margin-top:10px;font-size:11.5px;font-weight:700;letter-spacing:.6px;color:var(--dim);
   border:1px solid var(--line);border-radius:999px;padding:5px 15px;cursor:pointer;background:rgba(15,15,21,.7)}
 #artSec .art-more:hover{color:var(--tx);border-color:var(--tx)}
 #artSec .art-showall{display:block;width:max-content;margin:14px auto 0;font-size:12.5px;color:var(--dim);border:1px solid var(--line);
@@ -1744,7 +1743,7 @@ if(!$('#homeSec').hidden)renderHome();
 #artSec .artdur{width:54px;flex-shrink:0;text-align:right;font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 #artSec .artrow{padding-right:4px}
 @media(max-width:1000px){#artSec .artalb{display:none}}
-@media(max-width:660px){#artSec .art-name{font-size:29px}#artSec .art-av{width:92px;height:92px}#artSec .art-head{padding:104px 18px 20px}}
+@media(max-width:660px){#artSec .art-name{font-size:27px}#artSec .art-head{padding:0 18px 14px}#artSec .art-hero{height:clamp(200px,30vh,320px)}}
 /* mini-bar artist link: renders like #pvA, click opens the artist, not the player */
 #mSub .alink{color:var(--dim);cursor:pointer}
 #mSub .alink:hover{color:var(--tx);text-decoration:underline;text-underline-offset:2px}
@@ -1824,7 +1823,8 @@ renderQueue = function(){
       '<div class="rt"><img loading="lazy" src="'+esc(thumb(x))+'" onerror="this.style.display=\'none\'">'+
         '<div class="ov"><span class="ic">'+ic(isCur?'i-vol':'i-play')+'</span></div></div>'+
       '<div class="rm"><div class="rtitle">'+esc(x.title)+'</div>'+
-        '<div class="rsub">'+(isCur?'<span class="np">Now playing</span> · ':'')+esc(subOf(x))+'</div></div>'+
+        '<div class="rsub">'+(isCur?'<span class="np">Now playing</span> · ':'')+artistLinksHTML(x)+
+          (x.duration ? ' • '+esc(x.duration) : '')+'</div></div>'+
       '<div class="rr"><button class="dots" data-menu="'+esc(x.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
   }).join('');
   register(queue);
@@ -1890,16 +1890,20 @@ function subHTML(it){
   return (it && it.duration) ? a + ' • ' + esc(it.duration) : a;
 }
 /* --- artist hero artwork -------------------------------------------------
-   VERIFIED (Wave 4B): the artist header DOES carry a genuinely wide banner.
-   musicImmersiveHeaderRenderer.thumbnail lists e.g. 1500×625 @ 2.4:1, but the
-   shared artwork rule in /api/artist rewrites every size token to a 544-square,
-   so the payload arrives square and stretching it looked like a cropped face.
-   Ask the banner host for its real 1500×625 token instead. Square covers
-   (yt3…) are never stretched — they become the blurred backdrop instead. */
-function heroWide(a){
-  var u = (a && (a.banner || '')) || '';
-  if(!/^https:\/\/lh3\.googleusercontent\.com\//.test(u)) return '';
-  return u.replace(/=w\d+-h\d+[^"?]*$/, '=w1500-h625-p-l90-rj');
+   VERIFIED: the artist header DOES carry a genuinely wide banner. Both banner hosts
+   (lh3.googleusercontent.com and yt3.googleusercontent.com) serve ANY size token, so long
+   as the `-p-` flag is kept: 7/7 artists returned 200 + 2400×1000 for "=w2400-h1000-p-l90-rj"
+   (the banner's own aspect is exactly 2.4:1). /api/artist rewrites every size token to
+   "=w544-h544-l90-rj", which some artists answer with a PORTRAIT or square crop
+   (measured: 363×544, 544×544, 408×544) — that is the cropped-face square. So: ask for the
+   wide token; if the URL is not on a banner host, keep whatever the API gave (shown unblurred,
+   object-fit:cover) — never stretched into a box. */
+function heroArt(a){
+  var u = (a && (a.banner || a.thumb || '')) || '';
+  if(!u) return '';
+  if(/^https:\/\/(lh3|yt3)\.googleusercontent\.com\//.test(u))
+    return u.replace(/=w\d+-h\d+[^"?]*$/, '=w2400-h1000-p-l90-rj');
+  return u;
 }
 /* --- artist song rows: thumbnail | title | artist | album | duration ---
    One renderer for the 5-row preview AND the Show-all list. `data-artrow`
@@ -1932,6 +1936,18 @@ rowHTML = function(it){
     '<div class="rr">'+(favs[it.id] ? '<span class="likedH">'+ic('i-heart')+'</span>' : '')+
     '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
 };
+/* railCard lives in the base layer and is used by the Home rails ("Listen again",
+   "Albums for you", the trending rail) — and by railHTML(). Same markup, the artist
+   line under each cover becomes links. Same delegated handler as rows/search/pvA. */
+var _railCard = railCard;
+railCard = function(it, ctx){
+  var ph = thumb(it) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+  return '<div class="rail" data-rail="'+esc(ctx)+'" data-id="'+esc(it.id)+'" data-title="'+esc(it.title||'')+'">'+
+    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
+      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
+    '<div class="rname">'+esc(it.title)+'</div>'+
+    '<div class="rsub2">'+artistLinksHTML(it)+'</div></div>';
+};
 /* now-playing bar artist. Runs after the base textContent so it wins;
    the v3art wrapper still works because it wraps this wrapper. */
 var _setNowA = setNowUI;
@@ -1949,6 +1965,9 @@ setNowUI = function(it){
 /* --- the artist view: lives in #scroll, replaces #homeSec / #dynSec --- */
 var artPrev = null, artData = null;
 var artFull = [], artFullReq = null, artListOpen = false;   // artFull = full catalogue (§9.2)
+// Navigation generation. Artist look-ups are async (a name-only link needs a /api/artist?name=
+// round trip); if the user goes Back before it lands, the late response must NOT re-open the view.
+var artGen = 0;
 /* the artist's WHOLE catalogue (up to 150 rows) from /api/artist/songs.
    Prefetched when the page opens so a row click can start from that row. */
 function loadArtistSongs(){
@@ -1979,6 +1998,7 @@ function artSection(){
 function hideArtist(){
   var el = document.getElementById('artSec'); if(el) el.hidden = true;
   artPrev = null; artData = null; artFull = []; artFullReq = null; artListOpen = false;
+  artGen++;                                  // invalidates any artist fetch still in flight
 }
 function rememberView(){
   if(artPrev) return;                       // nested artist click keeps the original view
@@ -1993,6 +2013,7 @@ function rememberView(){
 }
 function restoreView(){
   var el = document.getElementById('artSec'); if(el) el.hidden = true;
+  artGen++;                                  // a pending look-up must not steal the view back
   var p = artPrev; artPrev = null; if(!p) return;
   document.getElementById('homeSec').hidden = p.home;
   document.getElementById('dynSec').hidden = p.dyn;
@@ -2023,29 +2044,28 @@ function renderArtist(a){
   artData = a; artListOpen = false;
   var el = document.getElementById('artSec'); if(!el) return;
   var top = a.topSongs || [], albums = a.albums || [], rel = a.related || [];
-  var wide = heroWide(a), cover = thumb({ thumb: a.thumb || a.banner || '' });
+  var pic = heroArt(a);
   var aud = a.monthlyAudience || '';
   if(aud && !/monthly/i.test(aud)) aud += ' monthly audience';
   var h = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
-  h += '<div class="art-hero">'+
-     (cover ? '<div class="art-herobg" style="background-image:url(&quot;'+esc(cover)+'&quot;)"></div>' : '')+
-     (wide ? '<img class="art-herowide" src="'+esc(wide)+'" alt="" onerror="this.style.display=\'none\'">' : '')+
+  /* name + monthly audience sit ON the clear banner; the only overlay is the bottom fade */
+  h += '<div class="art-hero'+(pic ? '' : ' nopic')+'">'+
+     (pic ? '<img class="art-herowide" src="'+esc(pic)+'" alt="" onerror="this.parentNode.classList.add(\'nopic\');this.style.display=\'none\'">' : '')+
      '<div class="art-head">'+
-       '<div class="art-top">'+
-         (cover ? '<img class="art-av" src="'+esc(cover)+'" alt="" onerror="this.style.display=\'none\'">'
-                : '<div class="art-av"></div>')+
-         '<div class="art-tx">'+
-           '<div class="art-name">'+esc(a.name)+'</div>'+
-           (aud ? '<div class="art-aud">'+esc(aud)+'</div>' : '')+
-         '</div>'+
-       '</div>'+
-       (a.description ? '<div class="art-desc" id="artDesc">'+esc(a.description)+'</div>'+
-                        '<button class="art-more" data-artmore="1" aria-expanded="false" hidden>MORE</button>' : '')+
-       '<div class="art-acts">'+
-         (top.length ? '<button class="pact" data-artplay="1"><span class="ic">'+ic('i-play')+'</span>Play all</button>' : '')+
-         '<button class="pact ghost" data-artmix="1"><span class="ic">'+ic('i-dice')+'</span>Mix</button>'+
-       '</div>'+
-     '</div></div>';
+       '<div class="art-name">'+esc(a.name)+'</div>'+
+       (aud ? '<div class="art-aud">'+esc(aud)+'</div>' : '')+
+     '</div>'+
+   '</div>';
+  /* description + actions stay directly below the name, now on var(--bg) so long
+     bios never sit on top of the artwork */
+  if(a.description) h += '<div class="art-meta">'+
+       '<div class="art-desc" id="artDesc">'+esc(a.description)+'</div>'+
+       '<button class="art-more" data-artmore="1" aria-expanded="false" hidden>MORE</button>'+
+     '</div>';
+  h += '<div class="art-acts">'+
+     (top.length ? '<button class="pact" data-artplay="1"><span class="ic">'+ic('i-play')+'</span>Play all</button>' : '')+
+     '<button class="pact ghost" data-artmix="1"><span class="ic">'+ic('i-dice')+'</span>Mix</button>'+
+   '</div>';
   if(top.length){
     h += '<div class="sec"><h2>Top songs</h2>'+artSongsHTML(top.slice(0,5))+
          '<button class="art-showall" data-artshowall="1">Show all</button></div>';
@@ -2107,6 +2127,7 @@ function artistPlayFrom(id){
 async function openArtist(id, name){
   var el = artSection(); if(!el) return;
   rememberView();
+  var gen = ++artGen;
   if(document.body.classList.contains('pv')) closePV();   // reveal the page; playback keeps running
   el.hidden = false;
   document.getElementById('homeSec').hidden = true;
@@ -2120,15 +2141,18 @@ async function openArtist(id, name){
   try{
     var r = await fetch('/api/artist?'+(id ? 'id='+encodeURIComponent(id) : 'name='+encodeURIComponent(name||'')));
     var j = await r.json();
+    if(gen !== artGen) return;    // user navigated away while this was loading
     if(!j || !j.id){ el.innerHTML = '<div class="empty">No artist page found for “'+esc(name||'')+'”.</div>'; return }
     renderArtist(j);
     loadArtistSongs();            // prefetch the whole catalogue (up to 150) for Play all / Mix
-  }catch(e){ el.innerHTML = '<div class="empty">Could not load this artist right now.</div>' }
+  }catch(e){ if(gen === artGen) el.innerHTML = '<div class="empty">Could not load this artist right now.</div>' }
 }
 /* name-only link: one lookup, then plain text if it fails */
 function probeArtist(span, name){
   if(!name) return;
+  var gen = artGen;                       // if anything navigates meanwhile, drop this look-up
   fetch('/api/artist?name='+encodeURIComponent(name)).then(function(r){ return r.json() }).then(function(j){
+    if(gen !== artGen) return;
     if(j && j.id) openArtist(j.id, j.name || name);
     else {
       span.classList.remove('alink');
