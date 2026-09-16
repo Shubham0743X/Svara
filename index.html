@@ -1717,12 +1717,37 @@ if(!$('#homeSec').hidden)renderHome();
 .art-back{margin:8px 2px 4px;font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 10px;display:inline-flex;align-items:center;gap:7px}
 .art-back:hover{border-color:var(--tx);color:var(--tx)}
 .art-back .ic{width:16px;height:16px}
-.art-hero{margin:8px 0 6px;border-radius:18px;overflow:hidden;background:linear-gradient(145deg,#232330,#101016)}
-.art-banner{width:100%;height:220px;object-fit:cover;display:block;opacity:.72}
-.art-head{padding:18px 22px 22px}
-.art-name{font-size:34px;font-weight:800;letter-spacing:-.6px;line-height:1.1}
-.art-aud{font-size:13px;color:var(--dim);margin-top:7px}
-.art-desc{font-size:13.5px;color:var(--dim);margin-top:12px;line-height:1.65;max-width:780px}
+/* Wave 4B — full-bleed hero (no box, no stretched square). Every rule scoped to #artSec
+   so it cannot reach #pv, the mini player or Home. −24px === #scroll's inline padding (line 67). */
+#artSec .art-hero{position:relative;overflow:hidden;margin:10px -24px 18px;background:var(--panel)}
+#artSec .art-herobg{position:absolute;inset:-70px;background-position:center;background-size:cover;filter:blur(40px) saturate(1.2);transform:scale(1.2);opacity:.5}
+#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 34%;opacity:.92}
+#artSec .art-hero::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(7,7,10,.42) 0%,rgba(7,7,10,.14) 28%,rgba(7,7,10,.66) 64%,var(--bg) 100%)}
+#artSec .art-head{position:relative;z-index:2;display:flex;flex-direction:column;gap:14px;padding:128px 26px 26px}
+#artSec .art-top{display:flex;align-items:flex-end;gap:20px;min-width:0}
+#artSec .art-av{width:126px;height:126px;flex-shrink:0;border-radius:50%;object-fit:cover;
+  background:linear-gradient(145deg,#232330,#101016);border:1px solid rgba(255,255,255,.12);box-shadow:0 16px 44px rgba(0,0,0,.55)}
+#artSec .art-tx{min-width:0}
+#artSec .art-name{font-size:40px;font-weight:800;letter-spacing:-1px;line-height:1.05;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+#artSec .art-aud{font-size:13px;color:var(--dim);margin-top:8px;text-shadow:0 1px 10px rgba(0,0,0,.6)}
+#artSec .art-desc{font-size:13.5px;color:var(--dim);line-height:1.7;max-width:760px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#artSec .art-desc.open{display:block;-webkit-line-clamp:unset;overflow:visible}
+#artSec .art-more{margin-top:8px;align-self:flex-start;font-size:11.5px;font-weight:700;letter-spacing:.6px;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:5px 15px;cursor:pointer;background:rgba(15,15,21,.7)}
+#artSec .art-more:hover{color:var(--tx);border-color:var(--tx)}
+#artSec .art-showall{display:block;width:max-content;margin:14px auto 0;font-size:12.5px;color:var(--dim);border:1px solid var(--line);
+  border-radius:999px;padding:7px 20px;font-weight:600;cursor:pointer;background:var(--panel)}
+#artSec .art-showall:hover{color:var(--tx);border-color:var(--tx)}
+#artSec .art-count{font-size:13px;font-weight:500;color:var(--dim)}
+#artSec .artalb{width:190px;flex-shrink:0;font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#artSec .artdur{width:54px;flex-shrink:0;text-align:right;font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+#artSec .artrow{padding-right:4px}
+@media(max-width:1000px){#artSec .artalb{display:none}}
+@media(max-width:660px){#artSec .art-name{font-size:29px}#artSec .art-av{width:92px;height:92px}#artSec .art-head{padding:104px 18px 20px}}
+/* mini-bar artist link: renders like #pvA, click opens the artist, not the player */
+#mSub .alink{color:var(--dim);cursor:pointer}
+#mSub .alink:hover{color:var(--tx);text-decoration:underline;text-underline-offset:2px}
 .art-acts{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 .art-acts .pact{width:auto;height:40px;padding:0 20px;border-radius:999px;background:var(--grad);color:#fff;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:8px}
 .art-acts .pact.ghost{background:var(--panel);border:1px solid var(--line);color:var(--tx)}
@@ -1864,6 +1889,36 @@ function subHTML(it){
   var a = artistLinksHTML(it);
   return (it && it.duration) ? a + ' • ' + esc(it.duration) : a;
 }
+/* --- artist hero artwork -------------------------------------------------
+   VERIFIED (Wave 4B): the artist header DOES carry a genuinely wide banner.
+   musicImmersiveHeaderRenderer.thumbnail lists e.g. 1500×625 @ 2.4:1, but the
+   shared artwork rule in /api/artist rewrites every size token to a 544-square,
+   so the payload arrives square and stretching it looked like a cropped face.
+   Ask the banner host for its real 1500×625 token instead. Square covers
+   (yt3…) are never stretched — they become the blurred backdrop instead. */
+function heroWide(a){
+  var u = (a && (a.banner || '')) || '';
+  if(!/^https:\/\/lh3\.googleusercontent\.com\//.test(u)) return '';
+  return u.replace(/=w\d+-h\d+[^"?]*$/, '=w1500-h625-p-l90-rj');
+}
+/* --- artist song rows: thumbnail | title | artist | album | duration ---
+   One renderer for the 5-row preview AND the Show-all list. `data-artrow`
+   is handled by the delegated artist handler, so a click queues the FULL
+   catalogue from that row (not the 5-row preview). Album comes from `sub`
+   (Wave 4A); there is no plays column by decision (§6 item 7). */
+function artSongRowHTML(it){
+  var cur = (typeof nowItem === 'function') && nowItem() && nowItem().id === it.id;
+  return '<div class="row artrow ' + (cur ? 'cur' : '') + '" data-artrow="'+esc(it.id)+'" data-id="'+esc(it.id)+'">'+
+    '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
+      '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
+    '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div>'+
+      '<div class="rsub">'+artistLinksHTML(it)+'</div></div>'+
+    '<div class="artalb">'+esc(it.sub||'')+'</div>'+
+    '<div class="artdur">'+esc(it.duration||'')+'</div>'+
+    '<div class="rr">'+(favs[it.id] ? '<span class="likedH">'+ic('i-heart')+'</span>' : '')+
+    '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
+}
+function artSongsHTML(items){ return '<div class="list">'+(items||[]).map(artSongRowHTML).join('')+'</div>' }
 /* rowHTML lives in the base layer and is used by search results, home rows,
    liked/playlists and the artist top-songs list. Same markup, artist names
    become links. */
@@ -1884,10 +1939,33 @@ setNowUI = function(it){
   _setNowA(it);
   var a = document.getElementById('pvA');
   if(a) a.innerHTML = artistLinksHTML(it || {});
+  /* mini bar: the ARTIST, as a real link. Set here (after the base textContent) so no
+     other layer can leave the album there; the delegated handler stopPropagation()s the
+     click, so this opens the artist page instead of the full player (#miniOpen). */
+  var s = document.getElementById('mSub');
+  if(s) s.innerHTML = artistLinksHTML(it || {});
 };
 
 /* --- the artist view: lives in #scroll, replaces #homeSec / #dynSec --- */
 var artPrev = null, artData = null;
+var artFull = [], artFullReq = null, artListOpen = false;   // artFull = full catalogue (§9.2)
+/* the artist's WHOLE catalogue (up to 150 rows) from /api/artist/songs.
+   Prefetched when the page opens so a row click can start from that row. */
+function loadArtistSongs(){
+  if(artFull.length) return Promise.resolve(artFull);
+  if(artFullReq) return artFullReq;
+  var id = (artData && artData.id) || '';
+  if(!id) return Promise.resolve([]);
+  artFullReq = fetch('/api/artist/songs?id='+encodeURIComponent(id))
+    .then(function(r){ return r.json() })
+    .then(function(j){
+      var songs = ((j && j.songs) || []).filter(function(x){ return x && x.id && x.kind!=='album' });
+      if(songs.length){ artFull = songs; register(songs) }
+      return artFull;
+    })
+    .catch(function(){ artFullReq = null; return [] });
+  return artFullReq;
+}
 function artSection(){
   var el = document.getElementById('artSec');
   if(!el){
@@ -1900,7 +1978,7 @@ function artSection(){
 }
 function hideArtist(){
   var el = document.getElementById('artSec'); if(el) el.hidden = true;
-  artPrev = null;
+  artPrev = null; artData = null; artFull = []; artFullReq = null; artListOpen = false;
 }
 function rememberView(){
   if(artPrev) return;                       // nested artist click keeps the original view
@@ -1942,32 +2020,89 @@ function relatedCard(a){
   '</div>';
 }
 function renderArtist(a){
-  artData = a;
+  artData = a; artListOpen = false;
   var el = document.getElementById('artSec'); if(!el) return;
   var top = a.topSongs || [], albums = a.albums || [], rel = a.related || [];
-  var banner = a.banner || a.thumb || '';
+  var wide = heroWide(a), cover = thumb({ thumb: a.thumb || a.banner || '' });
   var aud = a.monthlyAudience || '';
   if(aud && !/monthly/i.test(aud)) aud += ' monthly audience';
   var h = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
   h += '<div class="art-hero">'+
-     (banner ? '<img class="art-banner" src="'+esc(thumb({ thumb:banner }))+'" onerror="this.style.display=\'none\'">' : '')+
+     (cover ? '<div class="art-herobg" style="background-image:url(&quot;'+esc(cover)+'&quot;)"></div>' : '')+
+     (wide ? '<img class="art-herowide" src="'+esc(wide)+'" alt="" onerror="this.style.display=\'none\'">' : '')+
      '<div class="art-head">'+
-       '<div class="art-name">'+esc(a.name)+'</div>'+
-       (aud ? '<div class="art-aud">'+esc(aud)+'</div>' : '')+
-       (a.description ? '<div class="art-desc">'+esc(a.description)+'</div>' : '')+
+       '<div class="art-top">'+
+         (cover ? '<img class="art-av" src="'+esc(cover)+'" alt="" onerror="this.style.display=\'none\'">'
+                : '<div class="art-av"></div>')+
+         '<div class="art-tx">'+
+           '<div class="art-name">'+esc(a.name)+'</div>'+
+           (aud ? '<div class="art-aud">'+esc(aud)+'</div>' : '')+
+         '</div>'+
+       '</div>'+
+       (a.description ? '<div class="art-desc" id="artDesc">'+esc(a.description)+'</div>'+
+                        '<button class="art-more" data-artmore="1" aria-expanded="false" hidden>MORE</button>' : '')+
        '<div class="art-acts">'+
          (top.length ? '<button class="pact" data-artplay="1"><span class="ic">'+ic('i-play')+'</span>Play all</button>' : '')+
          '<button class="pact ghost" data-artmix="1"><span class="ic">'+ic('i-dice')+'</span>Mix</button>'+
        '</div>'+
      '</div></div>';
-  if(top.length) h += '<div class="sec"><h2>Top songs</h2>'+listHTML(top)+'</div>';
+  if(top.length){
+    h += '<div class="sec"><h2>Top songs</h2>'+artSongsHTML(top.slice(0,5))+
+         '<button class="art-showall" data-artshowall="1">Show all</button></div>';
+  }
   if(albums.length) h += '<div class="sec"><h2>Albums &amp; singles</h2><div class="railwrap">'+albums.map(albumCard).join('')+'</div></div>';
   if(rel.length) h += '<div class="sec"><h2>Fans might also like</h2><div class="art-rel">'+rel.map(relatedCard).join('')+'</div></div>';
   el.innerHTML = h;
-  curList = top.slice(); register(top);     // so a row click plays from this list
+  register(top);
+  curList = [];                             // artist rows are handled by data-artrow
   var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
   pt.hidden = true; ps.hidden = true;
   try{ document.title = String(a.name||'') + ' · Svara' }catch(e){}
+  artMoreSetup();
+}
+/* description: 2 lines + MORE — only when the text actually overflows */
+function artMoreSetup(){
+  var d = document.getElementById('artDesc'), b = document.querySelector('#artSec .art-more');
+  if(!d || !b) return;
+  d.classList.remove('open');
+  b.textContent = 'MORE'; b.setAttribute('aria-expanded','false');
+  b.hidden = !(d.scrollHeight > d.clientHeight + 2);   // measure after layout: hides on short bios
+}
+function artMoreToggle(){
+  var d = document.getElementById('artDesc'), b = document.querySelector('#artSec .art-more');
+  if(!d || !b) return;
+  var open = d.classList.toggle('open');
+  b.textContent = open ? 'LESS' : 'MORE';
+  b.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+/* the full catalogue inside the artist view — the back arrow returns to the
+   artist page preview, and the next back returns to the remembered view */
+function renderArtistSongs(list){
+  var el = document.getElementById('artSec'); if(!el || !artData) return;
+  artListOpen = true;
+  el.innerHTML = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>'+
+    '<div class="sec"><h2>All songs <span class="art-count">'+list.length+' songs</span></h2>'+artSongsHTML(list)+'</div>';
+  register(list);
+  var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = 0;
+  try{ document.title = 'All songs · '+String(artData.name||'')+' · Svara' }catch(e){}
+}
+/* Play all / a row click / Mix all need the WHOLE catalogue first */
+function withArtistSongs(fn){
+  var name = (artData && artData.name) || 'artist';
+  if(artFull.length) return Promise.resolve(artFull).then(fn);
+  toast('Loading '+name+'…');
+  return loadArtistSongs().then(function(list){
+    if(list.length) return fn(list);
+    var pre = (artData && artData.topSongs) || [];
+    if(pre.length) return fn(pre);
+    toast('No songs found for this artist');
+  });
+}
+function artistPlayFrom(id){
+  withArtistSongs(function(list){
+    var i = list.findIndex(function(x){ return x.id===id });
+    playList(list, i>=0?i:0, true);
+  });
 }
 async function openArtist(id, name){
   var el = artSection(); if(!el) return;
@@ -1978,13 +2113,16 @@ async function openArtist(id, name){
   document.getElementById('dynSec').hidden = true;
   setNav(null);
   curPage = 'artist'; curList = []; artData = null;        // keeps the keeper's homeLine() off
+  artFull = []; artFullReq = null; artListOpen = false;    // a new artist ⇒ a new catalogue
   el.innerHTML = '<div class="empty">Loading artist…</div>';
+  var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = 0;
   try{ document.title = 'Loading · Svara' }catch(e){}
   try{
     var r = await fetch('/api/artist?'+(id ? 'id='+encodeURIComponent(id) : 'name='+encodeURIComponent(name||'')));
     var j = await r.json();
     if(!j || !j.id){ el.innerHTML = '<div class="empty">No artist page found for “'+esc(name||'')+'”.</div>'; return }
     renderArtist(j);
+    loadArtistSongs();            // prefetch the whole catalogue (up to 150) for Play all / Mix
   }catch(e){ el.innerHTML = '<div class="empty">Could not load this artist right now.</div>' }
 }
 /* name-only link: one lookup, then plain text if it fails */
@@ -1999,20 +2137,34 @@ function probeArtist(span, name){
     }
   }).catch(function(){ toast('Artist lookup failed') });
 }
-/* Mix = seed the existing /api/radio engine with this artist's top track */
+function artShowAll(){
+  if(!artData) return;
+  if(artFull.length){ renderArtistSongs(artFull); return }
+  withArtistSongs(function(list){ renderArtistSongs(list) });
+}
+/* keep the artist's own rows: collaborations are fine, another artist's own track is not.
+   Rows whose credits we cannot read (artists: []) are kept — never drop what we cannot judge. */
+function artistOnly(list){
+  var me = String((artData && artData.name) || '').trim().toLowerCase();
+  if(!me) return list;
+  return list.filter(function(x){
+    var who = (x.artists || []).map(function(a){ return String((a && a.name) || '').trim().toLowerCase() }).filter(Boolean);
+    if(!who.length) return true;
+    return who.indexOf(me) >= 0;
+  });
+}
+/* Mix = the artist's OWN catalogue, shuffled. /api/radio is deliberately not used:
+   by design it returns the artist PLUS similar artists, so their tracks leaked in. */
 function mixArtist(){
   var a = artData; if(!a) return;
-  var seed = (a.topSongs || [])[0] || null;
-  var url = seed
-    ? '/api/radio?id='+encodeURIComponent(seed.id)+'&title='+encodeURIComponent(seed.title||'')+'&artist='+encodeURIComponent(a.name||'')+'&n=20'
-    : '/api/search?q='+encodeURIComponent((a.name||'')+' songs');
-  toast('🎲 Mixing '+a.name+'…');
-  fetch(url).then(function(r){ return r.json() }).then(function(j){
-    var items = (j.items||[]).filter(function(x){ return x && x.kind!=='album' });
-    if(!items.length){ toast('Not enough similar songs for this artist'); return }
-    playList(items, 0, true);
-    toast('🎲 Mix: '+items.length+' songs');
-  }).catch(function(){ toast('Mix failed') });
+  withArtistSongs(function(list){
+    var pool = artistOnly(list); if(!pool.length) pool = list;
+    var sh = pool.slice();
+    for(var i=sh.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=sh[i]; sh[i]=sh[j]; sh[j]=t }
+    playList(sh, 0, true);
+    toast('🎲 Mix: '+sh.length+' × '+a.name);
+    /* no /api/radio call anywhere in this path — see PLAN §9.2 */
+  });
 }
 /* ONE delegated handler for every artist affordance. Capture phase so the
    base [data-play] row handler never starts playback from an artist click. */
@@ -2026,10 +2178,23 @@ document.addEventListener('click', function(e){
     if(aid) openArtist(aid, an); else probeArtist(t, an);
     return;
   }
-  if((t = closestArtist(e, '[data-artback]'))){ e.preventDefault(); e.stopPropagation(); restoreView(); return }
+  if((t = closestArtist(e, '[data-artback]'))){
+    e.preventDefault(); e.stopPropagation();
+    if(artListOpen && artData){                    // Show-all list → back to the artist page
+      renderArtist(artData);
+      var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = 0;
+      return;
+    }
+    restoreView(); return;                         // artist page → the exact previous view
+  }
+  if((t = closestArtist(e, '[data-artshowall]'))){ e.preventDefault(); e.stopPropagation(); artShowAll(); return }
+  if((t = closestArtist(e, '[data-artmore]'))){ e.preventDefault(); e.stopPropagation(); artMoreToggle(); return }
   if((t = closestArtist(e, '[data-artplay]'))){ e.preventDefault(); e.stopPropagation();
-    if(artData && (artData.topSongs||[]).length) playList(artData.topSongs, 0, true); return }
+    withArtistSongs(function(list){ playList(list, 0, true) }); return }
   if((t = closestArtist(e, '[data-artmix]'))){ e.preventDefault(); e.stopPropagation(); mixArtist(); return }
+  t = closestArtist(e, '[data-artrow]');
+  if(t && !e.target.closest('button')){ e.preventDefault(); e.stopPropagation();
+    artistPlayFrom(t.getAttribute('data-artrow')); return }
   if((t = closestArtist(e, '[data-artalbum]'))){ e.preventDefault(); e.stopPropagation();
     openAlbum(t.getAttribute('data-artalbum'), t.getAttribute('data-title')||''); return }
 }, true);
@@ -2053,6 +2218,9 @@ async function loadMore(){
     if(add.length) S.items = S.items.concat(add);
     S.next = !!j.next;
     if(!add.length && !S.next) S.sessionId = null;
+    /* loadMore is async: if the user has navigated away (artist page, album, home)
+       while page 2 was in flight, repainting would call showDyn() and steal the view. */
+    if(curPage!=='dyn'){ S.loading = false; return }
     paintSearch();
     var s2 = document.getElementById('v3sent');
     if(s2) s2.textContent = S.next ? '' : 'End of results';
