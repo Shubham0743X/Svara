@@ -1709,6 +1709,33 @@ if(!$('#homeSec').hidden)renderHome();
 #pgTitle.pgNP{font-size:13px;font-weight:600;color:var(--dim);letter-spacing:0;margin:12px 2px 2px;
   display:flex;align-items:center;gap:8px}
 .npdot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.8)}
+/* ===== Wave 1 — artist links + artist page ===== */
+.alink{cursor:pointer}
+.alink:hover{color:var(--tx);text-decoration:underline;text-underline-offset:2px}
+.pvA .alink{color:var(--dim)}
+.pvA .alink:hover{color:var(--tx)}
+.art-back{margin:8px 2px 4px;font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 10px;display:inline-flex;align-items:center;gap:7px}
+.art-back:hover{border-color:var(--tx);color:var(--tx)}
+.art-back .ic{width:16px;height:16px}
+.art-hero{margin:8px 0 6px;border-radius:18px;overflow:hidden;background:linear-gradient(145deg,#232330,#101016)}
+.art-banner{width:100%;height:220px;object-fit:cover;display:block;opacity:.72}
+.art-head{padding:18px 22px 22px}
+.art-name{font-size:34px;font-weight:800;letter-spacing:-.6px;line-height:1.1}
+.art-aud{font-size:13px;color:var(--dim);margin-top:7px}
+.art-desc{font-size:13.5px;color:var(--dim);margin-top:12px;line-height:1.65;max-width:780px}
+.art-acts{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.art-acts .pact{width:auto;height:40px;padding:0 20px;border-radius:999px;background:var(--grad);color:#fff;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:8px}
+.art-acts .pact.ghost{background:var(--panel);border:1px solid var(--line);color:var(--tx)}
+.art-acts .pact.ghost:hover{background:var(--panel2)}
+.art-acts .pact .ic{width:17px;height:17px}
+.art-rel{display:flex;gap:22px;overflow-x:auto;padding:4px 0 8px}
+.art-relcard{width:130px;flex-shrink:0;text-align:center;cursor:pointer}
+.art-relcard .ring{width:130px;height:130px;border-radius:50%;overflow:hidden;position:relative;background:linear-gradient(145deg,#232330,#101016)}
+.art-relcard .ring img{width:100%;height:100%;object-fit:cover}
+.art-relcard .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#3a3a48}
+.art-relcard .ph .ic{width:34px;height:34px}
+.art-relcard .nm{font-size:13px;font-weight:650;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.art-relcard .ad{font-size:11.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 <script id="v3js">
 (function(){
@@ -1795,10 +1822,12 @@ renderQueue = function(){
 var _showDyn = showDyn, _goHome = goHome;
 showDyn = function(t,s,h){
   _showDyn(t,s,h);
+  hideArtist();
   try{ document.title = String(t).replace(/<[^>]+>/g,'') + ' · Svara' }catch(e){}
 };
 goHome = function(){
   _goHome();
+  hideArtist();
   try{ document.title = 'Svara' }catch(e){}
   homeLine();
 };
@@ -1815,6 +1844,195 @@ function homeLine(){
     pt.hidden=true; ps.hidden=true; pt.classList.remove('pgNP'); pt.innerHTML=''; ps.textContent='';
   }
 }
+
+/* ---------- WAVE 1: clickable artist names + artist page ---------- */
+/* Artist links are rendered in exactly one place and reused by rows, the
+   now-playing bar and the artist page. No id ⇒ plain text, never a dead link. */
+function artistLinksHTML(it){
+  var flat = (it && it.artist) || '';
+  var names = splitArtists(flat);
+  if(!names.length) return esc(flat);
+  var ids = {};
+  (it.artists || []).forEach(function(a){ if(a && a.name) ids[String(a.name).toLowerCase()] = a.id || '' });
+  return names.map(function(n){
+    var id = ids[String(n).toLowerCase()] || '';
+    return '<span class="alink"' + (id ? ' data-artist-id="'+esc(id)+'"' : '') +
+      ' data-artist-name="'+esc(n)+'">'+esc(n)+'</span>';
+  }).join(', ');
+}
+function subHTML(it){
+  var a = artistLinksHTML(it);
+  return (it && it.duration) ? a + ' • ' + esc(it.duration) : a;
+}
+/* rowHTML lives in the base layer and is used by search results, home rows,
+   liked/playlists and the artist top-songs list. Same markup, artist names
+   become links. */
+var _rowHTML = rowHTML;
+rowHTML = function(it){
+  var cur = (typeof nowItem === 'function') && nowItem() && nowItem().id === it.id;
+  return '<div class="row ' + (cur ? 'cur' : '') + '" data-play="1" data-id="'+esc(it.id)+'">'+
+    '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
+      '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
+    '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+subHTML(it)+'</div></div>'+
+    '<div class="rr">'+(favs[it.id] ? '<span class="likedH">'+ic('i-heart')+'</span>' : '')+
+    '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
+};
+/* now-playing bar artist. Runs after the base textContent so it wins;
+   the v3art wrapper still works because it wraps this wrapper. */
+var _setNowA = setNowUI;
+setNowUI = function(it){
+  _setNowA(it);
+  var a = document.getElementById('pvA');
+  if(a) a.innerHTML = artistLinksHTML(it || {});
+};
+
+/* --- the artist view: lives in #scroll, replaces #homeSec / #dynSec --- */
+var artPrev = null, artData = null;
+function artSection(){
+  var el = document.getElementById('artSec');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'artSec'; el.hidden = true;
+    var sc = document.getElementById('scroll');
+    if(sc) sc.insertBefore(el, document.getElementById('dynSec') || null);
+  }
+  return el;
+}
+function hideArtist(){
+  var el = document.getElementById('artSec'); if(el) el.hidden = true;
+  artPrev = null;
+}
+function rememberView(){
+  if(artPrev) return;                       // nested artist click keeps the original view
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  artPrev = {
+    home: document.getElementById('homeSec').hidden,
+    dyn: document.getElementById('dynSec').hidden,
+    page: curPage, list: curList.slice(), doc: document.title,
+    t: pt.innerHTML, tHid: pt.hidden, tCls: pt.className,
+    s: ps.textContent, sHid: ps.hidden
+  };
+}
+function restoreView(){
+  var el = document.getElementById('artSec'); if(el) el.hidden = true;
+  var p = artPrev; artPrev = null; if(!p) return;
+  document.getElementById('homeSec').hidden = p.home;
+  document.getElementById('dynSec').hidden = p.dyn;
+  curPage = p.page; curList = p.list;
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  pt.innerHTML = p.t; pt.hidden = p.tHid; pt.className = p.tCls;
+  ps.textContent = p.s; ps.hidden = p.sHid;
+  setNav(p.page === 'home' ? 'home' : null);
+  try{ document.title = p.doc }catch(e){}
+}
+function albumCard(a){
+  var ph = thumb(a) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+  return '<div class="rail" data-artalbum="'+esc(a.id)+'" data-title="'+esc(a.title||'')+'">'+
+    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'">'+
+      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
+    '<div class="rname">'+esc(a.title)+'</div>'+
+    '<div class="rsub2">'+(a.year ? esc(a.year) : esc(a.artist||''))+'</div></div>';
+}
+function relatedCard(a){
+  var ph = thumb(a) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+  return '<div class="art-relcard" data-artist-id="'+esc(a.id||'')+'" data-artist-name="'+esc(a.name||'')+'">'+
+    '<div class="ring">'+ph+'<img loading="lazy" src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'"></div>'+
+    '<div class="nm">'+esc(a.name)+'</div>'+
+    (a.audience ? '<div class="ad">'+esc(a.audience)+'</div>' : '')+
+  '</div>';
+}
+function renderArtist(a){
+  artData = a;
+  var el = document.getElementById('artSec'); if(!el) return;
+  var top = a.topSongs || [], albums = a.albums || [], rel = a.related || [];
+  var banner = a.banner || a.thumb || '';
+  var aud = a.monthlyAudience || '';
+  if(aud && !/monthly/i.test(aud)) aud += ' monthly audience';
+  var h = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
+  h += '<div class="art-hero">'+
+     (banner ? '<img class="art-banner" src="'+esc(thumb({ thumb:banner }))+'" onerror="this.style.display=\'none\'">' : '')+
+     '<div class="art-head">'+
+       '<div class="art-name">'+esc(a.name)+'</div>'+
+       (aud ? '<div class="art-aud">'+esc(aud)+'</div>' : '')+
+       (a.description ? '<div class="art-desc">'+esc(a.description)+'</div>' : '')+
+       '<div class="art-acts">'+
+         (top.length ? '<button class="pact" data-artplay="1"><span class="ic">'+ic('i-play')+'</span>Play all</button>' : '')+
+         '<button class="pact ghost" data-artmix="1"><span class="ic">'+ic('i-dice')+'</span>Mix</button>'+
+       '</div>'+
+     '</div></div>';
+  if(top.length) h += '<div class="sec"><h2>Top songs</h2>'+listHTML(top)+'</div>';
+  if(albums.length) h += '<div class="sec"><h2>Albums &amp; singles</h2><div class="railwrap">'+albums.map(albumCard).join('')+'</div></div>';
+  if(rel.length) h += '<div class="sec"><h2>Fans might also like</h2><div class="art-rel">'+rel.map(relatedCard).join('')+'</div></div>';
+  el.innerHTML = h;
+  curList = top.slice(); register(top);     // so a row click plays from this list
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  pt.hidden = true; ps.hidden = true;
+  try{ document.title = String(a.name||'') + ' · Svara' }catch(e){}
+}
+async function openArtist(id, name){
+  var el = artSection(); if(!el) return;
+  rememberView();
+  if(document.body.classList.contains('pv')) closePV();   // reveal the page; playback keeps running
+  el.hidden = false;
+  document.getElementById('homeSec').hidden = true;
+  document.getElementById('dynSec').hidden = true;
+  setNav(null);
+  curPage = 'artist'; curList = []; artData = null;        // keeps the keeper's homeLine() off
+  el.innerHTML = '<div class="empty">Loading artist…</div>';
+  try{ document.title = 'Loading · Svara' }catch(e){}
+  try{
+    var r = await fetch('/api/artist?'+(id ? 'id='+encodeURIComponent(id) : 'name='+encodeURIComponent(name||'')));
+    var j = await r.json();
+    if(!j || !j.id){ el.innerHTML = '<div class="empty">No artist page found for “'+esc(name||'')+'”.</div>'; return }
+    renderArtist(j);
+  }catch(e){ el.innerHTML = '<div class="empty">Could not load this artist right now.</div>' }
+}
+/* name-only link: one lookup, then plain text if it fails */
+function probeArtist(span, name){
+  if(!name) return;
+  fetch('/api/artist?name='+encodeURIComponent(name)).then(function(r){ return r.json() }).then(function(j){
+    if(j && j.id) openArtist(j.id, j.name || name);
+    else {
+      span.classList.remove('alink');
+      span.removeAttribute('data-artist-name');
+      toast('No artist page for “'+name+'”');
+    }
+  }).catch(function(){ toast('Artist lookup failed') });
+}
+/* Mix = seed the existing /api/radio engine with this artist's top track */
+function mixArtist(){
+  var a = artData; if(!a) return;
+  var seed = (a.topSongs || [])[0] || null;
+  var url = seed
+    ? '/api/radio?id='+encodeURIComponent(seed.id)+'&title='+encodeURIComponent(seed.title||'')+'&artist='+encodeURIComponent(a.name||'')+'&n=20'
+    : '/api/search?q='+encodeURIComponent((a.name||'')+' songs');
+  toast('🎲 Mixing '+a.name+'…');
+  fetch(url).then(function(r){ return r.json() }).then(function(j){
+    var items = (j.items||[]).filter(function(x){ return x && x.kind!=='album' });
+    if(!items.length){ toast('Not enough similar songs for this artist'); return }
+    playList(items, 0, true);
+    toast('🎲 Mix: '+items.length+' songs');
+  }).catch(function(){ toast('Mix failed') });
+}
+/* ONE delegated handler for every artist affordance. Capture phase so the
+   base [data-play] row handler never starts playback from an artist click. */
+function closestArtist(e, sel){ try{ return e.target.closest(sel) }catch(err){ return null } }
+document.addEventListener('click', function(e){
+  var t = closestArtist(e, '[data-artist-id],[data-artist-name]');
+  if(t){
+    e.preventDefault(); e.stopPropagation();
+    var aid = t.getAttribute('data-artist-id') || '';
+    var an = t.getAttribute('data-artist-name') || '';
+    if(aid) openArtist(aid, an); else probeArtist(t, an);
+    return;
+  }
+  if((t = closestArtist(e, '[data-artback]'))){ e.preventDefault(); e.stopPropagation(); restoreView(); return }
+  if((t = closestArtist(e, '[data-artplay]'))){ e.preventDefault(); e.stopPropagation();
+    if(artData && (artData.topSongs||[]).length) playList(artData.topSongs, 0, true); return }
+  if((t = closestArtist(e, '[data-artmix]'))){ e.preventDefault(); e.stopPropagation(); mixArtist(); return }
+  if((t = closestArtist(e, '[data-artalbum]'))){ e.preventDefault(); e.stopPropagation();
+    openAlbum(t.getAttribute('data-artalbum'), t.getAttribute('data-title')||''); return }
+}, true);
 
 /* ---------- BUG #5: search paging / infinite scroll ---------- */
 var S = { q:'', sessionId:null, next:false, loading:false, items:[] };
