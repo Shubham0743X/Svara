@@ -1717,20 +1717,28 @@ if(!$('#homeSec').hidden)renderHome();
 .art-back{margin:8px 2px 4px;font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 10px;display:inline-flex;align-items:center;gap:7px}
 .art-back:hover{border-color:var(--tx);color:var(--tx)}
 .art-back .ic{width:16px;height:16px}
-/* Wave 4C — hero = the CLEAR, unblurred banner, full-bleed, no circular avatar.
+/* Wave 4C/4D — hero = the CLEAR, unblurred 2.4:1 banner, full-bleed, no avatar circle.
+   Wave 4D: the box is never shorter than width/2.4, so object-fit:cover crops the
+   SIDES only — the image is never cropped top-to-bottom and faces are never cut.
+   The 2.4:1 floor lives on a zero-height spacer (.art-fit) instead of on the hero
+   itself: aspect-ratio on the container clamps the height and would clip the
+   expanded bio (overflow:hidden), while the spacer both floors the height at
+   width/2.4 and still lets the box GROW when MORE expands the description.
    Scoped to #artSec so it cannot reach #pv, the mini player or Home.
    −24px === #scroll's inline padding (line 67); #scroll itself is untouched. */
-#artSec .art-hero{position:relative;overflow:hidden;margin:10px -24px 0;height:clamp(240px,34vh,430px);background:var(--panel)}
-#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 38%}
+#artSec .art-hero{position:relative;display:grid;overflow:hidden;margin:10px -24px 0;height:auto;
+  min-height:clamp(340px,56dvh,640px);background:var(--panel)}
+#artSec .art-fit{grid-area:1/1;align-self:start;aspect-ratio:2.4/1;min-height:0;pointer-events:none}
+#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%}
 #artSec .art-hero::after{content:'';position:absolute;inset:0;pointer-events:none;   /* soft BOTTOM fade only */
-  background:linear-gradient(180deg,rgba(7,7,10,0) 46%,rgba(7,7,10,.42) 74%,rgba(7,7,10,.82) 92%,var(--bg) 100%)}
+  background:linear-gradient(180deg,rgba(7,7,10,0) 30%,rgba(7,7,10,.34) 58%,rgba(7,7,10,.78) 84%,var(--bg) 100%)}
 #artSec .art-hero.nopic{background:linear-gradient(160deg,#191922,#0a0a0f)}   /* banner failed: no empty box */
 #artSec .art-hero.nopic::after{display:none}
-#artSec .art-head{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:0 26px 16px}
+#artSec .art-head{grid-area:1/1;align-self:end;z-index:2;padding:0 24px 22px}
 #artSec .art-name{font-size:clamp(26px,3.4vw,42px);font-weight:800;letter-spacing:-1px;line-height:1.05;text-shadow:0 2px 16px rgba(0,0,0,.7)}
 #artSec .art-aud{font-size:13px;color:#dcdce4;margin-top:7px;text-shadow:0 1px 10px rgba(0,0,0,.75)}
 #artSec .art-meta{margin-top:18px}
-#artSec .art-desc{font-size:13.5px;color:var(--dim);line-height:1.7;max-width:760px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#artSec .art-desc{font-size:13.5px;color:var(--dim);line-height:1.7;max-width:760px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-shadow:0 1px 12px rgba(0,0,0,.85)}
 #artSec .art-desc.open{display:block;-webkit-line-clamp:unset;overflow:visible}
 #artSec .art-more{display:block;width:max-content;margin-top:10px;font-size:11.5px;font-weight:700;letter-spacing:.6px;color:var(--dim);
   border:1px solid var(--line);border-radius:999px;padding:5px 15px;cursor:pointer;background:rgba(15,15,21,.7)}
@@ -1743,7 +1751,7 @@ if(!$('#homeSec').hidden)renderHome();
 #artSec .artdur{width:54px;flex-shrink:0;text-align:right;font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 #artSec .artrow{padding-right:4px}
 @media(max-width:1000px){#artSec .artalb{display:none}}
-@media(max-width:660px){#artSec .art-name{font-size:27px}#artSec .art-head{padding:0 18px 14px}#artSec .art-hero{height:clamp(200px,30vh,320px)}}
+@media(max-width:660px){#artSec .art-name{font-size:27px}#artSec .art-head{padding:0 18px 16px}#artSec .art-hero{min-height:clamp(300px,52dvh,560px)}}
 /* mini-bar artist link: renders like #pvA, click opens the artist, not the player */
 #mSub .alink{color:var(--dim);cursor:pointer}
 #mSub .alink:hover{color:var(--tx);text-decoration:underline;text-underline-offset:2px}
@@ -1901,8 +1909,14 @@ function subHTML(it){
 function heroArt(a){
   var u = (a && (a.banner || a.thumb || '')) || '';
   if(!u) return '';
-  if(/^https:\/\/(lh3|yt3)\.googleusercontent\.com\//.test(u))
-    return u.replace(/=w\d+-h\d+[^"?]*$/, '=w2400-h1000-p-l90-rj');
+  if(/^https:\/\/(lh3|yt3)\.googleusercontent\.com\//.test(u)){
+    /* ask BOTH banner hosts for the widest 2.4:1 token. The API normalises artwork
+       to =w544… (=w544 → a bad 363×544 portrait / 544×544 square crop), and some
+       hosts ship other shapes (=s544…) or none at all, so replace whatever token
+       is there — never use the 544 crop for the hero. */
+    var hero = '=w2400-h1000-p-l90-rj';
+    return /=\w[^"?]*$/.test(u) ? u.replace(/=\w[^"?]*$/, hero) : u + hero;
+  }
   return u;
 }
 /* --- artist song rows: thumbnail | title | artist | album | duration ---
@@ -2048,23 +2062,24 @@ function renderArtist(a){
   var aud = a.monthlyAudience || '';
   if(aud && !/monthly/i.test(aud)) aud += ' monthly audience';
   var h = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
-  /* name + monthly audience sit ON the clear banner; the only overlay is the bottom fade */
+  /* Wave 4D — everything sits ON the clear banner: name, monthly audience, the
+     2-line-clamped description with MORE/LESS, and Play all / Mix. `.art-fit` is
+     the 2.4:1 floor; the hero grows when the description expands. */
   h += '<div class="art-hero'+(pic ? '' : ' nopic')+'">'+
      (pic ? '<img class="art-herowide" src="'+esc(pic)+'" alt="" onerror="this.parentNode.classList.add(\'nopic\');this.style.display=\'none\'">' : '')+
+     '<div class="art-fit" aria-hidden="true"></div>'+
      '<div class="art-head">'+
        '<div class="art-name">'+esc(a.name)+'</div>'+
        (aud ? '<div class="art-aud">'+esc(aud)+'</div>' : '')+
+       (a.description ? '<div class="art-meta">'+
+         '<div class="art-desc" id="artDesc">'+esc(a.description)+'</div>'+
+         '<button class="art-more" data-artmore="1" aria-expanded="false" hidden>MORE</button>'+
+       '</div>' : '')+
+       '<div class="art-acts">'+
+         (top.length ? '<button class="pact" data-artplay="1"><span class="ic">'+ic('i-play')+'</span>Play all</button>' : '')+
+         '<button class="pact ghost" data-artmix="1"><span class="ic">'+ic('i-dice')+'</span>Mix</button>'+
+       '</div>'+
      '</div>'+
-   '</div>';
-  /* description + actions stay directly below the name, now on var(--bg) so long
-     bios never sit on top of the artwork */
-  if(a.description) h += '<div class="art-meta">'+
-       '<div class="art-desc" id="artDesc">'+esc(a.description)+'</div>'+
-       '<button class="art-more" data-artmore="1" aria-expanded="false" hidden>MORE</button>'+
-     '</div>';
-  h += '<div class="art-acts">'+
-     (top.length ? '<button class="pact" data-artplay="1"><span class="ic">'+ic('i-play')+'</span>Play all</button>' : '')+
-     '<button class="pact ghost" data-artmix="1"><span class="ic">'+ic('i-dice')+'</span>Mix</button>'+
    '</div>';
   if(top.length){
     h += '<div class="sec"><h2>Top songs</h2>'+artSongsHTML(top.slice(0,5))+
