@@ -801,6 +801,13 @@ app.get('/api/stream', async (req, res) => {
   }
 });
 
+/* ================= system info (read-only, for the settings panel) ================= */
+app.get('/api/system', (req, res) => {
+  let version = '';
+  try { version = require('./package.json').version || ''; } catch (e) { version = ''; }
+  res.json({ version, ytdlp: YTDLP, ytdlpFound: fs.existsSync(YTDLP) });
+});
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 const srv = app.listen(3000, '127.0.0.1', () => console.log('🎵 Svara → http://localhost:3000'));
 srv.on('error', e => {

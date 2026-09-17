@@ -49,7 +49,6 @@ img{display:block}
 .tic{padding:8px;border-radius:50%}
 .tic:hover{background:var(--panel2)}
 .tic .ic{width:18px;height:18px}
-.avatar{margin-left:6px;width:32px;height:32px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
 /* search history */
 #shist{position:absolute;top:calc(100% + 8px);left:0;right:0;background:var(--panel2);border:1px solid var(--line);border-radius:14px;overflow:hidden;z-index:30;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:6px}
 #shist .shlbl{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);padding:6px 12px 4px;opacity:.75}
@@ -256,6 +255,7 @@ body.pv #pvFab{bottom:22px}
 <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><circle class="f" cx="4.5" cy="6" r="1.4"/><circle class="f" cx="4.5" cy="12" r="1.4"/><circle class="f" cx="4.5" cy="18" r="1.4"/></symbol>
 <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"/></symbol>
 <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle class="f" cx="12" cy="12" r="2.6"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
 </defs></svg>
 
 <!-- SIDEBAR -->
@@ -280,7 +280,7 @@ body.pv #pvFab{bottom:22px}
     </div>
     <div class="topr">
       <button class="tic" id="diceBtn" title="Radio from your taste"><span class="ic"><svg><use href="#i-dice"/></svg></span></button>
-      <div class="avatar">S</div>
+      <button class="tic" id="setBtn" type="button" title="Settings" aria-label="Settings" aria-haspopup="dialog" aria-expanded="false"><span class="ic"><svg><use href="#i-settings"/></svg></span></button>
     </div>
   </header>
 
@@ -1768,6 +1768,57 @@ if(!$('#homeSec').hidden)renderHome();
 .art-relcard .ph .ic{width:34px;height:34px}
 .art-relcard .nm{font-size:13px;font-weight:650;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .art-relcard .ad{font-size:11.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ===== Wave 4E — settings slide-over. Every rule is scoped to #setPanel, so it
+   cannot reach #pv, the mini player or Home. Open/close animates transform +
+   opacity only; the v2css prefers-reduced-motion reset kills both. ===== */
+#setPanel{position:fixed;top:0;right:0;bottom:0;width:min(392px,92vw);z-index:96;display:flex;flex-direction:column;
+  background:var(--panel2);border-left:1px solid var(--line);box-shadow:-18px 0 50px rgba(0,0,0,.5);
+  transform:translateX(100%);opacity:0;visibility:hidden;
+  transition:transform .3s cubic-bezier(.22,.61,.36,1),opacity .3s ease,visibility 0s linear .3s}
+#setPanel.on{transform:none;opacity:1;visibility:visible;
+  transition:transform .3s cubic-bezier(.22,.61,.36,1),opacity .3s ease}
+#setPanel .setTop{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 18px 12px;border-bottom:1px solid var(--line)}
+#setPanel .setTop h2{font-size:15px;font-weight:800}
+#setPanel .setX{padding:7px;border-radius:50%;color:var(--dim)}
+#setPanel .setX:hover{background:var(--panel);color:var(--tx)}
+#setPanel .setX .ic{width:16px;height:16px}
+#setPanel .setBody{flex:1;overflow-y:auto;padding:6px 18px 30px}
+#setPanel .setGrp{margin-top:18px}
+#setPanel .setGrp h3{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);opacity:.8;margin-bottom:6px}
+#setPanel .setRow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.045)}
+#setPanel .setRow:last-child{border-bottom:none}
+#setPanel .setRow.stack{display:block}
+#setPanel .setLbl{font-size:13px;font-weight:600}
+#setPanel .setHint{font-size:11.5px;color:var(--dim);margin-top:3px;line-height:1.5}
+#setPanel .setVal{font-size:11.5px;color:var(--dim);font-family:ui-monospace,Consolas,monospace;word-break:break-all;margin-top:5px}
+#setPanel .setNum{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+#setPanel .setPill{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim);flex-shrink:0}
+#setPanel .setPill.ok{color:#7ef0b0;border-color:rgba(126,240,176,.35)}
+#setPanel .setPill.no{color:var(--acc);border-color:rgba(255,92,122,.35)}
+#setPanel .setLink{font-size:12px;color:var(--acc2);text-decoration:none;flex-shrink:0}
+#setPanel .setLink:hover{text-decoration:underline}
+#setPanel .setSeg{display:inline-flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px;flex-shrink:0}
+#setPanel .setSeg label{position:relative;display:block}
+#setPanel .setSeg input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+#setPanel .setSeg span{display:block;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:700;color:var(--dim);cursor:pointer;white-space:nowrap}
+#setPanel .setSeg input:checked+span{background:var(--grad);color:#fff}
+#setPanel .setSeg input:focus-visible+span{outline:2px solid var(--acc2);outline-offset:1px}
+#setPanel .setSw{position:relative;width:42px;height:23px;flex-shrink:0}
+#setPanel .setSw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
+#setPanel .setSw i{position:absolute;inset:0;border-radius:999px;background:var(--panel);border:1px solid var(--line)}
+#setPanel .setSw i::after{content:'';position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:var(--dim);transition:transform .18s ease}
+#setPanel .setSw input:checked+i{background:var(--grad);border-color:transparent}
+#setPanel .setSw input:checked+i::after{background:#fff;transform:translateX(19px)}
+#setPanel .setSw input:focus-visible+i{outline:2px solid var(--acc2);outline-offset:2px}
+#setPanel .setRangeWrap{display:flex;align-items:center;gap:10px;flex-shrink:0}
+#setPanel input[type=range]{width:140px}
+#setPanel .setAct{font-size:12px;font-weight:600;color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;flex-shrink:0}
+#setPanel .setAct:hover{border-color:var(--tx)}
+#setPanel .setAct.danger{color:#ffb3c1;border-color:rgba(255,92,122,.35)}
+#setPanel .setAct.danger:hover{border-color:var(--acc);color:#fff}
+#setPanel .setCfm{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap}
+#setPanel .setCfmTx{font-size:12.5px;color:var(--tx)}
+#setPanel .setCfmBtns{display:flex;gap:8px;margin-left:auto}
 </style>
 <script id="v3js">
 (function(){
@@ -2451,6 +2502,323 @@ downloadTrack = async function(it){
   }catch(e){ toast('Download failed: '+e.message) }
 };
 
+/* ================== Wave 4E: settings slide-over ================== */
+/* Every localStorage key this app owns (WAVE0-NOTES inventory) + the frozen settings
+   keys (PLAN §8). Export/import use this list; nothing else is accepted on import. */
+var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto'];
+var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_logo'];
+var SET_KEYS = SET_LIVE.concat(SET_NEW);
+var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null;
+
+function setStored(k){ try{ return localStorage.getItem(k) }catch(e){ return null } }
+function setPut(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch(e){} }
+function setPanelEl(){ return document.getElementById('setPanel') }
+function setQ(sel){ var p = setPanelEl(); return p ? p.querySelector(sel) : null }
+
+/* the panel always shows the LIVE player state — it never keeps its own copy */
+function setLive(key){
+  if(key==='volume') return volume;
+  if(key==='shuffle') return !!shuffle;
+  if(key==='repeat') return repeat;
+  if(key==='autoplay') return !!v3autoOn;
+  if(key==='provider') return (lyrPref==='ytm'||lyrPref==='lrclib') ? lyrPref : 'auto';
+  return '';
+}
+function setSeg(name, opts, cur){
+  return '<div class="setSeg">'+opts.map(function(o){
+    var id = 'set_'+name+'_'+o[0];
+    return '<label for="'+id+'"><input type="radio" id="'+id+'" name="set_'+name+'" data-setkey="'+name+'" value="'+o[0]+'"'+(o[0]===cur?' checked':'')+'><span>'+esc(o[1])+'</span></label>';
+  }).join('')+'</div>';
+}
+function setSw(key, label){
+  var id = 'set_sw_'+key;
+  return '<label class="setSw" for="'+id+'" title="'+esc(label)+'"><input type="checkbox" id="'+id+'" data-setkey="'+key+'"'+(setLive(key)?' checked':'')+'><i aria-hidden="true"></i></label>';
+}
+function setRow(label, hint, ctrl, stack){
+  return '<div class="setRow'+(stack?' stack':'')+'"><div><div class="setLbl">'+esc(label)+'</div>'+(hint?'<div class="setHint">'+hint+'</div>':'')+'</div>'+ctrl+'</div>';
+}
+function setCfmRow(tx, yes, act){
+  return '<div class="setRow"><div class="setCfm"><span class="setCfmTx">'+esc(tx)+'</span>'+
+    '<span class="setCfmBtns"><button class="setAct danger" type="button" data-setact="'+act+'">'+esc(yes)+'</button>'+
+    '<button class="setAct" type="button" data-setact="cancel">Cancel</button></span></div></div>';
+}
+function setRender(){
+  var b = document.getElementById('setBody'); if(!b) return;
+  var keep = b.scrollTop, sys = setSys, h = '';
+  h += '<div class="setGrp"><h3>Playback</h3>'+
+    setRow('Autoplay similar','Keeps playing similar songs when the queue ends', setSw('autoplay','Autoplay similar'))+
+    setRow('Default shuffle','Shuffles the queue as it is built', setSw('shuffle','Default shuffle'))+
+    setRow('Repeat mode','', setSeg('repeat',[['off','Off'],['all','All'],['one','One']], setLive('repeat')))+
+    setRow('Volume','Mirrors the mini player’s slider',
+      '<div class="setRangeWrap"><input type="range" min="0" max="100" step="1" value="'+volume+'" data-setkey="volume" aria-label="Volume" style="--v:'+volume+'%"><span class="setNum" id="setVolNum">'+volume+'%</span></div>')+
+  '</div>';
+  h += '<div class="setGrp"><h3>Lyrics</h3>'+
+    setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRClib']], setLive('provider')))+
+  '</div>';
+  h += '<div class="setGrp"><h3>Downloads</h3>';
+  h += sys
+    ? '<div class="setRow stack"><div><div class="setLbl">yt-dlp</div><div class="setVal">'+esc(sys.ytdlp||'—')+'</div></div></div>'+
+      '<div class="setRow"><div><div class="setLbl">Status</div><div class="setHint">Read-only — resolved from the server</div></div><span class="setPill '+(sys.ytdlpFound?'ok':'no')+'">'+(sys.ytdlpFound?'found':'missing')+'</span></div>'
+    : '<div class="setRow stack"><div><div class="setLbl">yt-dlp</div><div class="setVal">—</div></div></div>';
+  h += '</div>';
+  h += '<div class="setGrp"><h3>Data</h3>';
+  h += (setCfm==='hist')
+    ? setCfmRow('Clear all listening history?','Clear','hist_yes')
+    : setRow('Clear history','Empties Home’s history rows ('+Object.keys(hist||{}).length+' tracks)','<button class="setAct danger" type="button" data-setact="hist">Clear</button>');
+  h += (setCfm==='likes')
+    ? setCfmRow('Remove every liked song?','Clear','likes_yes')
+    : setRow('Clear likes','Empties Liked music ('+Object.keys(favs||{}).length+' songs)','<button class="setAct danger" type="button" data-setact="likes">Clear</button>');
+  h += (setCfm==='import')
+    ? setCfmRow('Replace your Svara data with '+(setPend?Object.keys(setPend).length:0)+' keys from the file?','Import','import_yes')
+    : setRow('Export','Downloads every Svara localStorage key as JSON','<button class="setAct" type="button" data-setact="export">Export</button>')+
+      setRow('Import','Restores a file exported here — nothing is written unless it validates','<button class="setAct" type="button" data-setact="import">Import</button>');
+  h += '</div>';
+  h += '<div class="setGrp"><h3>About</h3>'+
+    setRow('Version','', '<span class="setNum">'+esc((sys&&sys.version)||'—')+'</span>')+
+    setRow('Author','', '<span class="setNum">Shubham0743X</span>')+
+    setRow('GitHub','', '<a class="setLink" href="https://github.com/Shubham0743X" target="_blank" rel="noreferrer">github.com/Shubham0743X</a>')+
+  '</div>';
+  b.innerHTML = h;
+  b.scrollTop = keep;
+}
+/* mirror the live player into the open panel, but never fight a control in use */
+function setSync(){
+  var p = setPanelEl(); if(!p) return;
+  var v = p.querySelector('input[data-setkey="volume"]');
+  if(v){ if(document.activeElement!==v && +v.value!==volume) v.value = volume; v.style.setProperty('--v', volume+'%') }
+  var n = document.getElementById('setVolNum'); if(n) n.textContent = volume+'%';
+  var sh = p.querySelector('input[data-setkey="shuffle"]'); if(sh && sh.checked!==!!shuffle) sh.checked = !!shuffle;
+  var ap = p.querySelector('input[data-setkey="autoplay"]'); if(ap && ap.checked!==!!v3autoOn) ap.checked = !!v3autoOn;
+  var rp = p.querySelector('input[data-setkey="repeat"][value="'+repeat+'"]'); if(rp && !rp.checked) rp.checked = true;
+  var pr = p.querySelector('input[data-setkey="provider"][value="'+setLive('provider')+'"]'); if(pr && !pr.checked) pr.checked = true;
+}
+function setShow(on){
+  var p = setPanelEl(), g = document.getElementById('setBtn');
+  if(!p) return;
+  setOpen = !!on; setCfm = '';
+  if(setOpen){
+    setRender();                                   // populated before the first visible frame
+    p.classList.add('on'); p.removeAttribute('aria-hidden');
+    if(g) g.setAttribute('aria-expanded','true');
+    setSysLoad(); setFileWire();
+  } else {
+    p.classList.remove('on'); p.setAttribute('aria-hidden','true');
+    if(g) g.setAttribute('aria-expanded','false');
+  }
+}
+function setSysLoad(){
+  if(setSysAsked) return;
+  setSysAsked = true;
+  fetch('/api/system').then(function(r){ return r.json() }).then(function(j){
+    setSys = (j && typeof j==='object') ? j : null;
+    if(setOpen) setRender();
+  }).catch(function(){ setSys = null; if(setOpen) setRender() });
+}
+function setFileWire(){
+  var f = document.getElementById('setFile');
+  if(!f || f.dataset.wired) return;
+  f.dataset.wired = '1';
+  f.onchange = function(){ var file = this.files && this.files[0]; this.value = ''; if(file) setImportFile(file) };
+}
+/* volume: the mini player's #vol input stays the single owner of playback volume */
+function setVolume(v){
+  v = +v; if(!isFinite(v)) v = 0;
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  var el = $('#vol');
+  if(el){ el.value = v; el.dispatchEvent(new Event('input', { bubbles:true })) }
+  else { volume = v; audio.volume = v/100 }
+  setPut('sv_set_volume', v);
+  var sl = setQ('input[data-setkey="volume"]');
+  if(sl){ sl.style.setProperty('--v', volume+'%'); if(document.activeElement!==sl) sl.value = volume }
+  var n = document.getElementById('setVolNum'); if(n) n.textContent = volume+'%';
+}
+/* lyrics provider: reuse the player's own chip handlers, never re-implement the fetch */
+function setProvider(p){
+  if(p!=='auto' && p!=='ytm' && p!=='lrclib') return;
+  try{ ensureLyricsUI() }catch(e){}
+  var b = document.getElementById(p==='auto' ? 'lAU' : p==='ytm' ? 'lYT' : 'lLR');
+  if(b) b.click();
+  else { lyrPref = p; saveAll() }    // chips not built yet: same state, no fetch to redo
+  setPut('sv_set_lyricsProvider', lyrPref);
+}
+function setClearHist(){
+  hist = {};
+  try{ LSset('ml_history', {}) }catch(e){}
+  try{ updatePlRows() }catch(e){}
+  try{ renderHome() }catch(e){}
+  toast('Listening history cleared');
+}
+function setClearLikes(){
+  favs = {};
+  try{ LSset('sv_favs', {}) }catch(e){}
+  try{ updatePlRows() }catch(e){}
+  try{ paintFavs() }catch(e){}
+  try{ refreshHearts() }catch(e){}
+  toast('Liked music cleared');
+}
+function setExport(){
+  var keys = {}, n = 0, k;
+  try{
+    for(var i=0;i<localStorage.length;i++){
+      k = localStorage.key(i);
+      if(!k || !/^(sv_|ml_)[a-z_0-9]*$/i.test(k)) continue;
+      keys[k] = localStorage.getItem(k); n++;
+    }
+  }catch(e){}
+  var payload = { app:'svara', exported:new Date().toISOString(), version:(setSys&&setSys.version)||'', keys:keys };
+  try{
+    var blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'svara-data-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href) }, 5000);
+    toast('Exported '+n+' keys');
+  }catch(e){ toast('Export failed: '+e.message) }
+}
+function setImportFile(file){
+  var fr = new FileReader();
+  fr.onload = function(){
+    var data = null;
+    try{ data = JSON.parse(String(fr.result||'')) }catch(e){ toast('Import failed: not valid JSON'); return }
+    if(!data || typeof data!=='object' || Array.isArray(data)){ toast('Import failed: expected a JSON object'); return }
+    var src = data.keys;
+    if(!src || typeof src!=='object' || Array.isArray(src)) src = data;      // also accept a flat export
+    var out = {}, bad = null;
+    Object.keys(src).forEach(function(k){
+      if(bad) return;
+      if(!/^(sv_|ml_)[a-z_0-9]*$/i.test(k)){ bad = k; return }
+      var v = src[k];
+      if(v===null || v===undefined) return;
+      if(typeof v==='string'){ try{ JSON.parse(v) }catch(e){ bad = k; return } out[k] = v }
+      else { try{ out[k] = JSON.stringify(v) }catch(e){ bad = k } }
+    });
+    if(bad){ toast('Import failed: unexpected key “'+bad+'”'); return }
+    var n = Object.keys(out).length;
+    if(!n){ toast('Import failed: no Svara data in the file'); return }
+    setPend = out; setCfm = 'import'; setRender();
+    toast('Loaded '+n+' keys — press Import to apply');
+  };
+  fr.onerror = function(){ toast('Import failed: could not read the file') };
+  fr.readAsText(file);
+}
+function setImportApply(){
+  var out = setPend; setPend = null; setCfm = '';
+  var n = out ? Object.keys(out).length : 0;
+  setRender();
+  if(!n) return;
+  var snap = {};
+  SET_KEYS.forEach(function(k){ var v = setStored(k); if(v!==null) snap[k] = v });
+  try{
+    Object.keys(out).forEach(function(k){ localStorage.setItem(k, out[k]) });
+  }catch(e){
+    try{                                    // any failure → put the previous data back
+      Object.keys(out).forEach(function(k){ localStorage.removeItem(k) });
+      SET_KEYS.forEach(function(k){ if(snap[k]!==undefined) localStorage.setItem(k, snap[k]) });
+    }catch(e2){}
+    toast('Import failed — your data was left as it was');
+    return;
+  }
+  setRefresh();
+  toast('Imported '+n+' keys');
+}
+/* after an import: re-read localStorage into the live state and repaint */
+function setRefresh(){
+  hist = LSget('ml_history', {}) || {};
+  favs = LSget('sv_favs', {}) || {};
+  pls  = LSget('sv_pls', {}) || {};
+  shist = LSget('sv_shist', []) || [];
+  var lp = LSget('sv_lyr', null); if(lp) lyrPref = lp;
+  recentTracks = LS.get('sv_tracks', []) || [];
+  recentIds = LS.get('sv_recent_ids', []) || [];
+  var v = LS.get('sv_set_volume', null); if(typeof v==='number' && isFinite(v)) setVolume(v);
+  var sh = LS.get('sv_set_shuffle', null); if(typeof sh==='boolean') shuffle = sh;
+  var rp = LS.get('sv_set_repeat', null); if(rp==='off'||rp==='all'||rp==='one') repeat = rp;
+  var ap = LS.get('sv_set_autoplay', null);
+  if(typeof ap==='boolean'){ v3autoOn = ap; LS.set('sv_auto', ap?'on':'off') }
+  try{ updatePlRows() }catch(e){}
+  try{ paintControls(); paintShuf(); paintAuto(); paintFavs(); renderSHist() }catch(e){}
+  try{ refreshHearts() }catch(e){}
+  if(setOpen) setRender();
+}
+
+/* ONE delegated input handler for every control in the panel */
+document.addEventListener('input', function(e){
+  var t = e.target;
+  if(!t || !t.getAttribute || !t.closest || !t.closest('#setPanel')) return;
+  var key = t.getAttribute('data-setkey'); if(!key) return;
+  if(key==='autoplay'){
+    v3autoOn = !!t.checked;
+    setPut('sv_set_autoplay', v3autoOn);
+    LS.set('sv_auto', v3autoOn ? 'on' : 'off');   // keep the key the #v3auto button writes in step
+    paintAuto();
+  } else if(key==='shuffle'){
+    if(!!t.checked !== !!shuffle) toggleShuffle();   // real queue rebuild + toast
+    setPut('sv_set_shuffle', !!shuffle);
+    paintShuf();
+  } else if(key==='repeat'){
+    if((t.value==='off'||t.value==='all'||t.value==='one') && repeat!==t.value){
+      repeat = t.value; paintControls();
+      toast(repeat==='off' ? 'Repeat off' : repeat==='all' ? 'Repeat all' : 'Repeat one');
+    }
+    setPut('sv_set_repeat', repeat);
+  } else if(key==='volume'){
+    setVolume(t.value);
+  } else if(key==='provider'){
+    setProvider(t.value);
+  }
+});
+/* ONE delegated click handler: the gear, every panel action, and click-outside */
+document.addEventListener('click', function(e){
+  var t = e.target;
+  if(!t || !t.closest) return;
+  if(t.closest('#setBtn')){ setShow(!setOpen); return }
+  if(!setOpen) return;
+  var a = t.closest('[data-setact]');
+  if(a){
+    var act = a.getAttribute('data-setact');
+    if(act==='close'){ setShow(false); return }
+    if(act==='cancel'){ setCfm = ''; setRender(); return }
+    if(act==='hist'){ setCfm = 'hist'; setRender(); return }
+    if(act==='hist_yes'){ setCfm = ''; setRender(); setClearHist(); return }
+    if(act==='likes'){ setCfm = 'likes'; setRender(); return }
+    if(act==='likes_yes'){ setCfm = ''; setRender(); setClearLikes(); return }
+    if(act==='export'){ setExport(); return }
+    if(act==='import'){ var f = document.getElementById('setFile'); if(f) f.click(); return }
+    if(act==='import_yes'){ setImportApply(); return }
+    return;
+  }
+  /* click outside closes — but only for real clicks: a programmatic click (the lyrics
+     provider chip in the player, for instance) must not close the panel underneath us */
+  if(e.isTrusted !== false && !t.closest('#setPanel')) setShow(false);
+});
+/* Escape closes the panel first: capture phase so the base Esc handler (menu / modal /
+   #pv) does not fire as well. While the modal is open, Esc is left to the base handler. */
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape') return;
+  var m = document.getElementById('modal');
+  if(m && m.classList.contains('show')) return;
+  if(!setOpen) return;
+  e.stopPropagation(); e.preventDefault();
+  setShow(false);
+}, true);
+
+/* the frozen keys are applied once, at startup, and only when they exist */
+(function setBoot(){
+  var v = LS.get('sv_set_volume', null);
+  if(typeof v==='number' && isFinite(v)) setVolume(v);          // the mini slider stays the owner
+  var sh = LS.get('sv_set_shuffle', null);
+  if(typeof sh==='boolean') shuffle = sh;                       // flag only: no queue yet to reorder
+  var rp = LS.get('sv_set_repeat', null);
+  if(rp==='off'||rp==='all'||rp==='one') repeat = rp;
+  var ap = LS.get('sv_set_autoplay', null);
+  if(typeof ap==='boolean') v3autoOn = ap;
+  LS.set('sv_auto', v3autoOn ? 'on' : 'off');
+  try{ paintControls(); paintShuf(); paintAuto() }catch(e){}
+})();
+/* the open panel mirrors the live player (the mini player can change under it) */
+setInterval(function(){ if(setOpen) setSync() }, 900);
+
 /* ---------- keepers ---------- */
 setInterval(function(){ homeLine(); paintShuf(); paintAuto(); ensureKnob(); }, 1200);
 setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
@@ -2709,6 +3077,16 @@ M3145 1368 c-3 -8 -4 -59 -3 -113 l3 -99 40 -4 c70 -7 143 8 175 34 56 48 49 139 -
   (logo || sb.firstElementChild).insertAdjacentElement('afterend', box);
 })();
 </script>
+
+<!-- SETTINGS SLIDE-OVER (Wave 4E) — shell only; the body is rendered by the v3js layer -->
+<aside id="setPanel" role="dialog" aria-modal="true" aria-label="Settings" aria-hidden="true">
+  <header class="setTop">
+    <h2>Settings</h2>
+    <button class="setX" type="button" data-setact="close" title="Close settings" aria-label="Close settings"><span class="ic"><svg><use href="#i-x"/></svg></span></button>
+  </header>
+  <div class="setBody" id="setBody"></div>
+  <input type="file" id="setFile" accept="application/json,.json" hidden>
+</aside>
 
 </body>
 </html>
