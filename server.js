@@ -47,7 +47,17 @@ function collectItems(node, out){
   return out;
 }
 function extractArtist(item){
-  if (Array.isArray(item.artists)) return item.artists.map(a => txt(a.name || a.text || a)).join(', ');
+  // metadata first: artists[] (song rows) → authors[] (video rows) → author (album rows).
+  // Subtitle parsing below is only the last resort — it can pick up a year or a
+  // play count on rows that carry no credits, and a flat artist string must never
+  // take its value from a title.
+  const src = Array.isArray(item.artists) && item.artists.length ? item.artists
+    : Array.isArray(item.authors) && item.authors.length ? item.authors
+    : item.author ? [item.author] : [];
+  const names = src.map(a => typeof a === 'string' ? a : txt(a && (a.name != null ? a.name : a.text))).filter(Boolean);
+  if (names.length) return names.join(', ');
+  const flex = flexCredits(item);                 // rows that ship credits only in flex[1]
+  if (flex) return flex;
   const sub = txt(item.subtitle);
   const parts = sub.split('•');
   if (parts.length > 1) return parts.slice(1).join('•').trim();
@@ -56,6 +66,19 @@ function extractArtist(item){
 // artist objects WITH channel ids, alongside the flat `artist` string (never replaces it).
 // youtubei.js 18 shapes: song rows -> `artists[]`, video rows -> `authors[]`,
 // album/playlist rows -> a single `author`. Each entry: { name, channel_id }.
+// Some rows carry NO structured credits at all (artists/authors/author/subtitle all empty)
+// yet still show "Artist • Album • 2:10" in flex_columns[1] — verified on live search rows.
+// The artist is the first non-duration segment; a duration or an album name must never be
+// promoted into the artist field, so anything `m:ss` shaped is dropped.
+function flexCredits(item){
+  try {
+    const runs = ((((item.flex_columns || [])[1] || {}).title) || {}).runs || [];
+    const line = runs.map(r => txt(r.text)).join('').replace(/\s+/g, ' ').trim();
+    if (!line) return '';
+    const seg = line.split('•').map(s => s.trim()).filter(s => s && !/^\d+:\d+$/.test(s));
+    return seg[0] || '';
+  } catch (e) { return ''; }
+}
 function artistList(item){
   try {
     const src = Array.isArray(item.artists) && item.artists.length ? item.artists
@@ -343,7 +366,11 @@ app.get('/api/artist', async (req, res) => {
       const s = await youtube.music.search(wantName, { type: 'artist' });
       const rows = collectItems(s.contents || [], []).filter(r => r && r.id && String(r.id).startsWith('UC'));
       const nm = r => txt(r.name) || txt(r.title);
-      const hit = rows.find(r => nm(r).toLowerCase() === wantName.toLowerCase()) || rows[0];
+      // EXACT name only — never rows[0]. A fuzzy fallback silently opens an unrelated
+      // artist (measured: "Study" → "Lofi Beat Study", "Dan" → "Dan Bull"), which is
+      // exactly the wrong-identity page this route must not produce. Unknown ⇒ plain text.
+      const norm = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+      const hit = rows.find(r => norm(nm(r)) === norm(wantName));
       id = (hit && hit.id) || '';
       if (!id) return res.json({ id: null });
     }

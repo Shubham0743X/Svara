@@ -1935,11 +1935,28 @@ function homeLine(){
 function artistLinksHTML(it){
   var flat = (it && it.artist) || '';
   var names = splitArtists(flat);
+  /* No flat string? The METADATA is the identity — this is what stops album and video
+     rows from rendering a blank artist line while `artists[]` sat there unused. */
+  if(!names.length) names = (it.artists || []).map(a => a && a.name ? String(a.name).trim() : '').filter(Boolean);
   if(!names.length) return esc(flat);
-  var ids = {};
-  (it.artists || []).forEach(function(a){ if(a && a.name) ids[String(a.name).toLowerCase()] = a.id || '' });
+  var norm = function(v){ return String(v == null ? '' : v).replace(/\s+/g,' ').replace(/^[,\s]+|[,\s]+$/g,'').toLowerCase() };
+  var ids = {}, meta = it.artists || [];
+  /* IDs come ONLY from `artists[]`. YouTube ships combined credits
+     ("Lofi Sleep Chill & Study", "Alex Kennon, Joris Voorn") as ONE entry with ONE
+     channel id; splitArtists() breaks those into display names, so an entry owns every
+     name it contains. No exact/contained match ⇒ no id ⇒ probe, never a wrong artist. */
+  meta.forEach(function(a){
+    if(!a || !a.name) return;
+    var m = norm(a.name); if(!m) return;
+    if(!ids[m]) ids[m] = a.id || '';
+    /* Separators become spaces so a trailing comma still matches: verified that these
+       ARE the channels' real names — UC0_Ba_aRYYM8CWYVWdYe5cg → "Alex Kennon, Joris
+       Voorn", UC1itStv5HQODNJr1zyUmDyg → "Lofi Sleep Chill & Study". */
+    var hay = ' ' + m.replace(/[,&;×]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+    names.forEach(function(n){ var w = norm(n); if(!w || ids[w]) return; if(hay.indexOf(' '+w+' ') >= 0) ids[w] = a.id || '' });
+  });
   return names.map(function(n){
-    var id = ids[String(n).toLowerCase()] || '';
+    var id = ids[norm(n)] || '';
     return '<span class="alink"' + (id ? ' data-artist-id="'+esc(id)+'"' : '') +
       ' data-artist-name="'+esc(n)+'">'+esc(n)+'</span>';
   }).join(', ');
@@ -1958,7 +1975,9 @@ function subHTML(it){
    wide token; if the URL is not on a banner host, keep whatever the API gave (shown unblurred,
    object-fit:cover) — never stretched into a box. */
 function heroArt(a){
-  var u = (a && (a.banner || a.thumb || '')) || '';
+  var raw = (a && (a.banner || a.thumb || '')) || '';
+  /* one artwork shape everywhere: v3art's normaliser decides whether this is a real URL */
+  var u = (typeof window.artURL === 'function') ? window.artURL(raw) : raw;
   if(!u) return '';
   if(/^https:\/\/(lh3|yt3)\.googleusercontent\.com\//.test(u)){
     /* ask BOTH banner hosts for the widest 2.4:1 token. The API normalises artwork
@@ -2117,7 +2136,7 @@ function renderArtist(a){
      2-line-clamped description with MORE/LESS, and Play all / Mix. `.art-fit` is
      the 2.4:1 floor; the hero grows when the description expands. */
   h += '<div class="art-hero'+(pic ? '' : ' nopic')+'">'+
-     (pic ? '<img class="art-herowide" src="'+esc(pic)+'" alt="" onerror="this.parentNode.classList.add(\'nopic\');this.style.display=\'none\'">' : '')+
+     (pic ? '<img class="art-herowide" src="'+esc(pic)+'" alt="">' : '')+
      '<div class="art-fit" aria-hidden="true"></div>'+
      '<div class="art-head">'+
        '<div class="art-name">'+esc(a.name)+'</div>'+
@@ -2845,38 +2864,97 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
 (function(){
   function goodUrl(u){ return typeof u==='string' && /^https?:\/\//i.test(u.trim()) }
 
+  /* ---- ONE artwork normaliser -------------------------------------------------
+     Accepts a track/album/artist OBJECT or a plain URL STRING and always returns a
+     URL STRING ('' when there is genuinely none), so every renderer — rows, rails,
+     queue, mini player, artist page — passes and receives the same shape. */
+  function artURL(v){
+    var u = (typeof v === 'string') ? v : ((v && (v.thumb || v.banner || v.url)) || '');
+    u = String(u == null ? '' : u).trim();
+    return goodUrl(u) ? u : '';                   // kills "[object Object]", "undefined", ""
+  }
+  window.artURL = artURL;                         // heroArt() (v3js) reuses it
+
+  /* ---- deliberate fallback TILE ---------------------------------------------
+     Brand gradient + the item's initials, drawn as an inline data: URI so nothing
+     has to load from a host. Used when artwork is TRULY missing — an empty gray box
+     is never an acceptable outcome. */
+  function xmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+  function artTile(label){
+    var words = String(label == null ? '' : label).replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
+    var ini = words.slice(0,2).map(function(w){ return w.charAt(0) }).join('').toUpperCase() || '♪';
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">' +
+      '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0" stop-color="#34304a"/><stop offset="1" stop-color="#141420"/></linearGradient></defs>' +
+      '<rect width="100" height="100" fill="url(#g)"/>' +
+      '<text x="50" y="52" fill="#9d9db2" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="34" font-weight="700" text-anchor="middle" dominant-baseline="middle">' + xmlEsc(ini) + '</text>' +
+      '</svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+  /* the artwork hosts answer the BIGGEST size tokens with 429 + `text/html` once a
+     page fires ~30 image requests at once; the renderer reports that as
+     net::ERR_BLOCKED_BY_ORB. So one retry at a smaller token is worth trying before
+     giving up. The hero keeps its 2.4:1 aspect so a retry can never crop it vertically. */
+  function smallerToken(u, wide){
+    var m = String(u || '').match(/=w\d+-h\d+[^"?]*$/);
+    if(!m) return '';
+    var next = String(u).slice(0, m.index) + (wide ? '=w1200-h500-p-l90-rj' : '=w320-h320-l90-rj');
+    return next === u ? '' : next;
+  }
+  function tileLabel(im){
+    try{
+      var row = im.closest('.row'); if(row && row.querySelector('.rtitle')) return row.querySelector('.rtitle').textContent;
+      var rail = im.closest('.rail'); if(rail && rail.querySelector('.rname')) return rail.querySelector('.rname').textContent;
+      var rel = im.closest('.art-relcard'); if(rel && rel.querySelector('.nm')) return rel.querySelector('.nm').textContent;
+      if(im.closest('#artSec')){ var n = document.querySelector('#artSec .art-name'); if(n) return n.textContent }
+      if(im.id === 'pvImg') return ($('#pvT') && $('#pvT').textContent) || '';
+      if(im.id === 'mArt') return ($('#mTitle') && $('#mTitle').textContent) || '';
+    }catch(e){}
+    return '';
+  }
+
   /* 1) any track without a real artwork URL gets YouTube's own thumbnail */
   var _thumb = thumb;
   thumb = function(it){
     var u = '';
-    try{ u = _thumb(it) || '' }catch(e){}
-    if(!goodUrl(u)) u = '';                       // kills "[object Object]", "undefined", ""
+    try{ u = artURL(_thumb(it)) }catch(e){}
     if(!u && it && /^[A-Za-z0-9_-]{11}$/.test(String(it.id||''))){
       u = 'https://i.ytimg.com/vi/'+it.id+'/mqdefault.jpg';
     }
     return u;
   };
 
-  /* 2) any image that still fails → fallback for rows, hide for anything else */
+  /* 2) an artwork request that fails gets: one smaller retry → YouTube's own still →
+        a deliberate tile. There is NO "hide the image and show nothing" path left. */
   document.addEventListener('error', function(e){
     var im = e.target;
-    if(!im || im.tagName!=='IMG' || im.dataset.fb==='1') return;
+    if(!im || im.tagName!=='IMG') return;
+    var stage = parseInt(im.dataset.fbr || '0', 10);
+    if(stage >= 3) return;                        // the tile itself failed (data: URI) — stop
     im.dataset.fb = '1';
-    var host = im.closest('[data-id]') || im.closest('[data-qid]');
-    var vid = host ? (host.getAttribute('data-id') || host.getAttribute('data-qid') || '') : '';
+    var host = im.closest('[data-id]') || im.closest('[data-qid]') || im.closest('[data-artrow]');
+    var vid = host ? (host.getAttribute('data-id') || host.getAttribute('data-qid') || host.getAttribute('data-artrow') || '') : '';
     if(!vid && (im.id==='pvImg' || im.id==='mArt')){
       try{ var it = nowItem(); vid = (it && it.id) || '' }catch(err){}
     }
-    if(!/^[A-Za-z0-9_-]{11}$/.test(vid)){ im.style.display='none'; return }
+    var real = /^[A-Za-z0-9_-]{11}$/.test(vid);
+    if(stage === 0){
+      var small = smallerToken(im.getAttribute('src') || '', im.classList.contains('art-herowide'));
+      if(small){ im.dataset.fbr = '1'; im.style.display = ''; im.src = small; return }
+      if(real){ im.dataset.fbr = '1'; im.style.display = ''; im.src = 'https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg'; return }
+    } else if(stage === 1 && real){
+      im.dataset.fbr = '2'; im.style.display = ''; im.src = 'https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg'; return;
+    }
+    im.dataset.fbr = '3';                         // artwork truly missing → deliberate tile
     im.style.display = '';
-    im.src = 'https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg';
+    im.src = artTile(tileLabel(im));
   }, true);
 
-  /* 3) reset the one-shot flag whenever the track changes */
+  /* 3) reset the retry state whenever the track changes */
   var _setNow = setNowUI;
   setNowUI = function(it){
     ['pvImg','mArt'].forEach(function(id){
-      var im = document.getElementById(id); if(im) im.dataset.fb = '';
+      var im = document.getElementById(id); if(im){ im.dataset.fb = ''; im.dataset.fbr = '0' }
     });
     _setNow(it);
   };
