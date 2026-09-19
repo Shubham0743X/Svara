@@ -1843,28 +1843,42 @@ if(!$('#homeSec').hidden)renderHome();
 #aboutCard .abX{padding:7px;border-radius:50%;color:var(--dim)}
 #aboutCard .abX:hover{background:var(--panel);color:var(--tx)}
 #aboutCard .abX .ic{width:15px;height:15px}
-#aboutCard .abMark{display:flex;align-items:center;justify-content:center;gap:9px;margin:14px 0 10px;color:#f4f4f7}
-#aboutCard .abMark svg{display:block;flex:0 0 auto;height:30px;width:auto;aspect-ratio:370/69}
-#aboutCard .abGlyph{flex:0 0 auto;width:30px;height:30px;background-size:contain;background-position:center;background-repeat:no-repeat;
+/* ---- Wave 4N: the body is TWO stacked cards (MetroList style) + the community block ---- */
+#aboutCard .abCards{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+#aboutCard .abCard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+/* CARD 1 — the app: brand mark left, "Svara" + version/platform pills right */
+#aboutCard .abCardTop{display:flex;align-items:center;gap:12px}
+#aboutCard .abMark{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:8px;color:#f4f4f7}
+#aboutCard .abMark svg{display:block;flex:0 1 auto;min-width:0;height:20px;width:auto;aspect-ratio:370/69}
+#aboutCard .abGlyphBox{flex:0 0 auto}
+#aboutCard .abGlyphBox .abGlyph{width:22px;height:22px}
+#aboutCard .abGlyph{display:block;width:30px;height:30px;background-size:contain;background-position:center;background-repeat:no-repeat;
   filter:drop-shadow(0 -1.5px 2.5px rgba(43,231,166,.55))}
-#aboutCard .abVer{font-size:12px;color:var(--dim);text-align:center;font-variant-numeric:tabular-nums}
-#aboutCard .abPillRow{display:flex;justify-content:center;margin:10px 0 14px}
-#aboutCard .abPill{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:999px;
-  border:1px solid var(--line);color:var(--dim)}
-#aboutCard .abName{font-size:14px;font-weight:700;text-align:center}
-#aboutCard .abRole{font-size:11.5px;color:var(--dim);text-align:center;margin-top:4px;line-height:1.5}
-#aboutCard .abLinks{display:flex;align-items:center;justify-content:center;gap:10px;margin:16px 0 2px}
+#aboutCard .abName{font-size:22px;font-weight:800;line-height:1.25;color:#f4f4f7}
+#aboutCard .abPillRow{display:flex;gap:7px;margin-top:7px;flex-wrap:wrap}
+#aboutCard .abPill{font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:4px 9px;border-radius:999px;
+  border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+#aboutCard .abPill--acc{border-color:rgba(43,231,166,.45);color:#2BE7A6}
+/* CARD 2 — the developer: avatar tile left, name + role right (name SAME size as "Svara") */
+#aboutCard .abAvatar{flex:0 0 auto;width:64px;height:64px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  background-color:rgba(43,231,166,.12);background-size:cover;background-position:center;border:1px solid rgba(43,231,166,.28)}
+#aboutCard .abAvatar .abGlyph{width:32px;height:32px}
+#aboutCard .abWho{flex:1 1 auto;min-width:0}
+#aboutCard .abRole{font-size:11.5px;line-height:1.5;color:#2BE7A6;margin-top:5px}
+/* GitHub / Instagram: two EQUAL-WIDTH buttons sharing the full card width */
+#aboutCard .abLinks{display:flex;gap:10px;margin-top:14px}
 #aboutCard .abBtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;font-size:12px;font-weight:600;
-  color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:999px;text-decoration:none;transition:border-color .18s ease}
+  color:var(--tx);background:var(--panel2);border:1px solid var(--line);border-radius:10px;text-decoration:none;transition:border-color .18s ease}
+#aboutCard .abLinks .abBtn{flex:1 1 0;min-width:0;padding:9px 8px}
 #aboutCard .abBtn:hover:not(:disabled){border-color:var(--tx)}
 #aboutCard .abBtn:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
-#aboutCard .abIco{width:44px;height:44px;padding:0;border-radius:50%}
 #aboutCard .abIco .ic{width:19px;height:19px}
 #aboutCard .abBtn:disabled{opacity:.4;cursor:not-allowed}
-#aboutCard .abGrp{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+/* Community & info — below both cards, unchanged in function */
+#aboutCard .abGrp{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 #aboutCard .abGrpH{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);opacity:.8;text-align:center;margin-bottom:10px}
 #aboutCard .abRepoRow{display:flex;justify-content:center}
-#aboutCard .abRepo{padding:9px 16px}
+#aboutCard .abRepo{padding:9px 16px;background:var(--panel)}
 </style>
 <script id="v3js">
 (function(){
@@ -2709,22 +2723,26 @@ function setSysLoad(){
 var ABOUT = {
   name: 'Shubham Nag',
   role: 'Creator & Maintainer · Product Architect & Designer',
+  avatar: '',       // avatar image URL — empty renders the brand-glyph tile (Wave 4N)
   github: '',       // GitHub profile URL
   instagram: '',    // Instagram profile URL
   repo: ''          // repository URL
 };
 var ABOUT_TIP = 'Not published yet';
 function aboutEl(){ return document.getElementById('aboutCard') }
-/* the OS is detected CLIENT-SIDE — no build-time assumption, no server route */
-function aboutOS(){
+/* the OS is detected CLIENT-SIDE — no build-time assumption, no server route.
+   4N: mode 'pill' returns the display name with its real case ("Windows"), matching the spec; the
+   default stays uppercase for any other caller. */
+function aboutOS(mode){
   var p = '', ua = '';
   try{ p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '' }catch(e){}
   try{ ua = navigator.userAgent || '' }catch(e){}
   var s = String(p || '');
-  if(/win/i.test(s) || /Windows/i.test(ua)) return 'Windows';
-  if(/mac/i.test(s) || /Mac OS X/i.test(ua)) return 'macOS';
-  if(/linux/i.test(s) || /Linux/i.test(ua)) return 'Linux';
-  return '—';
+  var os = '—';
+  if(/win/i.test(s) || /Windows/i.test(ua)) os = 'Windows';
+  else if(/mac/i.test(s) || /Mac OS X/i.test(ua)) os = 'macOS';
+  else if(/linux/i.test(s) || /Linux/i.test(ua)) os = 'Linux';
+  return mode === 'pill' ? os : os.toUpperCase();
 }
 /* a value ⇒ a real link; an EMPTY string ⇒ a disabled control that cannot be clicked or focused */
 function aboutLink(url, cls, inner, label){
@@ -2749,19 +2767,48 @@ function aboutMark(){
   try{ bg = getComputedStyle(src, '::after').backgroundImage || '' }catch(e){}
   if(bg && bg !== 'none') g.style.backgroundImage = bg;
   m.appendChild(g);
+  /* Wave 4N: the avatar tile shares the very same data-URI glyph (or a real ABOUT.avatar image) */
+  var av = document.getElementById('abAvatar');
+  if(av){
+    if(ABOUT.avatar){ av.style.backgroundImage = 'url("'+esc(ABOUT.avatar)+'")' }
+    else{ var ag = av.querySelector('.abGlyph'); if(ag && bg && bg !== 'none') ag.style.backgroundImage = bg }
+  }
+}
+/* Wave 4N: the developer avatar tile. No photo exists yet — the brand glyph renders centered in
+   a tinted rounded square. Drop a real image URL into ABOUT.avatar later; the tile's size,
+   radius and position never change. */
+function aboutAvatarHTML(){
+  var tile = '<div class="abAvatar" id="abAvatar" role="img" aria-label="'+esc(ABOUT.name)+'">';
+  if(ABOUT.avatar) return tile + '</div>';
+  return tile + '<span class="abGlyph" aria-hidden="true"></span></div>';
 }
 function aboutRender(){
   var b = document.getElementById('abBody'); if(!b) return;
   var h = '';
-  h += '<div class="abMark" id="abMark"></div>';
-  h += '<div class="abVer">Version <span>'+esc((setSys && setSys.version) || '—')+'</span></div>';
-  h += '<div class="abPillRow"><span class="abPill" id="abPill">'+esc(aboutOS())+'</span></div>';
-  h += '<div class="abName">'+esc(ABOUT.name)+'</div>';
-  h += '<div class="abRole">'+esc(ABOUT.role)+'</div>';
-  h += '<div class="abLinks">'+
-    aboutLink(ABOUT.github, 'abIco', '<span class="ic"><svg><use href="#i-github"/></svg></span>', 'GitHub profile')+
-    aboutLink(ABOUT.instagram, 'abIco', '<span class="ic"><svg><use href="#i-instagram"/></svg></span>', 'Instagram profile')+
+  /* CARD 1 — the app: brand mark left, "Svara" large + version/platform pills right */
+  /* CARD 2 — the developer: avatar tile left, name at the SAME size as "Svara", role in accent */
+  h += '<div class="abCards">'+
+    '<div class="abCard"><div class="abCardTop">'+
+      '<div class="abMark" id="abMark"></div>'+
+      '<div class="abWho">'+
+        '<div class="abName">Svara</div>'+
+        '<div class="abPillRow"><span class="abPill abPill--acc" id="abPillV">'+esc((setSys && setSys.version) || '—')+'</span>'+
+        '<span class="abPill" id="abPill">'+esc(aboutOS('pill'))+'</span></div>'+
+      '</div>'+
+    '</div></div>'+
+    '<div class="abCard"><div class="abCardTop">'+
+      aboutAvatarHTML()+
+      '<div class="abWho">'+
+        '<div class="abName">'+esc(ABOUT.name)+'</div>'+
+        '<div class="abRole">'+esc(ABOUT.role)+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="abLinks">'+
+      aboutLink(ABOUT.github, 'abIco', '<span class="ic"><svg><use href="#i-github"/></svg></span>', 'GitHub profile')+
+      aboutLink(ABOUT.instagram, 'abIco', '<span class="ic"><svg><use href="#i-instagram"/></svg></span>', 'Instagram profile')+
+    '</div></div>'+
   '</div>';
+  /* below both cards, unchanged in function */
   h += '<div class="abGrp"><div class="abGrpH">Community &amp; info</div><div class="abRepoRow">'+
     aboutLink(ABOUT.repo, 'abRepo', '<span>View Repository</span>', 'View Repository')+
   '</div></div>';
