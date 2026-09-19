@@ -122,9 +122,12 @@ function findMusicShelf(node, depth){
   return null;
 }
 
-/* ================= search (paginated — bug #5) ================= */
-const searchSessions = new Map();          // sessionId -> { feed, shelf, seen, next, expires }
+/* ================= search (paginated — bug #5, fixed in 4M) ================= */
+const searchSessions = new Map();          // sessionId -> { feed, shelf, seen, type, reqs, rows, expires }
 const SESSION_TTL = 10 * 60 * 1000;
+// 4M: per-session caps so a client cannot paginate one search forever.
+const SEARCH_PAGE_MAX = 3;                 // max /api/search/next calls per session
+const SEARCH_ROW_MAX = 100;                // max fresh rows a session may deliver
 
 function sweepSessions(){
   const now = Date.now();
@@ -137,23 +140,39 @@ function sweepSessions(){
 function newSessionId(){
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
+// 4M: the REAL "load more" token on a parsed search page. Measured live (18.0.0):
+//   • page-1 MusicShelf has NO ContinuationItem child — the token is hoisted onto
+//     shelf.continuation (from continuations[0].nextContinuationData, MusicShelf.js).
+//   • shelf.getContinuation() / feed.getContinuation() DO NOT EXIST on these parsed nodes,
+//     so the old pageFrom() always returned null → /api/search/next silently answered
+//     { items: [], next: false }. That is the bug.
+// Same request shape /api/artist/songs uses for its continuation (parse: true + memo read),
+// pointed at /search with the shelf token — the request the library's own SearchContinuation
+// makes (Search.js getContinuation). Rows come back through continuation_contents_memo,
+// the NEXT token rides on continuation_contents.continuation.
+//   shelf in the session = page-1 MusicShelf, then the stored next token (string or node).
+// Returns { rows, nextCont } or null — never throws past the caller's try/catch.
 async function pageFrom(shelf, feed){
-  // prefer the shelf's own continuation (keeps us inside the SONGS shelf)
-  if (shelf && typeof shelf.getContinuation === 'function') {
-    const nextShelf = await shelf.getContinuation();
-    if (nextShelf) {
-      const node = findMusicShelf(nextShelf, 0) || nextShelf;
-      if (Array.isArray(node.contents) && node.contents.length) return { node, shelf: node };
-    }
+  const youtube = await getYt();
+  let resp = null, memo = null;
+  if (shelf && typeof shelf.continuation === 'string' && shelf.continuation) {
+    // token string hoisted onto the shelf (page 1 and every page after)
+    resp = await youtube.actions.execute('/search', { continuation: shelf.continuation, client: 'YTMUSIC', parse: true });
+    memo = resp && (resp.continuation_contents_memo || resp.on_response_received_actions_memo || resp.contents_memo);
+  } else {
+    // defensive: legacy shapes — a bare ContinuationItem, or one sitting inside shelf.contents
+    const cont = (shelf && shelf.type === 'ContinuationItem') ? shelf
+      : (shelf && Array.isArray(shelf.contents)) ? shelf.contents.find(x => x && x.type === 'ContinuationItem') : null;
+    if (!cont || !cont.endpoint || typeof cont.endpoint.call !== 'function') return null;
+    resp = await cont.endpoint.call(youtube.actions, { client: 'YTMUSIC', parse: true });
+    memo = resp && (resp.continuation_contents_memo || resp.on_response_received_actions_memo || resp.contents_memo);
   }
-  if (feed && typeof feed.getContinuation === 'function') {
-    const nextFeed = await feed.getContinuation();
-    if (nextFeed) {
-      const shelf2 = findMusicShelf(nextFeed, 0);
-      if (shelf2 && Array.isArray(shelf2.contents) && shelf2.contents.length) return { node: shelf2, shelf: shelf2 };
-    }
-  }
-  return null;
+  if (!memo || typeof memo.getType !== 'function') return null;
+  const rows = YTNodes.MusicResponsiveListItem ? memo.getType(YTNodes.MusicResponsiveListItem) : [];
+  const lc = resp && resp.continuation_contents;
+  const nextCont = (lc && lc.continuation) ||
+    (YTNodes.ContinuationItem ? (memo.getType(YTNodes.ContinuationItem)[0] || null) : null);
+  return { rows, nextCont };
 }
 function dedupe(items, seen){
   const out = [];
@@ -179,8 +198,10 @@ app.get('/api/search', async (req, res) => {
     const seen = new Set(items.map(i => i.id));
     sweepSessions();
     const sessionId = newSessionId();
-    const hasMore = !!(shelf && (shelf.continuation || (shelf.contents || []).some(x => x.continuation)));
-    searchSessions.set(sessionId, { feed, shelf, seen, type, expires: Date.now() + SESSION_TTL });
+    // 4M: honest hasMore = we actually hold a usable token — shelf.continuation
+    // (page-1 shape) or a ContinuationItem in the contents (legacy shape).
+    const hasMore = !!(shelf && (shelf.continuation || (shelf.contents || []).some(x => x && x.type === 'ContinuationItem')));
+    searchSessions.set(sessionId, { feed, shelf, seen, type, reqs: 0, rows: items.length, expires: Date.now() + SESSION_TTL });
     res.json({ items, sessionId, next: hasMore });
   } catch (e) {
     console.error('search error:', e.message);
@@ -192,18 +213,39 @@ app.get('/api/search/next', async (req, res) => {
   const sessionId = String(req.query.sessionId || '');
   const s = searchSessions.get(sessionId);
   if (!s) return res.json({ items: [], next: false, error: 'session expired' });
+  // 4M: cap the session — page 1 plus at most SEARCH_PAGE_MAX calls / SEARCH_ROW_MAX rows.
+  if (s.reqs >= SEARCH_PAGE_MAX || s.rows >= SEARCH_ROW_MAX) {
+    searchSessions.delete(sessionId);
+    return res.json({ items: [], next: false, error: 'search page limit reached' });
+  }
   s.expires = Date.now() + SESSION_TTL;
   try {
     const page = await pageFrom(s.shelf, s.feed);
-    if (!page) { searchSessions.delete(sessionId); return res.json({ items: [], next: false }); }
-    s.shelf = page.shelf;
-    const mapped = collectItems(page.node.contents || [], [])
+    if (!page) {
+      searchSessions.delete(sessionId);
+      return res.json({ items: [], next: false, error: 'no continuation token on the last search page' });
+    }
+    // 4M: store the next token in the shape pageFrom consumes — { continuation: 'token' }.
+    // nextCont is the token string from continuation_contents (MusicShelfContinuation),
+    // or a ContinuationItem node on the legacy shape.
+    s.shelf = page.nextCont
+      ? (typeof page.nextCont === 'string' ? { continuation: page.nextCont } : page.nextCont)
+      : null;
+    s.reqs++;
+    const mapped = (page.rows || [])
       .map(i => mapTrack(i, '', s.type === 'album'))
       .filter(Boolean);
     const fresh = dedupe(mapped, s.seen);
-    const stillMore = !!(s.shelf && (s.shelf.continuation || (s.shelf.contents || []).some(x => x.continuation)));
+    s.rows += fresh.length;
+    const stillMore = !!page.nextCont;
     if (!stillMore) searchSessions.delete(sessionId);
-    res.json({ items: fresh, next: stillMore && fresh.length > 0 });
+    // 4M: never a silent empty page — YouTube advertised more but this page delivered 0 new
+    // tracks, so say so explicitly and end paging (next:false) instead of { items: [], next: ? }.
+    if (stillMore && !fresh.length) {
+      searchSessions.delete(sessionId);
+      return res.json({ items: [], next: false, error: 'expected more results but ' + (page.rows || []).length + ' continuation rows mapped to 0 new tracks' });
+    }
+    res.json({ items: fresh, next: stillMore });
   } catch (e) {
     console.error('search next error:', e.message);
     searchSessions.delete(sessionId);
