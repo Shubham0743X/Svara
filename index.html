@@ -1717,7 +1717,8 @@ if(!$('#homeSec').hidden)renderHome();
 .art-back{margin:8px 2px 4px;font-size:13px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 10px;display:inline-flex;align-items:center;gap:7px}
 .art-back:hover{border-color:var(--tx);color:var(--tx)}
 .art-back .ic{width:16px;height:16px}
-/* Wave 4C/4D — hero = the CLEAR, unblurred 2.4:1 banner, full-bleed, no avatar circle.
+/* Wave 4C/4D (restored for Wave 4J) — hero = the CLEAR, unblurred 2.4:1 banner,
+   full-bleed, no avatar circle.
    Wave 4D: the box is never shorter than width/2.4, so object-fit:cover crops the
    SIDES only — the image is never cropped top-to-bottom and faces are never cut.
    The 2.4:1 floor lives on a zero-height spacer (.art-fit) instead of on the hero
@@ -1965,7 +1966,7 @@ function subHTML(it){
   var a = artistLinksHTML(it);
   return (it && it.duration) ? a + ' • ' + esc(it.duration) : a;
 }
-/* --- artist hero artwork -------------------------------------------------
+/* --- artist hero artwork (restored for Wave 4J, matching the full-bleed hero) ---
    VERIFIED: the artist header DOES carry a genuinely wide banner. Both banner hosts
    (lh3.googleusercontent.com and yt3.googleusercontent.com) serve ANY size token, so long
    as the `-p-` flag is kept: 7/7 artists returned 200 + 2400×1000 for "=w2400-h1000-p-l90-rj"
@@ -1997,7 +1998,8 @@ function heroArt(a){
 function artSongRowHTML(it){
   var cur = (typeof nowItem === 'function') && nowItem() && nowItem().id === it.id;
   return '<div class="row artrow ' + (cur ? 'cur' : '') + '" data-artrow="'+esc(it.id)+'" data-id="'+esc(it.id)+'">'+
-    '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
+    /* Wave 4I — deferred: NO src until v3art's IntersectionObserver promotes data-src. */
+    '<div class="rt"><img loading="lazy" alt="" data-src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
     '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div>'+
       '<div class="rsub">'+artistLinksHTML(it)+'</div></div>'+
@@ -2111,7 +2113,7 @@ function restoreView(){
 function albumCard(a){
   var ph = thumb(a) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="rail" data-artalbum="'+esc(a.id)+'" data-title="'+esc(a.title||'')+'">'+
-    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'">'+
+    '<div class="art">'+ph+'<img loading="lazy" alt="" data-src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
     '<div class="rname">'+esc(a.title)+'</div>'+
     '<div class="rsub2">'+(a.year ? esc(a.year) : esc(a.artist||''))+'</div></div>';
@@ -2119,7 +2121,7 @@ function albumCard(a){
 function relatedCard(a){
   var ph = thumb(a) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="art-relcard" data-artist-id="'+esc(a.id||'')+'" data-artist-name="'+esc(a.name||'')+'">'+
-    '<div class="ring">'+ph+'<img loading="lazy" src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'"></div>'+
+    '<div class="ring">'+ph+'<img loading="lazy" alt="" data-src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'"></div>'+
     '<div class="nm">'+esc(a.name)+'</div>'+
     (a.audience ? '<div class="ad">'+esc(a.audience)+'</div>' : '')+
   '</div>';
@@ -2132,11 +2134,17 @@ function renderArtist(a){
   var aud = a.monthlyAudience || '';
   if(aud && !/monthly/i.test(aud)) aud += ' monthly audience';
   var h = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
-  /* Wave 4D — everything sits ON the clear banner: name, monthly audience, the
-     2-line-clamped description with MORE/LESS, and Play all / Mix. `.art-fit` is
-     the 2.4:1 floor; the hero grows when the description expands. */
+  /* Wave 4D hero (restored for Wave 4J) — everything sits ON the clear full-bleed
+     banner: name, monthly audience, the 2-line-clamped description with MORE/LESS, and
+     Play all / Mix. `.art-fit` is the 2.4:1 floor; the hero grows when the description
+     expands. The wide banner is the FIRST image in the view and the ONLY eager one
+     (fetchpriority="high", never deferred), so it always wins the race; every other
+     artist-page image is deferred by v3art's IntersectionObserver (data-src) and paced
+     ~80ms apart. Initials are NOT part of the ladder — a URL that merely FAILED gets
+     v3art's flat dark placeholder; the hero only falls back to its own .nopic gradient
+     when the API returned no artwork URL at all. */
   h += '<div class="art-hero'+(pic ? '' : ' nopic')+'">'+
-     (pic ? '<img class="art-herowide" src="'+esc(pic)+'" alt="">' : '')+
+     (pic ? '<img class="art-herowide" fetchpriority="high" decoding="async" alt="" src="'+esc(pic)+'">' : '')+
      '<div class="art-fit" aria-hidden="true"></div>'+
      '<div class="art-head">'+
        '<div class="art-name">'+esc(a.name)+'</div>'+
@@ -2875,10 +2883,12 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
   }
   window.artURL = artURL;                         // heroArt() (v3js) reuses it
 
-  /* ---- deliberate fallback TILE ---------------------------------------------
-     Brand gradient + the item's initials, drawn as an inline data: URI so nothing
-     has to load from a host. Used when artwork is TRULY missing — an empty gray box
-     is never an acceptable outcome. */
+  /* ---- initials TILE (Wave 4I: the NO-URL case only) -------------------------
+     Brand gradient + the item's initials, drawn as an inline data: URI so nothing has
+     to load from a host. Retained for the ONE case where the API returned NO artwork
+     URL at all (exposed as window.artTile; the artist hero itself renders its existing
+     .nopic gradient for that case). It is NEVER a failure fallback: an image that was
+     served and then FAILED gets the flat tile below. */
   function xmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
   function artTile(label){
     var words = String(label == null ? '' : label).replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
@@ -2891,26 +2901,30 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
       '</svg>';
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
+  window.artTile = artTile;                       // initials ⇢ ONLY when the API returned no artwork URL
   /* the artwork hosts answer the BIGGEST size tokens with 429 + `text/html` once a
      page fires ~30 image requests at once; the renderer reports that as
      net::ERR_BLOCKED_BY_ORB. So one retry at a smaller token is worth trying before
-     giving up. The hero keeps its 2.4:1 aspect so a retry can never crop it vertically. */
+     giving up. The full-bleed hero keeps its 2.4:1 token (wide), so a retry can never
+     introduce bands or a vertical crop; every square box shrinks to a square token.
+     Replace the WHOLE token, never part of it: ggpht avatars ship tokens such as
+     "=w1000-c-h416-k-c0x00ffffff-no-l90-rj-dcMSWWrhkK", and editing one piecemeal
+     (measured "=w400-c-h416-…") comes back 400 text/html while a clean
+     "=w320-h320-l90-rj" comes back 200 image/jpeg. The API itself uses this token shape. */
   function smallerToken(u, wide){
-    var m = String(u || '').match(/=w\d+-h\d+[^"?]*$/);
-    if(!m) return '';
-    var next = String(u).slice(0, m.index) + (wide ? '=w1200-h500-p-l90-rj' : '=w320-h320-l90-rj');
-    return next === u ? '' : next;
+    var s = String(u || '');
+    var i = s.lastIndexOf('=');
+    if(i < 0) return '';
+    var next = s.slice(0, i) + (wide ? '=w1200-h500-p-l90-rj' : '=w320-h320-l90-rj');
+    return next === s ? '' : next;
   }
-  function tileLabel(im){
-    try{
-      var row = im.closest('.row'); if(row && row.querySelector('.rtitle')) return row.querySelector('.rtitle').textContent;
-      var rail = im.closest('.rail'); if(rail && rail.querySelector('.rname')) return rail.querySelector('.rname').textContent;
-      var rel = im.closest('.art-relcard'); if(rel && rel.querySelector('.nm')) return rel.querySelector('.nm').textContent;
-      if(im.closest('#artSec')){ var n = document.querySelector('#artSec .art-name'); if(n) return n.textContent }
-      if(im.id === 'pvImg') return ($('#pvT') && $('#pvT').textContent) || '';
-      if(im.id === 'mArt') return ($('#mTitle') && $('#mTitle').textContent) || '';
-    }catch(e){}
-    return '';
+  /* flat dark placeholder for an image that was SERVED and then FAILED (after the one
+     smaller retry). Deliberately NOT initials: initials mean "the API returned no
+     artwork URL at all", which is a different fact (see the poster path in v3js). */
+  function flatTile(){
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">' +
+      '<rect width="100" height="100" fill="#14141b"/></svg>');
   }
 
   /* 1) any track without a real artwork URL gets YouTube's own thumbnail */
@@ -2924,37 +2938,117 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
     return u;
   };
 
-  /* 2) an artwork request that fails gets: one smaller retry → YouTube's own still →
-        a deliberate tile. There is NO "hide the image and show nothing" path left. */
+  /* Wave 4J — measured root cause: the artwork host answers a request that carries a
+     Referer with 429 + `text/html`, which the renderer reports as net::ERR_BLOCKED_BY_ORB,
+     so the image silently never paints. /api/thumb fetches the SAME URL server-side with
+     NO Referer and gets 200. A retry fired in the SAME burst is throttled again, so the
+     second ask is made after a pause — and only if nothing has painted or replaced the
+     image meanwhile. */
+  var RETRY_MS = 900;
+  function proxied(u){ return '/api/thumb?url=' + encodeURIComponent(u) }
+  function retryLater(im, url){
+    var from = im.getAttribute('src');
+    setTimeout(function(){
+      if(!im.isConnected) return;
+      if(im.complete && im.naturalWidth > 0) return;   // something painted it meanwhile
+      if(im.getAttribute('src') !== from) return;      // src changed under us — leave it alone
+      im.style.display = '';
+      im.setAttribute('src', url);
+    }, RETRY_MS);
+  }
+
+  /* 2) Wave 4J failure ladder, per image:
+        direct load → retry once (~900ms later) via /api/thumb?url=<same URL>
+        → the same artwork at a smaller token (proxied the same way) → FLAT DARK placeholder.
+        Initials are NEVER part of this ladder: they mean "the API returned no artwork URL
+        at all", which is a different fact (the artist hero's .nopic path in v3js). */
   document.addEventListener('error', function(e){
     var im = e.target;
     if(!im || im.tagName!=='IMG') return;
+    if(!im.isConnected) return;                   // detached image: nothing to paint
+    if(im.complete && im.naturalWidth > 0) return; // ALREADY PAINTED — never swap a good image
     var stage = parseInt(im.dataset.fbr || '0', 10);
-    if(stage >= 3) return;                        // the tile itself failed (data: URI) — stop
+    if(stage >= 3) return;                        // the flat placeholder itself failed — stop
+    var cur = im.getAttribute('src') || '';
+    /* the browser re-fires `error` for the SAME src when its own transport retry fails
+       (measured: two events for one URL). That must NOT escalate — and it must NOT cancel
+       the retry retryLater() already scheduled for that src. */
+    if(im.dataset.fbsrc === cur) return;
     im.dataset.fb = '1';
-    var host = im.closest('[data-id]') || im.closest('[data-qid]') || im.closest('[data-artrow]');
-    var vid = host ? (host.getAttribute('data-id') || host.getAttribute('data-qid') || host.getAttribute('data-artrow') || '') : '';
-    if(!vid && (im.id==='pvImg' || im.id==='mArt')){
-      try{ var it = nowItem(); vid = (it && it.id) || '' }catch(err){}
-    }
-    var real = /^[A-Za-z0-9_-]{11}$/.test(vid);
+    im.dataset.fbsrc = cur;
     if(stage === 0){
-      var small = smallerToken(im.getAttribute('src') || '', im.classList.contains('art-herowide'));
-      if(small){ im.dataset.fbr = '1'; im.style.display = ''; im.src = small; return }
-      if(real){ im.dataset.fbr = '1'; im.style.display = ''; im.src = 'https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg'; return }
-    } else if(stage === 1 && real){
-      im.dataset.fbr = '2'; im.style.display = ''; im.src = 'https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg'; return;
+      /* step 1 — the SAME URL re-asked through the server proxy, which sends no Referer.
+         This is the step that actually beats the 429/ORB. */
+      im.dataset.fb0 = cur;
+      im.dataset.fbr = '1';
+      retryLater(im, proxied(cur));
+      return;
     }
-    im.dataset.fbr = '3';                         // artwork truly missing → deliberate tile
+    if(stage === 1){
+      /* step 2 — the original artwork at one smaller size token, proxied the same way. */
+      var small = smallerToken(im.dataset.fb0 || cur, im.classList.contains('art-herowide'));
+      if(small){ im.dataset.fbr = '2'; retryLater(im, proxied(small)); return }
+    }
+    im.dataset.fbr = '3';                         // served, then failed → FLAT DARK placeholder
     im.style.display = '';
-    im.src = artTile(tileLabel(im));
+    im.src = flatTile();
   }, true);
 
-  /* 3) reset the retry state whenever the track changes */
+  /* 3) DEFERRED artwork (Wave 4I) ---------------------------------------------
+     The artist page's below-fold renderers (top songs, Albums & singles, Fans might
+     also like) emit <img loading="lazy" data-src="…"> with NO src, so opening an
+     artist requests only the poster instead of ~20-30 avatars at once — which is what
+     made the host throttle and the old hero lose the race. One IntersectionObserver
+     promotes data-src → src just before the image scrolls in; the error handler above
+     owns retries from there. A MutationObserver picks up every fresh render, so no
+     renderer has to remember to call anything. */
+  function lazyRoot(){ return document.getElementById('scroll') || null }
+  var lazyIO = null;
+  function promote(im){
+    if(!im || !im.isConnected) return;            // the view was left while this sat in the queue
+    var s = im.getAttribute('data-src');
+    im.removeAttribute('data-src');
+    if(s){ im.dataset.fb = ''; im.dataset.fbr = '0'; im.dataset.fbsrc = ''; im.dataset.fb0 = ''; im.setAttribute('src', s) }
+  }
+  /* ONE intersecting image per tick. Measured: ~13 requests at once is what provokes the
+     host's 429 + text/html storm (renderer: net::ERR_BLOCKED_BY_ORB); the same URLs asked
+     for one-at-a-time all return 200. So intersecting images are queued and drained with a
+     small gap — the poster is eager and is never queued, so it still goes first. */
+  var PROMOTE_GAP_MS = 80, lazyQ = [], lazyTimer = null;
+  function drain(){
+    lazyTimer = null;
+    if(lazyQ.length){ promote(lazyQ.shift()); lazyTimer = setTimeout(drain, PROMOTE_GAP_MS) }
+  }
+  function enqueue(im){
+    if(!im) return;
+    if(lazyQ.indexOf(im) < 0) lazyQ.push(im);
+    if(!lazyTimer) lazyTimer = setTimeout(drain, 0);
+  }
+  function lazyOne(im){
+    if(!im || im.getAttribute('src') || !im.hasAttribute('data-src')) return;
+    if(!im.getAttribute('data-src')){ im.removeAttribute('data-src'); return }  // no URL at all → keep the placeholder
+    if(!lazyIO){
+      try{
+        lazyIO = new IntersectionObserver(function(entries){
+          for(var i=0;i<entries.length;i++){ var t = entries[i].target; if(entries[i].isIntersecting){ lazyIO.unobserve(t); enqueue(t) } }
+        }, { root: lazyRoot(), rootMargin: '200px 0px' });
+      }catch(e){ lazyIO = null }
+    }
+    if(!lazyIO){ enqueue(im); return }            // no IntersectionObserver → queue it anyway, never never
+    lazyIO.observe(im);
+  }
+  function lazyScan(){
+    var ims = document.querySelectorAll('img[data-src]');
+    for(var i=0;i<ims.length;i++) lazyOne(ims[i]);
+  }
+  window.artLazy = lazyScan;                      // exposed so any renderer (or a probe) can flush it
+  try{ new MutationObserver(lazyScan).observe(document.body, { childList:true, subtree:true }); }catch(e){}
+
+  /* 4) reset the retry state whenever the track changes */
   var _setNow = setNowUI;
   setNowUI = function(it){
     ['pvImg','mArt'].forEach(function(id){
-      var im = document.getElementById(id); if(im){ im.dataset.fb = ''; im.dataset.fbr = '0' }
+      var im = document.getElementById(id); if(im){ im.dataset.fb = ''; im.dataset.fbr = '0'; im.dataset.fbsrc = ''; im.dataset.fb0 = '' }
     });
     _setNow(it);
   };
