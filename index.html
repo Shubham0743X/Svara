@@ -2318,6 +2318,10 @@ document.addEventListener('click', function(e){
 
 /* ---------- BUG #5: search paging / infinite scroll ---------- */
 var S = { q:'', sessionId:null, next:false, loading:false, items:[] };
+/* 4L: search generation token. Every doSearch() owns one; loadMore() reads it before its await so
+   a page-2 response that lands after a NEWER search can be dropped instead of mutating it.
+   Deliberately separate from the artist layer's artGen — the two views page independently. */
+var Sg = 0;
 function paintSearch(){
   var html = '<div class="list">'+S.items.map(function(it){ return rowHTML(it) }).join('')+'</div>'+
              '<div class="v3sent" id="v3sent"></div>';
@@ -2326,37 +2330,46 @@ function paintSearch(){
 }
 async function loadMore(){
   if(!S.sessionId || !S.next || S.loading) return;
-  S.loading = true;
+  /* 4L: bind this in-flight page to the search that asked for it — read both BEFORE the await.
+     `st` is the state object we may write to (never the global `S`), `gen` the generation that
+     owns it. `st !== S` after the await ⇒ a newer doSearch() replaced the state: drop the page. */
+  var gen = Sg, st = S;
+  st.loading = true;
   var s = document.getElementById('v3sent'); if(s) s.textContent = 'Loading more…';
   try{
-    var r = await fetch('/api/search/next?sessionId='+encodeURIComponent(S.sessionId));
+    var r = await fetch('/api/search/next?sessionId='+encodeURIComponent(st.sessionId));
     var j = await r.json();
+    /* 4L: a newer doSearch() has already replaced S — this response belongs to a query the user
+       has moved on from, so drop it: no mutation, no paint. */
+    if(gen !== Sg || st !== S){ st.loading = false; return }
     var add = j.items||[];
-    if(add.length) S.items = S.items.concat(add);
-    S.next = !!j.next;
-    if(!add.length && !S.next) S.sessionId = null;
+    if(add.length) st.items = st.items.concat(add);
+    st.next = !!j.next;
+    if(!add.length && !st.next) st.sessionId = null;
     /* loadMore is async: if the user has navigated away (artist page, album, home)
        while page 2 was in flight, repainting would call showDyn() and steal the view. */
-    if(curPage!=='dyn'){ S.loading = false; return }
+    if(curPage!=='dyn'){ st.loading = false; return }
     paintSearch();
     var s2 = document.getElementById('v3sent');
-    if(s2) s2.textContent = S.next ? '' : 'End of results';
-  }catch(e){ S.next = false }
-  S.loading = false;
+    if(s2) s2.textContent = st.next ? '' : 'End of results';
+  }catch(e){ st.next = false }
+  st.loading = false;
 }
 doSearch = async function(q, record){
   q = String(q||'').trim(); if(!q) return;
   if(record!==false && typeof pushSHist==='function') pushSHist(q);
   var sh = document.getElementById('shist'); if(sh) sh.hidden = true;
+  var gen = ++Sg;                                  // 4L: this search owns generation `gen`
   S = { q:q, sessionId:null, next:false, loading:false, items:[] };
   try{
     var r = await fetch('/api/search?q='+encodeURIComponent(q));
     var j = await r.json();
+    if(gen !== Sg) return;                         // 4L: a newer search started while this was in flight
     if(j.error && !(j.items||[]).length){ toast('Search failed: '+j.error); return }
     S.items = j.items||[]; S.sessionId = j.sessionId||null; S.next = !!j.next;
     paintSearch();
     if(S.next) loadMore();                     // immediately pull page 2 → ~40 results
-  }catch(e){ toast('Search failed: '+e.message) }
+  }catch(e){ if(gen === Sg) toast('Search failed: '+e.message) }
 };
 (function scrollPaging(){
   var sc = document.getElementById('scroll'); if(!sc) return;
