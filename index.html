@@ -20,8 +20,6 @@ img{display:block}
 /* sidebar */
 #sb{width:236px;flex-shrink:0;background:rgba(15,15,21,.72);backdrop-filter:blur(8px);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px;z-index:5}
 .logo{font-size:23px;font-weight:800;letter-spacing:-.5px;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.gh{display:block;font-size:11px;color:var(--dim);text-decoration:none;margin-top:2px}
-.gh:hover{color:var(--tx)}
 #sb nav{margin-top:20px;display:flex;flex-direction:column;gap:2px}
 .navit{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;font-size:14px;color:var(--dim);transition:.15s}
 .navit .ic{width:20px;height:20px}
@@ -256,12 +254,13 @@ body.pv #pvFab{bottom:22px}
 <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"/></symbol>
 <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle class="f" cx="12" cy="12" r="2.6"/></symbol>
 <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+<symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
+<symbol id="i-instagram" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></symbol>
 </defs></svg>
 
 <!-- SIDEBAR -->
 <aside id="sb">
   <div class="logo">Svara</div>
-  <a class="gh" href="https://github.com/Shubham0743X" target="_blank">@Shubham0743X · github.com/Shubham0743X</a>
   <nav>
     <button class="navit on" data-nav="home"><span class="ic"><svg><use href="#i-home"/></svg></span>Home</button>
     <button class="navit" data-nav="lib"><span class="ic"><svg><use href="#i-note"/></svg></span>Library</button>
@@ -1820,6 +1819,52 @@ if(!$('#homeSec').hidden)renderHome();
 #setPanel .setCfm{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap}
 #setPanel .setCfmTx{font-size:12.5px;color:var(--tx)}
 #setPanel .setCfmBtns{display:flex;gap:8px;margin-left:auto}
+/* the About button that sits at the bottom of the panel (Wave 4F) */
+#setPanel .setAbout{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:12px 14px;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:13px;font-weight:600;color:var(--tx);
+  text-align:left;transition:border-color .18s ease}
+#setPanel .setAbout:hover{border-color:var(--tx)}
+#setPanel .setAbout:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+#setPanel .setAbout .ic{width:15px;height:15px;color:var(--dim);transform:rotate(-90deg)}
+
+/* ===== Wave 4F — About overlay. Every rule is scoped to #aboutCard; it sits ABOVE the
+   settings panel (z 98 > 96) and never closes it. Open/close animates transform + opacity
+   only, so the prefers-reduced-motion reset in v2css kills both. ===== */
+#aboutCard{position:fixed;inset:0;z-index:98;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:rgba(4,4,7,.66);backdrop-filter:blur(3px);
+  opacity:0;visibility:hidden;transition:opacity .2s ease,visibility 0s linear .2s}
+#aboutCard.on{opacity:1;visibility:visible;transition:opacity .2s ease}
+#aboutCard .abBox{width:min(360px,94vw);max-height:min(600px,88vh);overflow-y:auto;
+  background:var(--panel2);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.6);
+  padding:14px 18px 20px;transform:translateY(14px) scale(.985);transition:transform .22s cubic-bezier(.22,.61,.36,1)}
+#aboutCard.on .abBox{transform:none}
+#aboutCard .abTop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#aboutCard .abTop h2{font-size:15px;font-weight:800}
+#aboutCard .abX{padding:7px;border-radius:50%;color:var(--dim)}
+#aboutCard .abX:hover{background:var(--panel);color:var(--tx)}
+#aboutCard .abX .ic{width:15px;height:15px}
+#aboutCard .abMark{display:flex;align-items:center;justify-content:center;gap:9px;margin:14px 0 10px;color:#f4f4f7}
+#aboutCard .abMark svg{display:block;flex:0 0 auto;height:30px;width:auto;aspect-ratio:370/69}
+#aboutCard .abGlyph{flex:0 0 auto;width:30px;height:30px;background-size:contain;background-position:center;background-repeat:no-repeat;
+  filter:drop-shadow(0 -1.5px 2.5px rgba(43,231,166,.55))}
+#aboutCard .abVer{font-size:12px;color:var(--dim);text-align:center;font-variant-numeric:tabular-nums}
+#aboutCard .abPillRow{display:flex;justify-content:center;margin:10px 0 14px}
+#aboutCard .abPill{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:999px;
+  border:1px solid var(--line);color:var(--dim)}
+#aboutCard .abName{font-size:14px;font-weight:700;text-align:center}
+#aboutCard .abRole{font-size:11.5px;color:var(--dim);text-align:center;margin-top:4px;line-height:1.5}
+#aboutCard .abLinks{display:flex;align-items:center;justify-content:center;gap:10px;margin:16px 0 2px}
+#aboutCard .abBtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;font-size:12px;font-weight:600;
+  color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:999px;text-decoration:none;transition:border-color .18s ease}
+#aboutCard .abBtn:hover:not(:disabled){border-color:var(--tx)}
+#aboutCard .abBtn:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+#aboutCard .abIco{width:44px;height:44px;padding:0;border-radius:50%}
+#aboutCard .abIco .ic{width:19px;height:19px}
+#aboutCard .abBtn:disabled{opacity:.4;cursor:not-allowed}
+#aboutCard .abGrp{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+#aboutCard .abGrpH{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);opacity:.8;text-align:center;margin-bottom:10px}
+#aboutCard .abRepoRow{display:flex;justify-content:center}
+#aboutCard .abRepo{padding:9px 16px}
 </style>
 <script id="v3js">
 (function(){
@@ -2548,7 +2593,7 @@ downloadTrack = async function(it){
 var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto'];
 var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_logo'];
 var SET_KEYS = SET_LIVE.concat(SET_NEW);
-var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null;
+var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null, aboutOpen = false;
 
 function setStored(k){ try{ return localStorage.getItem(k) }catch(e){ return null } }
 function setPut(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch(e){} }
@@ -2613,11 +2658,12 @@ function setRender(){
     : setRow('Export','Downloads every Svara localStorage key as JSON','<button class="setAct" type="button" data-setact="export">Export</button>')+
       setRow('Import','Restores a file exported here — nothing is written unless it validates','<button class="setAct" type="button" data-setact="import">Import</button>');
   h += '</div>';
-  h += '<div class="setGrp"><h3>About</h3>'+
-    setRow('Version','', '<span class="setNum">'+esc((sys&&sys.version)||'—')+'</span>')+
-    setRow('Author','', '<span class="setNum">Shubham0743X</span>')+
-    setRow('GitHub','', '<a class="setLink" href="https://github.com/Shubham0743X" target="_blank" rel="noreferrer">github.com/Shubham0743X</a>')+
-  '</div>';
+  /* Wave 4F — the About group is now ONE full-width button at the BOTTOM of the panel; the
+     version / name / links it used to hold live in the #aboutCard overlay it opens. No group
+     heading: the button already says what it is. */
+  h += '<div class="setGrp"><button class="setAbout" type="button" data-setact="about" aria-haspopup="dialog" aria-expanded="false" aria-controls="aboutCard">'+
+      '<span>About Svara</span><span class="ic"><svg><use href="#i-down"/></svg></span>'+
+    '</button></div>';
   b.innerHTML = h;
   b.scrollTop = keep;
 }
@@ -2644,6 +2690,7 @@ function setShow(on){
   } else {
     p.classList.remove('on'); p.setAttribute('aria-hidden','true');
     if(g) g.setAttribute('aria-expanded','false');
+    if(aboutOpen) aboutShow(false);              // Wave 4F: the card never outlives its panel
   }
 }
 function setSysLoad(){
@@ -2652,8 +2699,94 @@ function setSysLoad(){
   fetch('/api/system').then(function(r){ return r.json() }).then(function(j){
     setSys = (j && typeof j==='object') ? j : null;
     if(setOpen) setRender();
-  }).catch(function(){ setSys = null; if(setOpen) setRender() });
+    if(aboutOpen) aboutRender();                  // Wave 4F: the version lands in the card too
+  }).catch(function(){ setSys = null; if(setOpen) setRender(); if(aboutOpen) aboutRender() });
 }
+/* ================== Wave 4F: the About overlay ================== */
+/* ONE config object. Every empty string renders as a disabled, non-focusable control with
+   title="Not published yet" — never href="" and never a dead link. These three strings are the
+   only values left to fill in. */
+var ABOUT = {
+  name: 'Shubham Nag',
+  role: 'Creator & Maintainer · Product Architect & Designer',
+  github: '',       // GitHub profile URL
+  instagram: '',    // Instagram profile URL
+  repo: ''          // repository URL
+};
+var ABOUT_TIP = 'Not published yet';
+function aboutEl(){ return document.getElementById('aboutCard') }
+/* the OS is detected CLIENT-SIDE — no build-time assumption, no server route */
+function aboutOS(){
+  var p = '', ua = '';
+  try{ p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '' }catch(e){}
+  try{ ua = navigator.userAgent || '' }catch(e){}
+  var s = String(p || '');
+  if(/win/i.test(s) || /Windows/i.test(ua)) return 'Windows';
+  if(/mac/i.test(s) || /Mac OS X/i.test(ua)) return 'macOS';
+  if(/linux/i.test(s) || /Linux/i.test(ua)) return 'Linux';
+  return '—';
+}
+/* a value ⇒ a real link; an EMPTY string ⇒ a disabled control that cannot be clicked or focused */
+function aboutLink(url, cls, inner, label){
+  var c = 'abBtn ' + cls;
+  if(url) return '<a class="'+c+'" href="'+esc(url)+'" target="_blank" rel="noreferrer" title="'+esc(label)+'" aria-label="'+esc(label)+'">'+inner+'</a>';
+  return '<button class="'+c+'" type="button" disabled tabindex="-1" aria-disabled="true" title="'+ABOUT_TIP+'" aria-label="'+esc(label)+' — '+ABOUT_TIP+'">'+inner+'</button>';
+}
+/* the app mark reuses the sidebar lockup as it is: the traced wordmark SVG is CLONED and the
+   green glyph is the very data-URI the sidebar draws (read off #sbWord::after) — nothing re-traced */
+function aboutMark(){
+  var m = document.getElementById('abMark'); if(!m) return;
+  m.innerHTML = '';
+  var src = document.getElementById('sbWord'); if(!src) return;
+  var svg = src.querySelector('svg');
+  if(svg){
+    var c = svg.cloneNode(true);
+    c.removeAttribute('role'); c.removeAttribute('aria-label'); c.setAttribute('aria-hidden','true');
+    m.appendChild(c);
+  }
+  var g = document.createElement('span'); g.className = 'abGlyph'; g.setAttribute('aria-hidden','true');
+  var bg = '';
+  try{ bg = getComputedStyle(src, '::after').backgroundImage || '' }catch(e){}
+  if(bg && bg !== 'none') g.style.backgroundImage = bg;
+  m.appendChild(g);
+}
+function aboutRender(){
+  var b = document.getElementById('abBody'); if(!b) return;
+  var h = '';
+  h += '<div class="abMark" id="abMark"></div>';
+  h += '<div class="abVer">Version <span>'+esc((setSys && setSys.version) || '—')+'</span></div>';
+  h += '<div class="abPillRow"><span class="abPill" id="abPill">'+esc(aboutOS())+'</span></div>';
+  h += '<div class="abName">'+esc(ABOUT.name)+'</div>';
+  h += '<div class="abRole">'+esc(ABOUT.role)+'</div>';
+  h += '<div class="abLinks">'+
+    aboutLink(ABOUT.github, 'abIco', '<span class="ic"><svg><use href="#i-github"/></svg></span>', 'GitHub profile')+
+    aboutLink(ABOUT.instagram, 'abIco', '<span class="ic"><svg><use href="#i-instagram"/></svg></span>', 'Instagram profile')+
+  '</div>';
+  h += '<div class="abGrp"><div class="abGrpH">Community &amp; info</div><div class="abRepoRow">'+
+    aboutLink(ABOUT.repo, 'abRepo', '<span>View Repository</span>', 'View Repository')+
+  '</div></div>';
+  b.innerHTML = h;
+  aboutMark();
+}
+function aboutShow(on){
+  var c = aboutEl(); if(!c) return;
+  aboutOpen = !!on;
+  if(aboutOpen){ aboutRender(); c.classList.add('on'); c.removeAttribute('aria-hidden') }
+  else { c.classList.remove('on'); c.setAttribute('aria-hidden','true') }
+  /* the button in the panel reflects the card state */
+  var t = document.getElementById('setBody');
+  var btn = t ? t.querySelector('[data-setact="about"]') : null;
+  if(btn) btn.setAttribute('aria-expanded', aboutOpen ? 'true' : 'false');
+  if(aboutOpen){ var x = c.querySelector('.abX'); if(x) try{ x.focus() }catch(e){} }
+}
+/* the card's own close paths: the X and a REAL click outside the card box. Same isTrusted rule
+   as the panel, so a programmatic click can never close a card it just opened. */
+document.addEventListener('click', function(e){
+  var t = e.target;
+  if(!t || !t.closest || !aboutOpen) return;
+  if(t.closest('[data-aboutact="close"]')){ aboutShow(false); return }
+  if(e.isTrusted !== false && !t.closest('.abBox') && !t.closest('[data-setact="about"]')) aboutShow(false);
+});
 function setFileWire(){
   var f = document.getElementById('setFile');
   if(!f || f.dataset.wired) return;
@@ -2818,6 +2951,7 @@ document.addEventListener('click', function(e){
   if(a){
     var act = a.getAttribute('data-setact');
     if(act==='close'){ setShow(false); return }
+    if(act==='about'){ aboutShow(true); return }             // Wave 4F: card on top of the panel
     if(act==='cancel'){ setCfm = ''; setRender(); return }
     if(act==='hist'){ setCfm = 'hist'; setRender(); return }
     if(act==='hist_yes'){ setCfm = ''; setRender(); setClearHist(); return }
@@ -2829,8 +2963,9 @@ document.addEventListener('click', function(e){
     return;
   }
   /* click outside closes — but only for real clicks: a programmatic click (the lyrics
-     provider chip in the player, for instance) must not close the panel underneath us */
-  if(e.isTrusted !== false && !t.closest('#setPanel')) setShow(false);
+     provider chip in the player, for instance) must not close the panel underneath us.
+     Wave 4F: the About overlay is not the panel, so a click inside it leaves the panel open. */
+  if(e.isTrusted !== false && !t.closest('#setPanel') && !t.closest('#aboutCard')) setShow(false);
 });
 /* Escape closes the panel first: capture phase so the base Esc handler (menu / modal /
    #pv) does not fire as well. While the modal is open, Esc is left to the base handler. */
@@ -2840,7 +2975,8 @@ document.addEventListener('keydown', function(e){
   if(m && m.classList.contains('show')) return;
   if(!setOpen) return;
   e.stopPropagation(); e.preventDefault();
-  setShow(false);
+  if(aboutOpen){ aboutShow(false); return }      // Wave 4F: About closes FIRST …
+  setShow(false);                                // … then the panel, then nothing else
 }, true);
 
 /* the frozen keys are applied once, at startup, and only when they exist */
@@ -3271,6 +3407,18 @@ M3145 1368 c-3 -8 -4 -59 -3 -113 l3 -99 40 -4 c70 -7 143 8 175 34 56 48 49 139 -
   </header>
   <div class="setBody" id="setBody"></div>
   <input type="file" id="setFile" accept="application/json,.json" hidden>
+</aside>
+
+<!-- ABOUT OVERLAY (Wave 4F) — shell only; the body is rendered by the v3js About block.
+     z 98 > #setPanel's 96, so it opens ON TOP of the panel without closing it. -->
+<aside id="aboutCard" role="dialog" aria-modal="true" aria-labelledby="abTitle" aria-hidden="true">
+  <div class="abBox">
+    <header class="abTop">
+      <h2 id="abTitle">About Svara</h2>
+      <button class="abX" type="button" data-aboutact="close" title="Close About" aria-label="Close About"><span class="ic"><svg><use href="#i-x"/></svg></span></button>
+    </header>
+    <div class="abBody" id="abBody"></div>
+  </div>
 </aside>
 
 </body>
