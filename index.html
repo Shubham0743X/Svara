@@ -1846,7 +1846,8 @@ if(!$('#homeSec').hidden)renderHome();
 /* ---- Wave 4N: the body is TWO stacked cards (MetroList style) + the community block ---- */
 #aboutCard .abCards{display:flex;flex-direction:column;gap:12px;margin-top:12px}
 #aboutCard .abCard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-/* CARD 1 — the app: brand mark left, "Svara" + version/platform pills right */
+/* CARD 1 — the app: the brand lockup centred, version/platform pills stacked directly below */
+#aboutCard .abApp{display:flex;flex-direction:column;align-items:center}
 #aboutCard .abCardTop{display:flex;align-items:center;gap:12px}
 #aboutCard .abMark{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:8px;color:#f4f4f7}
 #aboutCard .abMark svg{display:block;flex:0 1 auto;min-width:0;height:20px;width:auto;aspect-ratio:370/69}
@@ -1859,10 +1860,7 @@ if(!$('#homeSec').hidden)renderHome();
 #aboutCard .abPill{font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:4px 9px;border-radius:999px;
   border:1px solid var(--line);color:var(--dim);white-space:nowrap}
 #aboutCard .abPill--acc{border-color:rgba(43,231,166,.45);color:#2BE7A6}
-/* CARD 2 — the developer: avatar tile left, name + role right (name SAME size as "Svara") */
-#aboutCard .abAvatar{flex:0 0 auto;width:64px;height:64px;border-radius:14px;display:flex;align-items:center;justify-content:center;
-  background-color:rgba(43,231,166,.12);background-size:cover;background-position:center;border:1px solid rgba(43,231,166,.28)}
-#aboutCard .abAvatar .abGlyph{width:32px;height:32px}
+/* CARD 2 — the developer: name at the large heading size, role in accent, links below */
 #aboutCard .abWho{flex:1 1 auto;min-width:0}
 #aboutCard .abRole{font-size:11.5px;line-height:1.5;color:#2BE7A6;margin-top:5px}
 /* GitHub / Instagram: two EQUAL-WIDTH buttons sharing the full card width */
@@ -2723,7 +2721,7 @@ function setSysLoad(){
 var ABOUT = {
   name: 'Shubham Nag',
   role: 'Creator & Maintainer · Product Architect & Designer',
-  avatar: '',       // avatar image URL — empty renders the brand-glyph tile (Wave 4N)
+  // avatar: '',    // future photo hook — no placeholder is rendered today (Wave 4N-b)
   github: '',       // GitHub profile URL
   instagram: '',    // Instagram profile URL
   repo: ''          // repository URL
@@ -2767,37 +2765,19 @@ function aboutMark(){
   try{ bg = getComputedStyle(src, '::after').backgroundImage || '' }catch(e){}
   if(bg && bg !== 'none') g.style.backgroundImage = bg;
   m.appendChild(g);
-  /* Wave 4N: the avatar tile shares the very same data-URI glyph (or a real ABOUT.avatar image) */
-  var av = document.getElementById('abAvatar');
-  if(av){
-    if(ABOUT.avatar){ av.style.backgroundImage = 'url("'+esc(ABOUT.avatar)+'")' }
-    else{ var ag = av.querySelector('.abGlyph'); if(ag && bg && bg !== 'none') ag.style.backgroundImage = bg }
-  }
-}
-/* Wave 4N: the developer avatar tile. No photo exists yet — the brand glyph renders centered in
-   a tinted rounded square. Drop a real image URL into ABOUT.avatar later; the tile's size,
-   radius and position never change. */
-function aboutAvatarHTML(){
-  var tile = '<div class="abAvatar" id="abAvatar" role="img" aria-label="'+esc(ABOUT.name)+'">';
-  if(ABOUT.avatar) return tile + '</div>';
-  return tile + '<span class="abGlyph" aria-hidden="true"></span></div>';
 }
 function aboutRender(){
   var b = document.getElementById('abBody'); if(!b) return;
   var h = '';
-  /* CARD 1 — the app: brand mark left, "Svara" large + version/platform pills right */
-  /* CARD 2 — the developer: avatar tile left, name at the SAME size as "Svara", role in accent */
+  /* CARD 1 — the app: the brand lockup on top, the version/platform pills directly below it */
+  /* CARD 2 — the developer: name at the large heading size, role in accent */
   h += '<div class="abCards">'+
-    '<div class="abCard"><div class="abCardTop">'+
+    '<div class="abCard abApp">'+
       '<div class="abMark" id="abMark"></div>'+
-      '<div class="abWho">'+
-        '<div class="abName">Svara</div>'+
-        '<div class="abPillRow"><span class="abPill abPill--acc" id="abPillV">'+esc((setSys && setSys.version) || '—')+'</span>'+
-        '<span class="abPill" id="abPill">'+esc(aboutOS('pill'))+'</span></div>'+
-      '</div>'+
-    '</div></div>'+
+      '<div class="abPillRow"><span class="abPill abPill--acc" id="abPillV">'+esc((setSys && setSys.version) || '—')+'</span>'+
+      '<span class="abPill" id="abPill">'+esc(aboutOS('pill'))+'</span></div>'+
+    '</div>'+
     '<div class="abCard"><div class="abCardTop">'+
-      aboutAvatarHTML()+
       '<div class="abWho">'+
         '<div class="abName">'+esc(ABOUT.name)+'</div>'+
         '<div class="abRole">'+esc(ABOUT.role)+'</div>'+
@@ -3461,7 +3441,7 @@ M3145 1368 c-3 -8 -4 -59 -3 -113 l3 -99 40 -4 c70 -7 143 8 175 34 56 48 49 139 -
 <aside id="aboutCard" role="dialog" aria-modal="true" aria-labelledby="abTitle" aria-hidden="true">
   <div class="abBox">
     <header class="abTop">
-      <h2 id="abTitle">About Svara</h2>
+      <h2 id="abTitle">About</h2>
       <button class="abX" type="button" data-aboutact="close" title="Close About" aria-label="Close About"><span class="ic"><svg><use href="#i-x"/></svg></span></button>
     </header>
     <div class="abBody" id="abBody"></div>
