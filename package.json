@@ -4,7 +4,7 @@
   "description": "Svara — YouTube Music player for PC, no login",
   "main": "electron/main.js",
   "icon": "build/icon.png",
-  "author": "Shubham0743X",
+  "author": "Shubham Nag",
   "license": "MIT",
   "scripts": {
     "start": "node server.js",
