@@ -853,10 +853,24 @@ app.get('/api/stream', async (req, res) => {
   try {
     const id = String(req.query.id || '');
     if (!id) return res.status(400).end();
-    const url = await getStreamUrl(id);
     const range = req.headers.range || 'bytes=0-';
-    const up = await fetch(url, { headers: { Range: range, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
-    if (!up.ok) return res.status(502).end();
+    /* googlevideo URLs are signed and expire on their own schedule, separately from our 3h
+       cache entry. A dead URL answers 403/410, so drop the stale entry, resolve a fresh URL
+       ONCE and retry the upstream fetch ONCE. No loop; the retry's failure carries a reason. */
+    const hostOf = u => { try { return new URL(u).host; } catch (e) { return 'unknown'; } };
+    const grab = u => fetch(u, { headers: { Range: range, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+    let url = await getStreamUrl(id);
+    let up = await grab(url);
+    if (!up.ok) {
+      console.error(`stream: upstream ${up.status} for ${id} (host ${hostOf(url)}) — refreshing URL and retrying once`);
+      streamCache.delete(id);
+      url = await getStreamUrl(id);
+      up = await grab(url);
+      if (!up.ok) {
+        console.error(`stream: upstream ${up.status} again for ${id} (host ${hostOf(url)}) — giving up`);
+        return res.status(502).json({ error: `upstream ${up.status} after refreshing the stream URL` });
+      }
+    }
     res.status(up.status);
     const map = { 'content-type': 'Content-Type', 'content-length': 'Content-Length', 'content-range': 'Content-Range', 'accept-ranges': 'Accept-Ranges' };
     for (const [k, v] of Object.entries(map)) {
@@ -866,7 +880,8 @@ app.get('/api/stream', async (req, res) => {
     Readable.fromWeb(up.body).on('error', () => res.destroy()).pipe(res);
   } catch (e) {
     console.error('stream error:', e.message);
-    if (!res.headersSent) res.status(500).end(); else res.destroy();
+    const reason = String(e.message || e).split('\n').map(s => s.trim()).filter(Boolean).pop();
+    if (!res.headersSent) res.status(500).json({ error: reason || 'stream failed' }); else res.destroy();
   }
 });
 
