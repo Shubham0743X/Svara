@@ -3254,8 +3254,10 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
 .pseek{pointer-events:none!important;width:100%!important;height:26px!important}
 .psTrack{height:6px}
 .pseekwrap:hover .v3knob,.pseekwrap.dragging .v3knob{width:19px;height:19px}
-/* mini player: bigger click target, same thin look */
-#prog{position:relative}
+/* mini player: bigger click target, same thin look.
+   Keep #prog absolutely positioned so `left:0;right:0` (base rule) still stretches it — as a
+   relative flex item it collapsed to width:0, hiding #progFill and the click target. */
+#prog{position:absolute}
 #prog::after{content:'';position:absolute;left:0;right:0;top:-7px;bottom:-7px}
 </style>
 <script id="v3seek2js">
