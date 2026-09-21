@@ -2583,7 +2583,10 @@ downloadTrack = async function(it){
     if(!r.ok){ var j = await r.json().catch(function(){ return null }); throw new Error((j && j.error) || 'download failed') }
     var name = it.title || 'track';
     var cd = r.headers.get('content-disposition')||'';
-    var m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    /* RFC 5987 first: Express sends BOTH a lossy ASCII filename="???.webm" and the real
+       UTF-8 filename*=UTF-8''%E2%80%A6.webm. Matching the plain form first saved the
+       mojibake name (e.g. "___ ___ _____.webm") for any non-Latin title. */
+    var m = cd.match(/filename\*=UTF-8''([^;]+)/i) || cd.match(/filename="?([^";]+)"?/i);
     if(m){ try{ name = decodeURIComponent(m[1]) }catch(e){ name = m[1] } }
     else {
       var ct = (r.headers.get('content-type')||'').toLowerCase();
