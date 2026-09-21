@@ -1895,7 +1895,7 @@ renderSHist = function(){
     return '<button type="button" class="shr" data-sh="'+esc(x)+'">'+
       '<span class="ic">'+ic('i-clock')+'</span>'+
       '<span class="st">'+esc(x)+'</span>'+
-      '<span class="x" data-shx="'+esc(x)+'" title="Remove">'+ic('i-x')+'</span>'+
+      '<span class="x" data-shx="'+esc(x)+'" title="Remove"><span class="ic">'+ic('i-x')+'</span></span>'+
     '</button>';
   }).join('') + '<button class="clear" data-sclear="1">Clear search history</button>';
 };
