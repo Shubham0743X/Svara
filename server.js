@@ -283,6 +283,81 @@ function dedupe(items, seen){
   return out;
 }
 
+/* ================= 4Z-b: type=all enrichment =================
+   4Z-b: type=all is ONE unfiltered YouTube batch, and it is incomplete in two measured ways
+   (18.0.0):
+     • many artist queries carry NO real artist row, only fan "Profile" channels — "arijit singh",
+       "the weeknd", "billie eilish", "coldplay" all lack the real artist (measured live), so the
+       top-result card had nothing to name;
+     • many songs publish NO credits at all — "Starboy (feat. Daft Punk)", "Blinding Lights",
+       "Main Na Raha Mera" arrive with artist:"" and artists:[], so the row reads "Song • 3:51".
+   The category searches for the SAME query DO carry both (verified: type=song gives Starboy
+   artist "The Weeknd"; type=artist row 1 is "The Weeknd" 241M / "Arijit Singh" 665M). So type=all
+   additionally runs song+album+artist IN PARALLEL and merges them. Category types never call this
+   code and stay byte-identical. No new deps; reuses mapTrack()/collectItems()/rowLabel(). */
+const ALL_MERGE_CAP = 40;                     // max RENDERABLE rows (kind!=='other') the All list may return
+function mapSearchRows(feed, type){
+  // identical mapping to the route's own expression — same normaliser, same row labels
+  return collectItems(feed.contents || [], [])
+    .map(i => mapTrack(i, '', type === 'album' || i.type === 'MusicTwoRowItem', true))
+    .filter(i => i && i.id);
+}
+// every rendered row carries an id (mapTrack drops id-less rows); the title+kind key is a cautious
+// fallback so two different id-less songs that only share a title never merge or de-dupe together.
+function mergeKey(it){
+  return (it && it.id) ? 'id:' + it.id
+    : 't:' + ((it && it.kind) || '') + ':' + String((it && it.title) || '').toLowerCase();
+}
+function nameKey(s){ return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase() }
+// BACKFILL: never overwrite a non-empty field — only fill what the base row is missing.
+function backfillRow(dst, src){
+  if (!dst.artist && src.artist) dst.artist = src.artist;
+  if (src.artists && src.artists.length){
+    if (!dst.artists || !dst.artists.length) dst.artists = src.artists.slice();
+    else {
+      const byName = new Map();
+      for (const a of src.artists) if (a && a.name) byName.set(nameKey(a.name), a);
+      for (const a of dst.artists) if (a && !a.id){ const m = byName.get(nameKey(a.name)); if (m && m.id) a.id = m.id }
+    }
+  }
+  if (!dst.duration && src.duration) dst.duration = src.duration;
+  if (!dst.thumb && src.thumb) dst.thumb = src.thumb;
+  if (!dst.sub && src.sub) dst.sub = src.sub;
+}
+// Merge the category searches into the unfiltered batch. Order: YouTube's unfiltered rows first,
+// then the category rows that are not present. `groups` is [song, album, artist] and the append is
+// ROUND-ROBIN (one row from each group per pass) so no single category floods the list and albums
+// AND artists both stay in the mix. Id-bearing duplicates are backfilled; id-less rows use the
+// cautious key and are only skipped when it already exists (never merged across a title).
+function mergeAllRows(base, groups){
+  const out = base.slice();
+  const at = new Map();
+  out.forEach((it, i) => at.set(mergeKey(it), i));
+  for (const group of groups) for (const src of group){
+    if (!src.id) continue;
+    const i = at.get('id:' + src.id);
+    if (i != null) backfillRow(out[i], src);
+  }
+  let rendered = out.reduce((n, it) => n + ((it && it.kind) === 'other' ? 0 : 1), 0);
+  for (let i = 0; rendered < ALL_MERGE_CAP; i++){
+    let advanced = false;
+    for (const group of groups){
+      if (i >= group.length) continue;
+      advanced = true;
+      const src = group[i];
+      if (!src || src.kind === 'other') continue;        // same drop-the-unrenderable rule as paintSearch
+      const k = mergeKey(src);
+      if (at.has(k)) continue;
+      if (rendered >= ALL_MERGE_CAP) break;
+      at.set(k, out.length);
+      out.push(src);
+      rendered++;
+    }
+    if (!advanced) break;
+  }
+  return out;
+}
+
 app.get('/api/search', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ items: [], next: false });
@@ -292,21 +367,45 @@ app.get('/api/search', async (req, res) => {
   if (!type) return res.status(400).json({ items: [], next: false, error: 'unknown type: ' + String(req.query.type) });
   try {
     const youtube = await getYt();
+    // 4Z-b: for All, start the three category searches NOW so they run in parallel WITH the
+    // unfiltered batch — one round trip instead of two. A category request never builds this
+    // promise (catP stays null) and its code path below is untouched.
+    const catP = (type === 'all')
+      ? Promise.all([
+          youtube.music.search(q, { type: 'song' }),
+          youtube.music.search(q, { type: 'album' }),
+          youtube.music.search(q, { type: 'artist' })
+        ])
+      : null;
+    if (catP) catP.catch(() => {});   // attach a handler now — the real await below reports the failure
     // type=all -> the unfiltered search (no type option at all); category -> its verified value.
     const feed = await youtube.music.search(q, type === 'all' ? {} : { type });
     const shelf = findMusicShelf(feed.contents || [], 0);
-    const items = collectItems(feed.contents || [], [])
+    let items = collectItems(feed.contents || [], [])
       // 4W-D2: the unfiltered list is the ONLY one that mixes row types, so it — and only it —
       // asks for the per-row type label ("Song • The Weeknd • 3:51"). A category list is
       // single-typed and keeps the subtitle it has always had.
       .map(i => mapTrack(i, '', type === 'album' || i.type === 'MusicTwoRowItem', type === 'all'))
       .filter(i => i && i.id);
+    // 4Z-b: only the unfiltered list is enriched — and it is enriched from the SAME query's
+    // category searches, which were started ABOVE so all four requests run in parallel.
+    if (type === 'all' && catP) {
+      try {
+        const cats = await catP;   // [song, album, artist]
+        items = mergeAllRows(items, [mapSearchRows(cats[0], 'song'), mapSearchRows(cats[1], 'album'), mapSearchRows(cats[2], 'artist')]);
+      } catch (e) {
+        // soft-fail: keep YouTube's honest unfiltered batch rather than 500 the whole search
+        console.error('all merge error (soft-fail):', e.message);
+      }
+    }
     const seen = new Set(items.map(i => i.id));
     sweepSessions();
     const sessionId = newSessionId();
     // 4M: honest hasMore = we actually hold a usable token — shelf.continuation
     // (page-1 shape) or a ContinuationItem in the contents (legacy shape).
-    const hasMore = !!(shelf && (shelf.continuation || (shelf.contents || []).some(x => x && x.type === 'ContinuationItem')));
+    // 4Z-b: All is a single batch and never paginates — never advertise a token it cannot use.
+    // Categories keep their real continuation (page 1 + /api/search/next), exactly as before.
+    const hasMore = (type !== 'all') && !!(shelf && (shelf.continuation || (shelf.contents || []).some(x => x && x.type === 'ContinuationItem')));
     searchSessions.set(sessionId, { feed, shelf, seen, type, reqs: 0, rows: items.length, expires: Date.now() + SESSION_TTL });
     res.json({ items, sessionId, next: hasMore });
   } catch (e) {

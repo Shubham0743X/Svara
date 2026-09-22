@@ -418,7 +418,9 @@ function thumb(it){
   if(i>0)u=u.slice(0,i)+'=w544-h544-l90-rj';
   return u;
 }
-function subOf(it){return it.duration?`${it.artist} • ${it.duration}`:(it.artist||'')}
+/* 4Z-b: artist + ' • ' + duration — but a track with no artist shows the duration alone,
+   never a stray " • " (the artist is now backfilled server-side, this is the safety net). */
+function subOf(it){return it.duration?(it.artist?it.artist+' • '+it.duration:it.duration):(it.artist||'')}
 function rowHTML(it){
   const cur=nowItem()&&nowItem().id===it.id;
   return `<div class="row ${cur?'cur':''}" data-play="1" data-id="${esc(it.id)}">
@@ -1912,6 +1914,31 @@ if(!$('#homeSec').hidden)renderHome();
    stretched or badly cropped. Song and album rows keep the 44px square from the base .row .rt rule. */
 .row.srow-artist .rt{width:56px;height:56px;border-radius:50%}
 .row.srow-artist .rt img{width:100%;height:100%;object-fit:cover}
+/* ---------- WAVE 4W-TR: top result card (All filter, first artist row) ---------- */
+/* One large card ABOVE the result list. It is NOT a .row: it carries no ⋮ menu and is never
+   counted in the "N results" header. The circular avatar reuses the row's own normalised
+   artwork; name/audience/actions sit beside it on desktop and stack below ~720px. */
+.topres{display:flex;align-items:center;gap:16px;padding:6px 8px 16px;margin-bottom:4px}
+.topres .trart{width:112px;height:112px;border-radius:50%;overflow:hidden;flex-shrink:0;cursor:pointer;background:linear-gradient(145deg,#232330,#101016);display:flex;align-items:center;justify-content:center}
+.topres .trart img{width:100%;height:100%;object-fit:cover}
+.topres .trart .ic{width:34px;height:34px;color:#3a3a48}
+.topres .trinfo{flex:1;min-width:0;max-width:100%}
+.topres .trname{font-size:24px;font-weight:800;letter-spacing:-.5px;line-height:1.1;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topres .trname:hover{text-decoration:underline}
+.topres .traud{font-size:13px;color:var(--dim);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topres .tracts{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.topres .trbtn{font-family:inherit;font-size:13px;font-weight:700;color:#fff;background:var(--grad);border:1px solid transparent;border-radius:999px;padding:0 18px;height:40px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;transition:filter .18s ease,background .18s ease,border-color .18s ease}
+.topres .trbtn:hover{filter:brightness(1.08)}
+.topres .trbtn.ghost{background:var(--panel);border-color:var(--line);color:var(--tx)}
+.topres .trbtn.ghost:hover{background:var(--panel2);filter:none}
+.topres .trbtn .ic{width:17px;height:17px}
+@media(max-width:720px){
+  .topres{flex-direction:column;align-items:center;text-align:center}
+  .topres .trart{align-self:center}
+  .topres .trinfo{width:100%}
+  .topres .trname{font-size:22px}
+  .topres .tracts{justify-content:center}
+}
 </style>
 <script id="v3js">
 (function(){
@@ -1971,12 +1998,13 @@ renderQueue = function(){
   el.innerHTML = order.map(function(qi,pos){
     var x = queue[qi]; if(!x) return '';
     var isCur = (pos===0 && curQi>=0);
+    var A = artistLinksHTML(x);   // 4Z-b: computed once — an empty artist must not leave a stray " • "
     return '<div class="row '+(isCur?'cur':'')+'" data-q="'+qi+'" data-qid="'+esc(x.id)+'">'+
       '<div class="rt"><img loading="lazy" src="'+esc(thumb(x))+'" onerror="this.style.display=\'none\'">'+
         '<div class="ov"><span class="ic">'+ic(isCur?'i-vol':'i-play')+'</span></div></div>'+
       '<div class="rm"><div class="rtitle">'+esc(x.title)+'</div>'+
-        '<div class="rsub">'+(isCur?'<span class="np">Now playing</span> · ':'')+artistLinksHTML(x)+
-          (x.duration ? ' • '+esc(x.duration) : '')+'</div></div>'+
+        '<div class="rsub">'+(isCur?'<span class="np">Now playing</span> · ':'')+A+
+          (x.duration ? (A ? ' • ' : '')+esc(x.duration) : '')+'</div></div>'+
       '<div class="rr"><button class="dots" data-menu="'+esc(x.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
   }).join('');
   register(queue);
@@ -2073,7 +2101,8 @@ function subHTML(it){
     if(it.duration) parts.push(esc(it.duration));
     return parts.join(' • ');
   }
-  return (it && it.duration) ? a + ' • ' + esc(it.duration) : a;
+  /* 4Z-b: no artist ⇒ no stray " • ": render the duration alone. */
+  return (it && it.duration) ? (a ? a + ' • ' + esc(it.duration) : esc(it.duration)) : a;
 }
 /* --- artist hero artwork (restored for Wave 4J, matching the full-bleed hero) ---
    VERIFIED: the artist header DOES carry a genuinely wide banner. Both banner hosts
@@ -2148,13 +2177,17 @@ railCard = function(it, ctx){
 var _setNowA = setNowUI;
 setNowUI = function(it){
   _setNowA(it);
+  /* 4Z-b: when a track has NO artist, the line shows its duration instead of going blank
+     (and never a stray " • "). With an artist present this is exactly the old link markup. */
+  var A = artistLinksHTML(it || {});
+  var line = (!A && it && it.duration) ? esc(it.duration) : A;
   var a = document.getElementById('pvA');
-  if(a) a.innerHTML = artistLinksHTML(it || {});
+  if(a) a.innerHTML = line;
   /* mini bar: the ARTIST, as a real link. Set here (after the base textContent) so no
      other layer can leave the album there; the delegated handler stopPropagation()s the
      click, so this opens the artist page instead of the full player (#miniOpen). */
   var s = document.getElementById('mSub');
-  if(s) s.innerHTML = artistLinksHTML(it || {});
+  if(s) s.innerHTML = line;
 };
 
 /* --- the artist view: lives in #scroll, replaces #homeSec / #dynSec --- */
@@ -2454,12 +2487,109 @@ function searchRowHTML(it){
   }
   return rowHTML(it);
 }
+/* 4Z: pickTopArtist() chooses which artist the TOP RESULT card names. The old rule ('first
+   artist row') named a stranger for obvious queries ('weekend' → 'Not My Weekend', 1.66K
+   subscribers). A wrong top result is worse than none, so a row must actually MATCH the query.
+   trNorm normalises BOTH sides: lowercase, diacritics stripped, punctuation → space, a leading
+   'the' dropped. */
+function trNorm(s){
+  var t = String(s == null ? '' : s).toLowerCase();
+  try{ t = t.normalize('NFD').replace(/[\u0300-\u036f]/g,'') }catch(e){}
+  t = t.replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  return t.replace(/^the\s+/,'');
+}
+function trEdit(a, b){
+  var m = a.length, n = b.length, d = [];
+  for(var i=0;i<=m;i++){ d[i] = [i] }
+  for(var j=0;j<=n;j++){ d[0][j] = j }
+  for(var i2=1;i2<=m;i2++){
+    for(var j2=1;j2<=n;j2++){
+      d[i2][j2] = Math.min(d[i2-1][j2]+1, d[i2][j2-1]+1, d[i2-1][j2-1] + (a.charAt(i2-1)===b.charAt(j2-1)?0:1));
+    }
+  }
+  return d[m][n];
+}
+/* '331M monthly audience' / '1.66K subscribers' → a number (K/M/B multipliers). A value that is
+   NOT a real audience (the digits inside a @handle) never parses: the unit needs a word boundary,
+   so '@…21march32' cannot masquerade as 21M. */
+function trAudience(sub){
+  var s = String(sub == null ? '' : sub).toLowerCase().replace(/,/g,'');
+  var m = s.match(/(\d+(?:\.\d+)?)\s*([kmb])\b/) || s.match(/(\d+(?:\.\d+)?)\s*subscribers?\b/);
+  if(!m) return 0;
+  var n = parseFloat(m[1]); if(!(n > 0)) return 0;
+  var u = m[2] || '';
+  return Math.round(n * (u === 'k' ? 1e3 : u === 'm' ? 1e6 : u === 'b' ? 1e9 : 1));
+}
+/* A candidate MATCHES the query when: the names are equal, OR a name token equals a query token,
+   OR the query is a whole token of the name, OR the whole name is within a small edit distance of
+   the query ('weekend' vs 'weeknd'). Fan profiles (label 'Profile') are NOT the artist and are
+   never candidates — that is exactly the 'stranger' this card must not show. Among matches the
+   LARGEST parsed audience wins; a tie keeps the earlier row. No match ⇒ null ⇒ no card. */
+function pickTopArtist(rows, query){
+  var q = trNorm(query); if(!q) return null;
+  var qT = q.split(' '), best = null, bestAud = -1;
+  for(var i=0;i<rows.length;i++){
+    var r = rows[i]; if(!r || !r.id) continue;
+    if(((r.kind) || 'track') !== 'artist') continue;
+    if(r.label && r.label !== 'Artist') continue;
+    var n = trNorm(r.title || r.artist || ''); if(!n) continue;
+    var nT = n.split(' ');
+    var cand = (n === q)
+      || qT.some(function(t){ return t && nT.indexOf(t) >= 0 })
+      || nT.indexOf(q) >= 0
+      || (Math.abs(n.length - q.length) <= 2 && trEdit(n, q) <= 2);
+    if(!cand) continue;
+    var aud = trAudience(r.sub);
+    if(aud > bestAud){ bestAud = aud; best = r }
+  }
+  return best;
+}
+/* 4Z: the TOP RESULT card. Only the All filter mixes row types, so only there can an artist
+   genuinely sit at the top of the list. The card is NOT a result row — it is rendered ABOVE the
+   list, carries no ⋮ menu, and is never counted in the header (paintSearch keeps counting
+   `vis.length`). No MATCHING artist row ⇒ no card, and nothing else changes. The avatar reuses the
+   row's own normalised artwork (`thumb`), never a new size token. */
+function topResultHTML(vis){
+  if(S.filter !== 'all') return '';
+  var a = pickTopArtist(vis, S.q);
+  if(!a || !a.id) return '';
+  var name = a.title || a.artist || '';
+  var art = thumb(a);
+  var aud = a.sub || 'Artist';
+  return '<div class="topres">'+
+    '<div class="trart" data-artist-id="'+esc(a.id)+'" data-artist-name="'+esc(name)+'" title="Open artist page">'+
+      (art ? '<img loading="lazy" alt="" src="'+esc(art)+'">' : '<span class="ic">'+ic('i-disc')+'</span>')+
+    '</div>'+
+    '<div class="trinfo">'+
+      '<div class="trname" data-artist-id="'+esc(a.id)+'" data-artist-name="'+esc(name)+'">'+esc(name)+'</div>'+
+      '<div class="traud">'+esc(aud)+'</div>'+
+      '<div class="tracts">'+
+        '<button class="trbtn" type="button" data-trshuffle="'+esc(a.id)+'" data-trname="'+esc(name)+'"><span class="ic">'+ic('i-dice')+'</span>Shuffle</button>'+
+        '<button class="trbtn ghost" type="button" data-trmix="'+esc(a.id)+'" data-trname="'+esc(name)+'"><span class="ic">'+ic('i-dice')+'</span>Mix</button>'+
+      '</div>'+
+    '</div></div>';
+}
+/* 4W-TR: Shuffle / Mix CALL the artist page's own actions instead of reimplementing them. The
+   artist page keeps its context in `artData`/`artFull`; the card seeds exactly that context for
+   this artist and then invokes the SAME paths the page's buttons use:
+     Shuffle → withArtistSongs(...) + playList(...,0,true)   (the page's Play all)
+     Mix     → mixArtist()                                    (the page's Mix)
+   openArtist()/hideArtist() reset artData/artFull on every navigation, so a seeded context can
+   never leak into a later artist page. */
+function topResultAction(mod, id, name){
+  if(!id) return;
+  artData = { id:id, name:name || '' };
+  artFull = []; artFullReq = null;
+  if(mod === 'mix'){ mixArtist(); return; }
+  withArtistSongs(function(list){ playList(list, 0, true) });
+}
 function paintSearch(){
   /* 4W: type=all is YouTube's raw answer and can carry playlists/podcasts Svara can neither play
      nor open. They are dropped HERE, at render time, so the API stays an honest mirror and no dead
      row or “not playable” pill can appear. The header counts only the VISIBLE rows. */
   var vis = S.items.filter(function(it){ return ((it && it.kind) || 'track') !== 'other' });
-  var html = '<div class="list">'+vis.map(searchRowHTML).join('')+'</div>'+
+  var html = topResultHTML(vis) +
+             '<div class="list">'+vis.map(searchRowHTML).join('')+'</div>'+
              '<div class="v3sent" id="v3sent"></div>';
   _sPaint = true;                 // handshake: the showDyn wrapper learns this IS the search view
   showDyn('Results for “'+esc(S.q)+'”', vis.length+' '+sNoun(S.filter), html);
@@ -2575,6 +2705,17 @@ document.addEventListener('click', function(e){
   if(f === sFilter){ syncFilters(); return }          // already active — nothing to reload
   sFilter = f; syncFilters();
   if(S.q) doSearch(S.q, false, f);
+}, true);
+/* 4W-TR: the top-result card's two pills. Capture phase + stopPropagation so a pill click can
+   never bubble into the row/artist handlers; the card's avatar/name keep using the existing
+   [data-artist-id] delegated path (they carry no pill attribute). */
+document.addEventListener('click', function(e){
+  var t = e.target && e.target.closest ? e.target.closest('[data-trshuffle],[data-trmix]') : null;
+  if(!t) return;
+  e.preventDefault(); e.stopPropagation();
+  var mix = t.hasAttribute('data-trmix');
+  var id = t.getAttribute(mix ? 'data-trmix' : 'data-trshuffle') || '';
+  topResultAction(mix ? 'mix' : 'shuffle', id, t.getAttribute('data-trname') || '');
 }, true);
 /* An album row carries an ALBUM id, not playable audio — open the album page, never the player. */
 document.addEventListener('click', function(e){
