@@ -283,6 +283,9 @@ body.pv #pvFab{bottom:22px}
     </div>
   </header>
 
+  <!-- WAVE 4W: search filter chips — directly below the search bar, shown only on the results view -->
+  <div id="searchFilters" hidden></div>
+
   <div id="scroll">
     <div class="paget" id="pgTitle" hidden></div>
     <div class="sub" id="pgSub" hidden></div>
@@ -1877,6 +1880,22 @@ if(!$('#homeSec').hidden)renderHome();
 #aboutCard .abGrpH{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);opacity:.8;text-align:center;margin-bottom:10px}
 #aboutCard .abRepoRow{display:flex;justify-content:center}
 #aboutCard .abRepo{padding:9px 16px;background:var(--panel)}
+/* ---------- WAVE 4W: search filter chips (All / Songs / Albums / Artists) ---------- */
+/* Sits directly under the search bar. [hidden] needs its OWN rule: the bar is display:flex, which
+   would otherwise win over the hidden attribute and leave the chips permanently on screen. */
+#searchFilters{display:flex;flex-wrap:wrap;gap:8px;padding:0 22px 10px}
+#searchFilters[hidden]{display:none}
+#searchFilters .fchip{font-family:inherit;font-size:13px;line-height:1;color:var(--dim);background:var(--panel);
+  border:1px solid var(--line);border-radius:999px;padding:7px 15px;cursor:pointer;
+  transition:background .18s ease,color .18s ease,border-color .18s ease}
+#searchFilters .fchip:hover{color:var(--tx);border-color:var(--acc2)}
+#searchFilters .fchip.on{color:var(--tx);background:var(--panel2);border-color:var(--acc2)}
+#searchFilters .fchip:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+/* 4W: an artist row shows a ROUND avatar, larger than the square song/album art. The art slot keeps
+   overflow:hidden with border-radius:50%, and a 1:1 object-fit:cover image, so the avatar is never
+   stretched or badly cropped. Song and album rows keep the 44px square from the base .row .rt rule. */
+.row.srow-artist .rt{width:56px;height:56px;border-radius:50%}
+.row.srow-artist .rt img{width:100%;height:100%;object-fit:cover}
 </style>
 <script id="v3js">
 (function(){
@@ -1963,15 +1982,22 @@ renderQueue = function(){
 /* ---------- BUG #7: page title ---------- */
 var _showDyn = showDyn, _goHome = goHome;
 showDyn = function(t,s,h){
+  /* 4W: the filter chips belong to the search RESULTS view only. paintSearch() raises `_sPaint`
+     immediately before this call; every other showDyn() caller (liked music, playlists, the
+     artist “show all” list) leaves it down, so the chips stay hidden on those views. */
+  sView = _sPaint; _sPaint = false;
   _showDyn(t,s,h);
   hideArtist();
   try{ document.title = String(t).replace(/<[^>]+>/g,'') + ' · Svara' }catch(e){}
+  try{ syncFilters() }catch(e){}
 };
 goHome = function(){
+  sView = false; _sPaint = false;
   _goHome();
   hideArtist();
   try{ document.title = 'Svara' }catch(e){}
   homeLine();
+  try{ syncFilters() }catch(e){}
 };
 function homeLine(){
   if(curPage!=='home') return;
@@ -2374,19 +2400,58 @@ document.addEventListener('click', function(e){
 }, true);
 
 /* ---------- BUG #5: search paging / infinite scroll ---------- */
-var S = { q:'', sessionId:null, next:false, loading:false, items:[] };
+var S = { q:'', sessionId:null, next:false, loading:false, items:[], filter:'all' };
 /* 4L: search generation token. Every doSearch() owns one; loadMore() reads it before its await so
    a page-2 response that lands after a NEWER search can be dropped instead of mutating it.
    Deliberately separate from the artist layer's artGen — the two views page independently. */
 var Sg = 0;
+function sNoun(f){ return f==='song'?'songs':f==='video'?'videos':f==='album'?'albums':f==='artist'?'artists':'results' }
+/* 4W: ONE row renderer for search results, driven by the server's `kind` — nothing is mislabelled:
+     track  → the normal playable row (data-play)
+     album  → opens the album page (an album id is not playable audio)
+     artist → opens the artist page through the existing delegated artist handler
+   Rows the server labels `other` (playlists, podcasts) are dropped in paintSearch() before any
+   template runs, so a dead row or a "not playable" pill can no longer be rendered at all. */
+function searchRowHTML(it){
+  var kind = (it && it.kind) || 'track';
+  if(kind === 'artist'){
+    return '<div class="row srow-artist" data-artist-id="'+esc(it.id)+'" data-artist-name="'+esc(it.title)+'" title="Open artist page">'+
+      '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'">'+
+        '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
+      '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+esc(it.sub||'Artist')+'</div></div></div>';
+  }
+  if(kind === 'album'){
+    return '<div class="row srow-album" data-openalbum="'+esc(it.id)+'" data-title="'+esc(it.title)+'" title="Open album">'+
+      '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'">'+
+        '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
+      '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+esc(it.sub||'Album')+'</div></div></div>';
+  }
+  return rowHTML(it);
+}
 function paintSearch(){
-  var html = '<div class="list">'+S.items.map(function(it){ return rowHTML(it) }).join('')+'</div>'+
+  /* 4W: type=all is YouTube's raw answer and can carry playlists/podcasts Svara can neither play
+     nor open. They are dropped HERE, at render time, so the API stays an honest mirror and no dead
+     row or “not playable” pill can appear. The header counts only the VISIBLE rows. */
+  var vis = S.items.filter(function(it){ return ((it && it.kind) || 'track') !== 'other' });
+  var html = '<div class="list">'+vis.map(searchRowHTML).join('')+'</div>'+
              '<div class="v3sent" id="v3sent"></div>';
-  showDyn('Results for “'+esc(S.q)+'”', S.items.length+' songs', html);
-  curList = S.items.slice(); register(S.items);
+  _sPaint = true;                 // handshake: the showDyn wrapper learns this IS the search view
+  showDyn('Results for “'+esc(S.q)+'”', vis.length+' '+sNoun(S.filter), html);
+  /* curList feeds playList(): it must hold ONLY playable rows, otherwise clicking a song in a
+     mixed type=all result set would queue albums and artists behind it. */
+  curList = vis.filter(function(it){ return ((it && it.kind) || 'track') === 'track' }).slice();
+  register(S.items);
+  var sent = document.getElementById('v3sent');
+  if(sent){
+    /* All is a SINGLE YouTube batch with no continuation: never leave a “Loading more…” behind and
+       never claim an “End of results” that would imply paging happened. */
+    var paged = S.filter !== 'all';
+    sent.textContent = (paged && !S.next && vis.length) ? 'End of results' : '';
+  }
+  syncFilters();
 }
 async function loadMore(){
-  if(!S.sessionId || !S.next || S.loading) return;
+  if(!S.sessionId || !S.next || S.loading || S.filter === 'all') return;
   /* 4L: bind this in-flight page to the search that asked for it — read both BEFORE the await.
      `st` is the state object we may write to (never the global `S`), `gen` the generation that
      owns it. `st !== S` after the await ⇒ a newer doSearch() replaced the state: drop the page. */
@@ -2412,20 +2477,24 @@ async function loadMore(){
   }catch(e){ st.next = false }
   st.loading = false;
 }
-doSearch = async function(q, record){
+doSearch = async function(q, record, filter){
   q = String(q||'').trim(); if(!q) return;
   if(record!==false && typeof pushSHist==='function') pushSHist(q);
   var sh = document.getElementById('shist'); if(sh) sh.hidden = true;
-  var gen = ++Sg;                                  // 4L: this search owns generation `gen`
-  S = { q:q, sessionId:null, next:false, loading:false, items:[] };
+  /* 4W: the chip is part of the request. A plain search-bar submit passes no filter and keeps
+     whichever chip is selected; a chip tap passes its own value. Unknown values fall back. */
+  var f = (filter && SFILTERS.some(function(x){ return x[0]===filter })) ? filter : sFilter;
+  sFilter = f;
+  var gen = ++Sg;      // 4W: bumped BEFORE the fetch — every older doSearch() AND loadMore() is stale now
+  S = { q:q, sessionId:null, next:false, loading:false, items:[], filter:f };
   try{
-    var r = await fetch('/api/search?q='+encodeURIComponent(q));
+    var r = await fetch('/api/search?q='+encodeURIComponent(q)+'&type='+encodeURIComponent(f));
     var j = await r.json();
-    if(gen !== Sg) return;                         // 4L: a newer search started while this was in flight
+    if(gen !== Sg) return;   // a newer search/filter started: no S mutation, no paint, no retitle, no sentinel
     if(j.error && !(j.items||[]).length){ toast('Search failed: '+j.error); return }
     S.items = j.items||[]; S.sessionId = j.sessionId||null; S.next = !!j.next;
     paintSearch();
-    if(S.next) loadMore();                     // immediately pull page 2 → ~40 results
+    if(S.next && S.filter !== 'all') loadMore();   // page 2 → ~40 results (All never paginates)
   }catch(e){ if(gen === Sg) toast('Search failed: '+e.message) }
 };
 (function scrollPaging(){
@@ -2435,6 +2504,69 @@ doSearch = async function(q, record){
     if(sc.scrollTop + sc.clientHeight > sc.scrollHeight - 700) loadMore();
   }, { passive:true });
 })();
+
+/* ---------- WAVE 4W: search filter chips (All / Songs / Albums / Artists) ---------- */
+var SFILTERS = [['all','All'],['song','Songs'],['album','Albums'],['artist','Artists']];
+/* `sFilter` is the selected chip and lives OUTSIDE S, because every doSearch() replaces S wholesale
+   — a brand-new query therefore keeps the filter the user picked.
+   `sView` is true only while the search RESULTS view is on screen. `_sPaint` is the one-shot
+   handshake with paintSearch(); the showDyn wrapper consumes it, so every other caller (home,
+   liked music, playlists, the artist “show all” list) leaves the chips hidden. */
+var sFilter = 'all', sView = false, _sPaint = false;
+function buildFilters(){
+  var el = document.getElementById('searchFilters');
+  if(!el || el.getAttribute('data-built')) return;
+  el.innerHTML = SFILTERS.map(function(f){
+    return '<button class="fchip" type="button" data-sfilter="'+f[0]+'" aria-pressed="false">'+f[1]+'</button>';
+  }).join('');
+  el.setAttribute('data-built','1');   // built exactly once — repeating a search can never add a second row
+}
+function syncFilters(){
+  var el = document.getElementById('searchFilters'); if(!el) return;
+  buildFilters();
+  /* Visible on the results view only: home, artist page, and the full player all hide the row. */
+  var art = document.getElementById('artSec'), dyn = document.getElementById('dynSec');
+  var show = !!(sView && curPage === 'dyn' && dyn && !dyn.hidden
+                && !(art && !art.hidden) && !document.body.classList.contains('pv'));
+  el.hidden = !show;
+  Array.prototype.forEach.call(el.querySelectorAll('[data-sfilter]'), function(b){
+    var act = b.getAttribute('data-sfilter') === sFilter;
+    b.classList[act ? 'add' : 'remove']('on');
+    b.setAttribute('aria-pressed', act ? 'true' : 'false');
+  });
+}
+/* A chip tap re-runs the CURRENT query with the new filter, keeping the search box untouched.
+   record=false: it is the same query, so it must not leave a second recent-search entry.
+   doSearch() bumps Sg before it fetches, so every older search and in-flight page-2 request is
+   already invalidated before the new one starts — an old response can no longer mutate S, paint
+   rows, change the title, or write to the pagination sentinel. */
+document.addEventListener('click', function(e){
+  var t = e.target && e.target.closest ? e.target.closest('[data-sfilter]') : null;
+  if(!t) return;
+  e.preventDefault(); e.stopPropagation();
+  var f = t.getAttribute('data-sfilter') || 'all';
+  if(!SFILTERS.some(function(x){ return x[0]===f })) return;
+  if(f === sFilter){ syncFilters(); return }          // already active — nothing to reload
+  sFilter = f; syncFilters();
+  if(S.q) doSearch(S.q, false, f);
+}, true);
+/* An album row carries an ALBUM id, not playable audio — open the album page, never the player. */
+document.addEventListener('click', function(e){
+  var t = e.target && e.target.closest ? e.target.closest('[data-openalbum]') : null;
+  if(!t) return;
+  e.preventDefault(); e.stopPropagation();
+  openAlbum(t.getAttribute('data-openalbum')||'', t.getAttribute('data-title')||'');
+}, true);
+/* View switches that never pass through showDyn()/goHome() must re-evaluate the chips too.
+   Wrapped from here so the playback and artist code itself is left exactly as it was. */
+(function(){
+  var _openPV = openPV, _closePV = closePV, _openArtist = openArtist, _restoreView = restoreView;
+  openPV = function(){ var r = _openPV(); try{ syncFilters() }catch(e){} return r };
+  closePV = function(){ var r = _closePV(); try{ syncFilters() }catch(e){} return r };
+  openArtist = function(id, name){ var p = _openArtist(id, name); try{ syncFilters() }catch(e){} return p };
+  restoreView = function(){ var r = _restoreView(); try{ syncFilters() }catch(e){} return r };
+})();
+syncFilters();   // build the chips once; hidden until a search results view is showing
 
 /* ---------- BUG #8: real personalised radio + bigger dice ---------- */
 var v3autoOn = LS.get('sv_auto','on') !== 'off';

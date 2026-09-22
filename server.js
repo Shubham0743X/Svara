@@ -93,15 +93,46 @@ function artistList(item){
     }).filter(a => a.name || a.id);
   } catch (e) { return []; }
 }
+// 4W: `kind` now comes from the row's REAL `item_type`, so a mixed result set is never
+// mislabelled as a playable track. type=all is genuinely unfiltered and returns songs,
+// albums, artists, playlists, podcasts and non-music tracks in one list (measured live on
+// 18.0.0, "Arijit Singh": song 7 · album 4 · playlist 6 · artist 6 · video 3 ·
+// non_music_track 3 · podcast_show 3 = 32 rows).
+//   song | video                                    -> 'track'  (playable)
+//   album                                           -> 'album'  (client opens the album page)
+//   artist                                          -> 'artist' (client opens the artist page)
+//   playlist | podcast_show | non_music_track | etc  -> 'other'  (client renders it inert)
+// VERIFIED: artist rows ship an EMPTY `title` — item_type 'artist', `name` = 'Arijit Singh',
+// `title` = ''. The name is on `name` (a plain string), with flex_columns[0] as fallback,
+// and `id` is the channel id. Without this branch artist rows render with a blank title.
+function rowKind(i, isAlbum){
+  const t = (i && i.item_type) || '';
+  const id = String((i && i.id) || '');
+  if (t === 'artist') return 'artist';        // channel id: UC… (24)
+  if (t === 'album') return 'album';          // album id: MPREb_… (17)
+  // A PLAYABLE row is decided by ID SHAPE, not by item_type alone. Measured live: inside
+  // type=video YouTube labels three genuine songs `non_music_track` ('Shayad', 'Kalank (Duet)',
+  // 'Khairiyat (Bonus Track)') and still gives them 11-char video ids (MJyKN-8UncM / Grr0FlC8SQA /
+  // hoNb6HuNmU0) — they are perfectly playable, so they must NOT be buried as 'other'.
+  // Every playable row measured (song / video / non_music_track) had an 11-char id; albums
+  // (MPREb_…, 17), channels (UC…, 24), playlists (VL…/VLPL…/VLRDCLAK5uy_…, 36–45) and podcast
+  // shows (MPSP…, 17–38) never did. The same 11-char shape the client already uses for ytimg art.
+  if (/^[A-Za-z0-9_-]{11}$/.test(id)) return isAlbum ? 'album' : 'track';
+  if (t === 'song' || t === 'video') return isAlbum ? 'album' : 'track';
+  return 'other';
+}
 function mapTrack(i, fallbackThumb, isAlbum){
   try {
     const th = i.thumbnail?.contents || [];
+    const kind = rowKind(i, isAlbum);
+    const isArtistRow = kind === 'artist';
+    const artName = isArtistRow ? (txt(i.name) || flexText(i, 0)) : '';
     return {
       id: i.id,
-      kind: isAlbum ? 'album' : 'track',
-      title: txt(i.title),
-      artist: extractArtist(i),
-      artists: artistList(i),
+      kind,
+      title: isArtistRow ? (artName || txt(i.title)) : txt(i.title),
+      artist: isArtistRow ? artName : extractArtist(i),
+      artists: isArtistRow ? (i.id ? [{ name: artName, id: i.id }] : []) : artistList(i),
       sub: txt(i.subtitle) || txt(i.album) || '',
       thumb: bestUrl(th) || fallbackThumb || '',
       duration: i.duration?.text ? String(i.duration.text) : ''
@@ -123,6 +154,27 @@ function findMusicShelf(node, depth){
 }
 
 /* ================= search (paginated — bug #5, fixed in 4M) ================= */
+// 4W: the ONLY accepted filter values. VERIFIED against the installed youtubei.js 18.0.0:
+//   MusicSearchType = 'all' | 'song' | 'video' | 'album' | 'playlist' | 'artist'
+//                      (dist/src/types/Misc.d.ts:34)
+//   Music.search(query, filters) encodes filters.type into the protobuf
+//   SearchFilter{ filters: { musicSearchType: { [type]: true } } } — the message's real
+//   fields are song/video/album/artist/playlist
+//                      (dist/src/core/clients/Music.js:104, dist/protos/generated/misc/params.d.ts:57)
+//   `filters.type === 'all'` short-circuits and leaves `params` undefined — the UNFILTERED
+//   search, byte-identical to omitting `type` entirely (verified live: both return the same
+//   32 rows / same first titles). 'playlist' is a real filter but is deliberately NOT exposed.
+const SEARCH_TYPES = ['all', 'song', 'video', 'album', 'artist'];
+// undefined / absent / '' -> 'song', which is EXACTLY the pre-4W behaviour other callers rely on
+// (e.g. openAlbum's `/api/search?q=<title>` fallback omits `type`). An explicit value must be in
+// the allowlist, otherwise the route answers 400 — never a silent substitute, never a Songs default.
+// Verified: an unknown type reaches the library as an unset protobuf field and silently returns
+// ZERO rows, so validating here is the only thing standing between a typo and an empty page.
+function searchTypeOf(raw){
+  if (raw === undefined || raw === null || String(raw).trim() === '') return 'song';
+  const t = String(raw).trim().toLowerCase();
+  return SEARCH_TYPES.indexOf(t) >= 0 ? t : null;
+}
 const searchSessions = new Map();          // sessionId -> { feed, shelf, seen, type, reqs, rows, expires }
 const SESSION_TTL = 10 * 60 * 1000;
 // 4M: per-session caps so a client cannot paginate one search forever.
@@ -187,10 +239,14 @@ function dedupe(items, seen){
 app.get('/api/search', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ items: [], next: false });
-  const type = req.query.type === 'album' ? 'album' : 'song';
+  const type = searchTypeOf(req.query.type);
+  // 4W: an explicit-but-unknown type is a client bug — say so (HTTP 400 + JSON), because the
+  // library would otherwise answer 200 with an unusable empty result and nobody would notice.
+  if (!type) return res.status(400).json({ items: [], next: false, error: 'unknown type: ' + String(req.query.type) });
   try {
     const youtube = await getYt();
-    const feed = await youtube.music.search(q, { type });
+    // type=all -> the unfiltered search (no type option at all); category -> its verified value.
+    const feed = await youtube.music.search(q, type === 'all' ? {} : { type });
     const shelf = findMusicShelf(feed.contents || [], 0);
     const items = collectItems(feed.contents || [], [])
       .map(i => mapTrack(i, '', type === 'album' || i.type === 'MusicTwoRowItem'))
@@ -233,7 +289,7 @@ app.get('/api/search/next', async (req, res) => {
       : null;
     s.reqs++;
     const mapped = (page.rows || [])
-      .map(i => mapTrack(i, '', s.type === 'album'))
+      .map(i => mapTrack(i, '', s.type === 'album' || s.type === 'artist'))
       .filter(Boolean);
     const fresh = dedupe(mapped, s.seen);
     s.rows += fresh.length;
