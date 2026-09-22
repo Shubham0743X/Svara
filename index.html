@@ -1513,6 +1513,21 @@ document.addEventListener('keydown',function(e){
 
 /* 9) live search suggestions (#21) */
 var sugTimer=null, sugToken=0;
+/* D1: a TOP RESULTS row reads "Title • Artist • Duration". It rendered as
+   "Starboy (feat. Daft Punk)The Weeknd • 3:51" because the title span and the meta span are both
+   inline and nothing separated them — the separator is the row's own ' • '. The artist is a real
+   link: the same attributes every other artist affordance carries (data-artist-id /
+   data-artist-name), consumed by the artist layer's ONE delegated click handler — this block runs
+   before it and adds no listener of its own. No channel id ⇒ the name still carries
+   data-artist-name, which is the handler's existing lookup path (PLAN §9.3). */
+function sugArtistHTML(it){
+  var list=(it&&it.artists&&it.artists.length)?it.artists:((it&&it.artist)?[{name:it.artist,id:''}]:[]);
+  return list.map(function(a){
+    var n=(a&&a.name)?String(a.name):''; if(!n) return '';
+    return '<span class="alink"'+(a.id?' data-artist-id="'+esc(a.id)+'"':'')+
+      ' data-artist-name="'+esc(n)+'">'+esc(n)+'</span>';
+  }).filter(Boolean).join(', ');
+}
 function renderSuggest(q){
   var el=$('#shist'); if(!el)return;
   if(!q){ if(typeof renderSHist==='function')renderSHist(); return }
@@ -1535,9 +1550,10 @@ function renderSuggest(q){
       if(items.length){
         register(items);
         h+='<div class="shgrp">Top results</div>'+items.map(function(it){
+          var meta=sugArtistHTML(it)+(it.duration?' • '+esc(it.duration):'');
           return '<button class="shr" data-play-item="'+esc(it.id)+'"><span class="kart"><img src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'"></span>'+
             '<span style="flex:1;min-width:0"><span class="st">'+esc(it.title)+'</span>'+
-            '<span class="subx">'+esc(it.artist||'')+(it.duration?' • '+esc(it.duration):'')+'</span></span></button>';
+            '<span class="subx">'+(meta?' • '+meta:'')+'</span></span></button>';
         }).join('');
       }
       el.innerHTML=h;
@@ -2047,6 +2063,16 @@ function artistLinksHTML(it){
 }
 function subHTML(it){
   var a = artistLinksHTML(it);
+  /* 4W-D2: the All list labels every row with its own type, so a song row reads
+     "Song • <clickable artist> • 3:51" instead of the artist alone. `label` is attached to
+     type=all search rows ONLY (server /api/search), so every other list keeps the exact output
+     below — the label branch cannot fire anywhere else. */
+  if(it && it.label){
+    var parts = [esc(it.label)];
+    if(a) parts.push(a);
+    if(it.duration) parts.push(esc(it.duration));
+    return parts.join(' • ');
+  }
   return (it && it.duration) ? a + ' • ' + esc(it.duration) : a;
 }
 /* --- artist hero artwork (restored for Wave 4J, matching the full-bleed hero) ---

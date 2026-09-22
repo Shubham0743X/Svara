@@ -68,16 +68,52 @@ function extractArtist(item){
 // album/playlist rows -> a single `author`. Each entry: { name, channel_id }.
 // Some rows carry NO structured credits at all (artists/authors/author/subtitle all empty)
 // yet still show "Artist • Album • 2:10" in flex_columns[1] — verified on live search rows.
-// The artist is the first non-duration segment; a duration or an album name must never be
-// promoted into the artist field, so anything `m:ss` shaped is dropped.
-function flexCredits(item){
+// The artist is the first remaining segment; a duration, a release date or a play count must
+// never be promoted into the artist field.
+// 4W-D2: every flex line measured on 18.0.0 BEGINS with the row's own type label ("Song • The
+// Weeknd", "Episode • 12h ago • The 44Two Live Podcast", "Artist • 664M monthly audience"), and
+// in type=all many song rows publish NO structured credits at all, so this line is the only
+// credit source left. Measured live ("weekend" / type=all, 18.0.0): "Starboy (feat. Daft Punk)",
+// "Blinding Lights" and "Reminder" have artists/authors/author EMPTY and a flex line of exactly
+// "Song • 3:51" — YouTube publishes no artist for them at all. flexCredits() used to hand that
+// leading label back as the artist, which is why those rows read "Song • 3:51" and why the
+// label showed up as a dead artist link.
+const ROW_LABELS = ['song', 'video', 'album', 'single', 'ep', 'playlist', 'podcast', 'episode', 'artist', 'profile'];
+function isRowLabel(s){ return ROW_LABELS.indexOf(String(s == null ? '' : s).toLowerCase()) >= 0 }
+function flexSegments(item){
   try {
     const runs = ((((item.flex_columns || [])[1] || {}).title) || {}).runs || [];
     const line = runs.map(r => txt(r.text)).join('').replace(/\s+/g, ' ').trim();
-    if (!line) return '';
-    const seg = line.split('•').map(s => s.trim()).filter(s => s && !/^\d+:\d+$/.test(s));
-    return seg[0] || '';
-  } catch (e) { return ''; }
+    return line ? line.split('•').map(s => s.trim()).filter(Boolean) : [];
+  } catch (e) { return []; }
+}
+// A flex segment that measured as anything BUT an artist: a duration (3:51 / 1:00:52), an album
+// year (2026), a release date (Jan 22, 2020 / Sep 11), a relative date (12h ago), a play count
+// (1.4B views), a playlist length (54 songs), a subscriber/audience figure (1.66K subscribers /
+// 664M monthly audience) or a handle (@weekendvibes143). Verified against every segment in the
+// type=all rows of "weekend" and "arijit singh" — real names (incl. "3 Steps Ahead", "Caitlin.M💐",
+// "সা") are untouched.
+const NOT_ARTIST = /^(\d{1,2}:\d{2}(:\d{2})?|\d{4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? \d{1,2}(,? \d{4})?|\d+\s*(h|d|w|mo|y)\s+ago|[\d.,]+\s*[KMB]?\s*views?|\d+\s*songs?|[\d.,]+\s*[KMB]?\s*subscribers?|[\d.,]+\s*[KMB]?\s*monthly audience|@[^\s]+)$/i;
+function flexCredits(item){
+  const seg = flexSegments(item).filter(s => !isRowLabel(s) && !NOT_ARTIST.test(s));
+  return seg[0] || '';
+}
+// the row's own type label, straight off the flex line ("Song", "Episode", …) — '' when absent
+function flexLabel(item){
+  const seg = flexSegments(item);
+  return seg.length && isRowLabel(seg[0]) ? seg[0] : '';
+}
+// the label the All list prints in front of a row ("Song • <artist> • 3:51"): the flex line's own
+// label, else the parsed item_type. Only unfiltered results are given it — see /api/search.
+function rowLabel(item){
+  const f = flexLabel(item);
+  if (f) return f;
+  const t = (item && item.item_type) || '';
+  if (t === 'song' || t === 'non_music_track') return 'Song';
+  if (t === 'video') return 'Video';
+  if (t === 'album') return 'Album';
+  if (t === 'artist') return 'Artist';
+  return '';
 }
 function artistList(item){
   try {
@@ -110,6 +146,16 @@ function rowKind(i, isAlbum){
   const id = String((i && i.id) || '');
   if (t === 'artist') return 'artist';        // channel id: UC… (24)
   if (t === 'album') return 'album';          // album id: MPREb_… (17)
+  // 4W-D3: an EPISODE row hides behind item_type 'non_music_track' AND an 11-char video id, so the
+  // id-shape rule below lets it through as a playable track. Measured live ("weekend" / type=all,
+  // 18.0.0): title "Wild Wild Weekend! | 4-4-Two | S6 E6", item_type 'non_music_track', id
+  // bqo6gm3U4Uk, flex "Episode • 12h ago • The 44Two Live Podcast" — rendered as an "Episode" row
+  // Svara can neither play nor open. Its own row label says Episode/Podcast, so drop it by label.
+  // The genuine `non_music_track` SONGS 4W proved playable (Shayad MJyKN-8UncM, Khairiyat
+  // hoNb6HuNmU0, measured live on 18.0.0 in type=video) carry NO label on the flex line — their
+  // first segment is a release date ("Jan 22, 2020" / "Sep 26, 2019") — so this never touches them.
+  const lab = flexLabel(i).toLowerCase();
+  if (lab === 'episode' || lab === 'podcast') return 'other';
   // A PLAYABLE row is decided by ID SHAPE, not by item_type alone. Measured live: inside
   // type=video YouTube labels three genuine songs `non_music_track` ('Shayad', 'Kalank (Duet)',
   // 'Khairiyat (Bonus Track)') and still gives them 11-char video ids (MJyKN-8UncM / Grr0FlC8SQA /
@@ -121,7 +167,7 @@ function rowKind(i, isAlbum){
   if (t === 'song' || t === 'video') return isAlbum ? 'album' : 'track';
   return 'other';
 }
-function mapTrack(i, fallbackThumb, isAlbum){
+function mapTrack(i, fallbackThumb, isAlbum, withLabel){
   try {
     const th = i.thumbnail?.contents || [];
     const kind = rowKind(i, isAlbum);
@@ -130,6 +176,7 @@ function mapTrack(i, fallbackThumb, isAlbum){
     return {
       id: i.id,
       kind,
+      label: withLabel ? rowLabel(i) : '',   // 4W-D2: the All list's own per-row type label
       title: isArtistRow ? (artName || txt(i.title)) : txt(i.title),
       artist: isArtistRow ? artName : extractArtist(i),
       artists: isArtistRow ? (i.id ? [{ name: artName, id: i.id }] : []) : artistList(i),
@@ -249,7 +296,10 @@ app.get('/api/search', async (req, res) => {
     const feed = await youtube.music.search(q, type === 'all' ? {} : { type });
     const shelf = findMusicShelf(feed.contents || [], 0);
     const items = collectItems(feed.contents || [], [])
-      .map(i => mapTrack(i, '', type === 'album' || i.type === 'MusicTwoRowItem'))
+      // 4W-D2: the unfiltered list is the ONLY one that mixes row types, so it — and only it —
+      // asks for the per-row type label ("Song • The Weeknd • 3:51"). A category list is
+      // single-typed and keeps the subtitle it has always had.
+      .map(i => mapTrack(i, '', type === 'album' || i.type === 'MusicTwoRowItem', type === 'all'))
       .filter(i => i && i.id);
     const seen = new Set(items.map(i => i.id));
     sweepSessions();
