@@ -283,6 +283,53 @@ function dedupe(items, seen){
   return out;
 }
 
+/* ================= 4AB: type=artist row filter (artist searches only) =================
+   A type=artist batch mixes the real artist with fan/duplicate channels. Two rules:
+     1. drop every row whose sub starts with "Profile" — the fan-channel form "Profile • @handle";
+     2. collapse EXACT normalised-name duplicates, keeping the row with the LARGER parsed audience.
+   The normalisation is the same one the All card's picker uses (index.html trNorm): lowercase,
+   diacritics stripped, punctuation -> space, spaces collapsed, a leading "the" dropped. The
+   audience parse is trAudience's K/M/B rule ("331M monthly audience" -> 331000000,
+   "1.66K subscribers" -> 1660). A small subscriber count is NEVER a reason to drop a row: small
+   real artists must survive. Rows whose normalised names differ are different people and both
+   stay. Order is YouTube's own — a winner replaces its twin in the earlier slot, never reordered. */
+function artistNameKey(s){
+  let t = String(s == null ? '' : s).toLowerCase();
+  try { t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+  t = t.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return t.replace(/^the\s+/, '');
+}
+// '331M monthly audience' / '1.66K subscribers' -> a number (K/M/B multipliers). A value that is
+// NOT a real audience (the digits inside a @handle) never parses: the unit needs a word boundary.
+function subAudience(sub){
+  const s = String(sub == null ? '' : sub).toLowerCase().replace(/,/g, '');
+  const m = s.match(/(\d+(?:\.\d+)?)\s*([kmb])\b/) || s.match(/(\d+(?:\.\d+)?)\s*subscribers?\b/);
+  if (!m) return 0;
+  const n = parseFloat(m[1]); if (!(n > 0)) return 0;
+  const u = m[2] || '';
+  return Math.round(n * (u === 'k' ? 1e3 : u === 'm' ? 1e6 : u === 'b' ? 1e9 : 1));
+}
+function filterArtistRows(rows){
+  // rule 1: the fan-channel form "Profile • @handle" is never an artist
+  const list = (rows || []).filter(r => r && !(String(r.sub || '').trim().indexOf('Profile') === 0));
+  // rule 2, pass 1: the winner of each exact normalised name = the larger parsed audience.
+  // Replaced only on a STRICTLY larger audience, so the earlier row wins a tie or when neither
+  // sub parses (a subscriber count of 5 is small, not junk — it never triggers a drop here).
+  const win = new Map();
+  for (const r of list) {
+    const k = artistNameKey(r.title || r.artist || '');
+    if (!k) continue;                                   // nameless rows can never collide
+    const cur = win.get(k);
+    if (!cur || subAudience(r.sub) > subAudience(cur.sub)) win.set(k, r);
+  }
+  // pass 2: drop the losers, keep every winner in YouTube's own slot — the result is a plain
+  // subsequence of the input, so nothing is ever reordered.
+  return list.filter(r => {
+    const k = artistNameKey(r.title || r.artist || '');
+    return !k || win.get(k) === r;
+  });
+}
+
 /* ================= 4Z-b: type=all enrichment =================
    4Z-b: type=all is ONE unfiltered YouTube batch, and it is incomplete in two measured ways
    (18.0.0):
@@ -398,6 +445,10 @@ app.get('/api/search', async (req, res) => {
         console.error('all merge error (soft-fail):', e.message);
       }
     }
+    // 4AB: a type=artist batch mixes the real artist with fan/duplicate channels. The filter runs
+    // AFTER the All merge so type=all stays byte-identical, and BEFORE the session/seen set is
+    // built so a dropped row can never be resurrected by a continuation page.
+    if (type === 'artist') items = filterArtistRows(items);
     const seen = new Set(items.map(i => i.id));
     sweepSessions();
     const sessionId = newSessionId();
@@ -440,7 +491,8 @@ app.get('/api/search/next', async (req, res) => {
     const mapped = (page.rows || [])
       .map(i => mapTrack(i, '', s.type === 'album' || s.type === 'artist'))
       .filter(Boolean);
-    const fresh = dedupe(mapped, s.seen);
+    // 4AB: the same artist filter as /api/search, applied to this page's mapped rows
+    const fresh = dedupe(s.type === 'artist' ? filterArtistRows(mapped) : mapped, s.seen);
     s.rows += fresh.length;
     const stillMore = !!page.nextCont;
     if (!stillMore) searchSessions.delete(sessionId);
