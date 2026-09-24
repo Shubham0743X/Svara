@@ -1151,6 +1151,12 @@ app.get('/api/system', (req, res) => {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 const srv = app.listen(3000, '127.0.0.1', () => console.log('🎵 Svara → http://localhost:3000'));
+// Wave 4AD: warm the memoised Innertube client ONCE after the server is up. Measured:
+// the very first /api/search on a cold process cost 3.9s vs 1.6s warm (~2.2s of client
+// initialisation paid by whichever request happens to arrive first). This removes that
+// one-off cold penalty without touching any route. A failure is deliberately ignored —
+// the real request still calls getYt() and reports its own error.
+getYt().catch(() => {});
 srv.on('error', e => {
   if (e.code === 'EADDRINUSE') console.error('Port 3000 is busy — Svara is probably already running.');
   else console.error('Server error:', e.message);

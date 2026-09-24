@@ -411,11 +411,16 @@ function openLiked(){const items=Object.values(favs).filter(x=>x&&x.id);if(!item
 function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlist is empty');return}showDyn(esc(name),items.length+' songs · '+esc('click ⋮ to remove'),listHTML(items));curList=items;register(items);}
 
 /* ============ rows & rails ============ */
-function thumb(it){
+/* Wave 4AD — the size token is now context-specific. thumb(it) with no size still means
+   the big 544px token (player hero, #mArt, the queue, the 4Z top-result card and the
+   artist banner all keep it, unchanged); the list/rail renderers ask for what their own
+   box can actually display instead of making every 44-64px row decode a 544x544 bitmap. */
+var THUMB_ROW='w160-h160-l90-rj',THUMB_RAIL='w256-h256-l90-rj',THUMB_BIG='w544-h544-l90-rj';
+function thumb(it,size){
   let u=(it&&it.thumb)||'';
   if(!u)return '';
   const i=u.indexOf('=w');
-  if(i>0)u=u.slice(0,i)+'=w544-h544-l90-rj';
+  if(i>0)u=u.slice(0,i)+'='+(size||THUMB_BIG);
   return u;
 }
 /* 4Z-b: artist + ' • ' + duration — but a track with no artist shows the duration alone,
@@ -424,7 +429,7 @@ function subOf(it){return it.duration?(it.artist?it.artist+' • '+it.duration:i
 function rowHTML(it){
   const cur=nowItem()&&nowItem().id===it.id;
   return `<div class="row ${cur?'cur':''}" data-play="1" data-id="${esc(it.id)}">
-    <div class="rt"><img loading="lazy" src="${esc(thumb(it))}" onerror="this.style.display='none'">
+    <div class="rt"><img loading="lazy" src="${esc(thumb(it,THUMB_ROW))}" onerror="this.style.display='none'">
       <div class="ov"><span class="ic">${ic('i-play')}</span></div></div>
     <div class="rm"><div class="rtitle">${esc(it.title)}</div><div class="rsub">${esc(subOf(it))}</div></div>
     <div class="rr">${favs[it.id]?`<span class="likedH">${ic('i-heart')}</span>`:''}
@@ -433,9 +438,9 @@ function rowHTML(it){
 function listHTML(items){return `<div class="list">${(items||[]).map(rowHTML).join('')}</div>`}
 function railCard(it,ctx){
   const cur=nowItem()&&nowItem().id===it.id;
-  const ph=thumb(it)?'':`<div class="ph"><span class="ic">${ic('i-disc')}</span></div>`;
+  const ph=thumb(it,THUMB_RAIL)?'':`<div class="ph"><span class="ic">${ic('i-disc')}</span></div>`;
   return `<div class="rail" data-rail="${ctx}" data-id="${esc(it.id)}" data-title="${esc(it.title||'')}">
-    <div class="art">${ph}<img loading="lazy" src="${esc(thumb(it))}" onerror="this.style.display='none'">
+    <div class="art">${ph}<img loading="lazy" src="${esc(thumb(it,THUMB_RAIL))}" onerror="this.style.display='none'">
       <div class="ov"><span class="pb">${ic('i-play')}</span></div></div>
     <div class="rname">${esc(it.title)}</div><div class="rsub2">${esc(it.artist||'')}</div></div>`;
 }
@@ -1553,7 +1558,7 @@ function renderSuggest(q){
         register(items);
         h+='<div class="shgrp">Top results</div>'+items.map(function(it){
           var meta=sugArtistHTML(it)+(it.duration?' • '+esc(it.duration):'');
-          return '<button class="shr" data-play-item="'+esc(it.id)+'"><span class="kart"><img src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'"></span>'+
+          return '<button class="shr" data-play-item="'+esc(it.id)+'"><span class="kart"><img src="'+esc(thumb(it,THUMB_ROW))+'" onerror="this.style.display=\'none\'"></span>'+
             '<span style="flex:1;min-width:0"><span class="st">'+esc(it.title)+'</span>'+
             '<span class="subx">'+(meta?' • '+meta:'')+'</span></span></button>';
         }).join('');
@@ -1659,7 +1664,25 @@ if(!$('#homeSec').hidden)renderHome();
   input.addEventListener('input',paint);
   input.addEventListener('change',paint);
 
-  (function loop(){paint();requestAnimationFrame(loop)})();   // smooth, ~60fps
+  /* Wave 4AD — this used to be a PERMANENT rAF loop: it kept asking for a frame on
+     every vsync of the app's whole lifetime, including while paused and while the
+     track had no duration at all, i.e. it did per-frame work for a bar that could
+     not move. It now runs ONLY while audio is actually playing or the seek bar is
+     being dragged, and it is cancelled on pause/ended/emptied.
+     Nothing else changed: every event-driven paint() call above is still registered,
+     and paintSeek() still points at paint(), so play/pause/seek/ended/next-track and
+     the lyrics click-to-seek all repaint immediately from their own listeners. */
+  var rafId=0, draggingSeek=false;
+  function wants(){ var d=audio.duration; return draggingSeek || (!audio.paused && isFinite(d) && d>0) }
+  function frame(){ rafId=0; paint(); if(wants())rafId=requestAnimationFrame(frame) }
+  function sync(){ if(wants()){ if(!rafId)rafId=requestAnimationFrame(frame) } else if(rafId){ cancelAnimationFrame(rafId);rafId=0 } }
+  ['play','playing','pause','ended','emptied','loadedmetadata','durationchange','seeked']
+    .forEach(function(ev){audio.addEventListener(ev,sync)});
+  input.addEventListener('pointerdown',function(){ draggingSeek=true; sync() });
+  ['pointerup','pointercancel'].forEach(function(ev){
+    window.addEventListener(ev,function(){ if(!draggingSeek)return; draggingSeek=false; paint(); sync() });
+  });
+  paint(); sync();                                            // one immediate paint, then only if it can move
 })();
 </script>
 
@@ -2137,7 +2160,7 @@ function artSongRowHTML(it){
   var cur = (typeof nowItem === 'function') && nowItem() && nowItem().id === it.id;
   return '<div class="row artrow ' + (cur ? 'cur' : '') + '" data-artrow="'+esc(it.id)+'" data-id="'+esc(it.id)+'">'+
     /* Wave 4I — deferred: NO src until v3art's IntersectionObserver promotes data-src. */
-    '<div class="rt"><img loading="lazy" alt="" data-src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
+    '<div class="rt"><img loading="lazy" alt="" data-src="'+esc(thumb(it,THUMB_ROW))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
     '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div>'+
       '<div class="rsub">'+artistLinksHTML(it)+'</div></div>'+
@@ -2154,7 +2177,7 @@ var _rowHTML = rowHTML;
 rowHTML = function(it){
   var cur = (typeof nowItem === 'function') && nowItem() && nowItem().id === it.id;
   return '<div class="row ' + (cur ? 'cur' : '') + '" data-play="1" data-id="'+esc(it.id)+'">'+
-    '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
+    '<div class="rt"><img loading="lazy" src="'+esc(thumb(it,THUMB_ROW))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
     '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+subHTML(it)+'</div></div>'+
     '<div class="rr">'+(favs[it.id] ? '<span class="likedH">'+ic('i-heart')+'</span>' : '')+
@@ -2165,9 +2188,9 @@ rowHTML = function(it){
    line under each cover becomes links. Same delegated handler as rows/search/pvA. */
 var _railCard = railCard;
 railCard = function(it, ctx){
-  var ph = thumb(it) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+  var ph = thumb(it,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="rail" data-rail="'+esc(ctx)+'" data-id="'+esc(it.id)+'" data-title="'+esc(it.title||'')+'">'+
-    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it))+'" onerror="this.style.display=\'none\'">'+
+    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it,THUMB_RAIL))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
     '<div class="rname">'+esc(it.title)+'</div>'+
     '<div class="rsub2">'+artistLinksHTML(it)+'</div></div>';
@@ -2253,17 +2276,17 @@ function restoreView(){
   try{ document.title = p.doc }catch(e){}
 }
 function albumCard(a){
-  var ph = thumb(a) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+  var ph = thumb(a,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="rail" data-artalbum="'+esc(a.id)+'" data-title="'+esc(a.title||'')+'">'+
-    '<div class="art">'+ph+'<img loading="lazy" alt="" data-src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'">'+
+    '<div class="art">'+ph+'<img loading="lazy" alt="" data-src="'+esc(thumb(a,THUMB_RAIL))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
     '<div class="rname">'+esc(a.title)+'</div>'+
     '<div class="rsub2">'+(a.year ? esc(a.year) : esc(a.artist||''))+'</div></div>';
 }
 function relatedCard(a){
-  var ph = thumb(a) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+  var ph = thumb(a,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="art-relcard" data-artist-id="'+esc(a.id||'')+'" data-artist-name="'+esc(a.name||'')+'">'+
-    '<div class="ring">'+ph+'<img loading="lazy" alt="" data-src="'+esc(thumb(a))+'" onerror="this.style.display=\'none\'"></div>'+
+    '<div class="ring">'+ph+'<img loading="lazy" alt="" data-src="'+esc(thumb(a,THUMB_RAIL))+'" onerror="this.style.display=\'none\'"></div>'+
     '<div class="nm">'+esc(a.name)+'</div>'+
     (a.audience ? '<div class="ad">'+esc(a.audience)+'</div>' : '')+
   '</div>';
@@ -2475,13 +2498,13 @@ function searchRowHTML(it){
   var kind = (it && it.kind) || 'track';
   if(kind === 'artist'){
     return '<div class="row srow-artist" data-artist-id="'+esc(it.id)+'" data-artist-name="'+esc(it.title)+'" title="Open artist page">'+
-      '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'">'+
+      '<div class="rt"><img loading="lazy" src="'+esc(thumb(it,THUMB_ROW))+'">'+
         '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
       '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+esc(it.sub||'Artist')+'</div></div></div>';
   }
   if(kind === 'album'){
     return '<div class="row srow-album" data-openalbum="'+esc(it.id)+'" data-title="'+esc(it.title)+'" title="Open album">'+
-      '<div class="rt"><img loading="lazy" src="'+esc(thumb(it))+'">'+
+      '<div class="rt"><img loading="lazy" src="'+esc(thumb(it,THUMB_ROW))+'">'+
         '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
       '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+esc(it.sub||'Album')+'</div></div></div>';
   }
@@ -3407,9 +3430,9 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
 
   /* 1) any track without a real artwork URL gets YouTube's own thumbnail */
   var _thumb = thumb;
-  thumb = function(it){
+  thumb = function(it, size){
     var u = '';
-    try{ u = artURL(_thumb(it)) }catch(e){}
+    try{ u = artURL(_thumb(it, size)) }catch(e){}
     if(!u && it && /^[A-Za-z0-9_-]{11}$/.test(String(it.id||''))){
       u = 'https://i.ytimg.com/vi/'+it.id+'/mqdefault.jpg';
     }
