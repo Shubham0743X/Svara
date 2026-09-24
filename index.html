@@ -3687,6 +3687,35 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
 #sbWord:hover{opacity:.85}
 </style>
 
+<style id="v4rowcss">
+/* ================= WAVE 4AC — content row density =================
+   Makes the MAIN content rows larger (closer to YouTube Music) with pure CSS.
+   No base rule is edited, no markup and no JS changes: everything below is an
+   override appended after the last existing style layer.
+
+   Scope = CONTENT rows only, i.e. the `.list` containers:
+     - search results              (paintSearch → searchRowHTML / rowHTML)
+     - home lists (Quick picks, recent)  (listHTML)
+     - liked / playlists           (openLiked / openPl → listHTML)
+     - artist-page song rows       (#artSec → artSongsHTML, preview + Show all)
+
+   Deliberately NOT in scope: #pvQueue. Its rows are direct children of #pvQueue
+   and are NOT wrapped in a `.list`, so `.list …` can never reach them — the
+   queue stays exactly as compact as it is today. Same reason the rails
+   (.rail), .miniL .art, the artist hero, related-artist cards and the 4Z
+   top-result card (.topres) are untouched: none of them live inside a .list.
+
+   Unchanged on purpose: .dots + its hit area, the .rt thumbnail overlay
+   (.ov), hover / .cur states, .row's 12px internal gap, every data-* attribute
+   and the whole .rm title/sub scaffolding. */
+.list{gap:3px}                                    /* was 2px */
+.list .row{padding:8px 10px}                      /* was 7px 8px; 12px gap kept */
+.list .row .rt{width:64px;height:64px}            /* was 44px; radius/overflow kept */
+.list .row.srow-artist .rt{width:64px;height:64px;border-radius:50%}   /* was 56px */
+.list .rtitle{font-size:15px}                     /* was 14px */
+.list .rsub{font-size:13px}                       /* was 12px */
+</style>
+
 <script id="v3wjs">
 (function(){
   'use strict';
