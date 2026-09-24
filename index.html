@@ -506,10 +506,56 @@ async function renderHome(){
 
 /* ============ playback ============ */
 function nowItem(){return cur>=0&&seq[cur]!=null&&queue[seq[cur]]?queue[seq[cur]]:null}
+/* ============ Wave 4AE: the stream is still being fetched ============
+   A cold /api/stream measured 0.7-4.9s, and until now the UI showed nothing at all while
+   it was in flight: the mini player printed the artist line as if playback had already
+   started. `pendStart` is the id whose stream is being fetched — loadAt() arms it, the
+   audio element's OWN events disarm it; nothing else. While armed, the now-playing
+   surfaces read "Starting…" instead of the artist line. The play/pause icon and every
+   transport control keep their existing behaviour. */
+var pendStart=null;
+function startingNow(){return !!(pendStart && nowItem() && nowItem().id===pendStart)}
+/* True when the element no longer NAMES the pending stream. Setting a NEW src makes the
+   element fire `abort`/`emptied` for the OLD load — that must not be mistaken for "playback
+   was stopped", or the state would clear ~7ms after it was armed (measured).
+   The src ATTRIBUTE is the only reliable witness: `audio.currentSrc` still reports the
+   PREVIOUS resource while the new load is aborting, so trusting it here cleared the state
+   immediately and hid the real failure path. */
+function pendStreamGone(){
+  if(!pendStart)return true;
+  var a=String(audio.getAttribute('src')||'');
+  if(!a)return true;                     // src removed ⇒ nothing is being fetched any more
+  return a.indexOf(pendStart)<0;         // a different track was requested instead
+}
+/* Repaint ONLY the artist / “Starting…” line: the mini player, the full player, and —
+   when the player page is actually open — the queue's now-playing row.
+   FALLBACK only: the v3js layer owns the real markup (artistLinksHTML is private to that
+   block) and replaces this function below. Kept so a surface can never go blank if that
+   layer is absent. Never setNowUI(): that would re-run setTheme()/resetLyrics() for a
+   track that is already loaded. */
+var paintStarting=function(){
+  var it=nowItem(); if(!it)return;
+  var sub=startingNow()?'Starting…':(it.artist||'');
+  var ms=document.getElementById('mSub'); if(ms)ms.textContent=sub;
+  var pa=document.getElementById('pvA'); if(pa)pa.textContent=sub;
+  if(document.body.classList.contains('pv'))renderQueue();
+};
+/* `playing`/`error` always clear; `emptied`/`abort` clear only when the element really
+   stopped pointing at the pending stream — so a failed stream can never leave
+   "Starting…" stuck, and a new load can never clear the state it just armed. */
+['playing','error','emptied','abort'].forEach(function(ev){
+  audio.addEventListener(ev,function(){
+    if(!pendStart)return;
+    if((ev==='emptied'||ev==='abort')&&!pendStreamGone())return;
+    pendStart=null;
+    paintStarting();
+  });
+});
 function setNowUI(it){
   const art=thumb(it);
-  $('#mTitle').textContent=it.title;$('#mSub').textContent=it.artist||'';
-  $('#pvT').textContent=it.title;$('#pvA').textContent=it.artist||'';
+  const sub0=startingNow()?'Starting…':(it.artist||'');
+  $('#mTitle').textContent=it.title;$('#mSub').textContent=sub0;
+  $('#pvT').textContent=it.title;$('#pvA').textContent=sub0;
   const ma=$('#mArt'),pa=$('#pvImg');
   if(art){ma.src=art;ma.style.display='';pa.src=art;$('#pvArtBg').style.backgroundImage=`url("${art}")`;$('#mArtPh').style.display='none'}
   else{ma.style.display='none';pa.removeAttribute('src');$('#pvArtBg').style.backgroundImage='';$('#mArtPh').style.display='flex'}
@@ -520,9 +566,10 @@ function loadAt(seqPos,autoplay=true){
   if(!queue.length)return;
   if(seqPos<0||seqPos>=seq.length)return;
   cur=seqPos;const it=queue[seq[cur]];if(!it)return;
+  pendStart=it.id;               // 4AE: a new track always re-arms the “Starting…” state
   audio.src='/api/stream?id='+it.id;
   setNowUI(it);
-  if(autoplay)audio.play().catch(()=>{});
+  if(autoplay)audio.play().catch(()=>{ if(pendStart===it.id){pendStart=null;paintStarting()} });   // 4AE: a refused play() must not leave “Starting…” stuck
   renderQueue();paintRowCursor();
 }
 function playList(list,idx,openPv){
@@ -592,7 +639,7 @@ function renderQueue(){
     return `<div class="row ${isCur?'cur':''}" data-q="${i}">
       <div class="rt"><img loading="lazy" src="${esc(thumb(x))}" onerror="this.style.display='none'">
         <div class="ov"><span class="ic">${ic(isCur?'i-vol':'i-play')}</span></div></div>
-      <div class="rm"><div class="rtitle">${esc(x.title)}</div><div class="rsub">${esc(subOf(x))}</div></div>
+      <div class="rm"><div class="rtitle">${esc(x.title)}</div><div class="rsub">${isCur&&startingNow()?'Starting…':esc(subOf(x))}</div></div>
       <div class="rr"><button class="dots" data-menu="${esc(x.id)}"><span class="ic">${ic('i-dots')}</span></button></div></div>`;
   }).join('');
   register(queue);
@@ -1540,6 +1587,12 @@ function renderSuggest(q){
   if(!q){ if(typeof renderSHist==='function')renderSHist(); return }
   var token=++sugToken;
   el.hidden=false;
+  /* 4AE: the dropdown used to stay completely empty for ~1.3s (280ms debounce + both
+     fetches). This placeholder is the same `.shr` markup as a real suggestion row — so the
+     panel keeps its exact height and cannot jump — but carries no data-sh / data-play-item,
+     so it is inert, and `data-ph` keeps it out of the arrow-key row list below. The existing
+     token guard still decides whether real rows are allowed to replace it. */
+  el.innerHTML='<button class="shr" type="button" disabled data-ph="1"><span class="ic">'+ic('i-search')+'</span><span class="st">Searching…</span></button>';
   clearTimeout(sugTimer);
   sugTimer=setTimeout(function(){
     Promise.all([
@@ -1571,7 +1624,7 @@ $('#q').addEventListener('input',function(){renderSuggest($('#q').value.trim())}
 $('#q').addEventListener('focus',function(){if($('#q').value.trim())renderSuggest($('#q').value.trim())});
 $('#q').addEventListener('keydown',function(e){
   if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
-  var rows=$$('#shist .shr'); if(!rows.length)return;
+  var rows=$$('#shist .shr:not([data-ph])'); if(!rows.length)return;
   e.preventDefault();
   var i=rows.findIndex(function(r){return r.classList.contains('on')});
   i=e.key==='ArrowDown'?(i<0?0:Math.min(rows.length-1,i+1)):(i<=0?rows.length-1:i-1);
@@ -2022,6 +2075,7 @@ renderQueue = function(){
     var x = queue[qi]; if(!x) return '';
     var isCur = (pos===0 && curQi>=0);
     var A = artistLinksHTML(x);   // 4Z-b: computed once — an empty artist must not leave a stray " • "
+    if(isCur && startingNow()) A = 'Starting…';   // 4AE: the now-playing row mirrors the stream state
     return '<div class="row '+(isCur?'cur':'')+'" data-q="'+qi+'" data-qid="'+esc(x.id)+'">'+
       '<div class="rt"><img loading="lazy" src="'+esc(thumb(x))+'" onerror="this.style.display=\'none\'">'+
         '<div class="ov"><span class="ic">'+ic(isCur?'i-vol':'i-play')+'</span></div></div>'+
@@ -2204,6 +2258,9 @@ setNowUI = function(it){
      (and never a stray " • "). With an artist present this is exactly the old link markup. */
   var A = artistLinksHTML(it || {});
   var line = (!A && it && it.duration) ? esc(it.duration) : A;
+  /* 4AE: this is the LAST writer of #pvA / #mSub, so the pending-stream state must be
+     honoured here as well or it would overwrite the base layer's “Starting…”. */
+  if(startingNow()) line = 'Starting…';
   var a = document.getElementById('pvA');
   if(a) a.innerHTML = line;
   /* mini bar: the ARTIST, as a real link. Set here (after the base textContent) so no
@@ -2211,6 +2268,18 @@ setNowUI = function(it){
      click, so this opens the artist page instead of the full player (#miniOpen). */
   var s = document.getElementById('mSub');
   if(s) s.innerHTML = line;
+};
+/* 4AE: the LAST writer of #pvA / #mSub owns this repaint, because artistLinksHTML() is
+   private to this block. Identical line construction to the wrapper above, so clearing the
+   pending state restores the real artist LINK rather than leaving plain text behind. */
+paintStarting = function(){
+  var it = nowItem(); if(!it) return;
+  var A = artistLinksHTML(it || {});
+  var line = (!A && it.duration) ? esc(it.duration) : A;
+  if(startingNow()) line = 'Starting…';
+  var a = document.getElementById('pvA'); if(a) a.innerHTML = line;
+  var s = document.getElementById('mSub'); if(s) s.innerHTML = line;
+  if(document.body.classList.contains('pv')) renderQueue();
 };
 
 /* --- the artist view: lives in #scroll, replaces #homeSec / #dynSec --- */
@@ -2613,6 +2682,9 @@ function paintSearch(){
   var vis = S.items.filter(function(it){ return ((it && it.kind) || 'track') !== 'other' });
   var html = topResultHTML(vis) +
              '<div class="list">'+vis.map(searchRowHTML).join('')+'</div>'+
+             /* 4AE: a zero-row result must say WHICH zero it is — still paging, or honestly
+                empty — instead of leaving a bare gap. The #v3sent sentinel is kept either way. */
+             (vis.length ? '' : '<div class="empty">'+(S.next ? 'Loading results…' : 'No results for “'+esc(S.q)+'”.')+'</div>')+
              '<div class="v3sent" id="v3sent"></div>';
   _sPaint = true;                 // handshake: the showDyn wrapper learns this IS the search view
   showDyn('Results for “'+esc(S.q)+'”', vis.length+' '+sNoun(S.filter), html);
@@ -2666,6 +2738,13 @@ doSearch = async function(q, record, filter){
   sFilter = f;
   var gen = ++Sg;      // 4W: bumped BEFORE the fetch — every older doSearch() AND loadMore() is stale now
   S = { q:q, sessionId:null, next:false, loading:false, items:[], filter:f };
+  /* 4AE: paint the placeholder BEFORE the fetch. The search itself takes ~1.0-1.3s and until
+     now the view said nothing for that whole time. `_sPaint` (never `sView`) is the existing
+     one-shot handshake with the showDyn wrapper, so the filter chips appear as they would for
+     a real result set and showDyn() still leaves the artist page. loadMore() is never called
+     from here — pagination is untouched. */
+  curList = []; register([]); _sPaint = true;
+  showDyn('Results for “'+esc(q)+'”', 'Searching…', '<div class="empty">Searching…</div>');
   try{
     var r = await fetch('/api/search?q='+encodeURIComponent(q)+'&type='+encodeURIComponent(f));
     var j = await r.json();
