@@ -226,6 +226,32 @@ body.pv #pvFab{bottom:22px}
 <body>
 <div id="theme"></div>
 
+<script id="v4fxboot">
+/* ================= WAVE 5 (UI-1) — effects mode, decided BEFORE first paint =================
+   The wave background must never flash the wrong look, so the mode lands on <html> here, at the
+   very top of <body> — setBoot() (in v3js) runs far too late for that.
+   Two EXISTING keys only, no new localStorage key (sv_set_shaderIntensity / sv_set_lowPower).
+     classic : shaderIntensity 'off' OR lowPower true  → NO canvas is created, app looks like today
+     bal     : 'low' | 'medium'                        → scale 3 / 30 fps
+     full    : 'high'                                  → scale 2 / 60 fps
+   Also seeds the canvas-opacity custom property (and any future glass var) from one place. */
+(function(){
+  var intensity = 'medium', lowPower = false;
+  try{
+    var rawI = localStorage.getItem('sv_set_shaderIntensity');
+    if(rawI !== null){ try{ intensity = JSON.parse(rawI) }catch(e){ intensity = rawI } }
+    var rawL = localStorage.getItem('sv_set_lowPower');
+    if(rawL !== null){ try{ lowPower = (JSON.parse(rawL) === true) }catch(e){ lowPower = (rawL === 'true') } }
+  }catch(e){}
+  if(intensity !== 'off' && intensity !== 'low' && intensity !== 'medium' && intensity !== 'high') intensity = 'medium';
+  var mode = (intensity === 'off' || lowPower) ? 'classic' : (intensity === 'high' ? 'full' : 'bal');
+  var d = document.documentElement;
+  d.dataset.fx = mode;
+  d.style.setProperty('--wave-op', '1');     // canvas opacity: inherited, overridden per view by v4wavejs
+  window.__waveCfg = { mode: mode, intensity: intensity, lowPower: lowPower };
+})();
+</script>
+
 <!-- ICONS -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></symbol>
@@ -3912,6 +3938,332 @@ M3145 1368 c-3 -8 -4 -59 -3 -113 l3 -99 40 -4 c70 -7 143 8 175 34 56 48 49 139 -
     <div class="abBody" id="abBody"></div>
   </div>
 </aside>
+
+<style id="v4wavecss">
+/* ================= WAVE 5 (UI-1) — live wave canvas background =================
+   Appended after the last existing style layer; nothing above is edited. EVERY rule here is
+   gated behind html[data-fx="full"] / html[data-fx="bal"], and in "classic" the wave script
+   never even creates the canvas — that is the proof the effect can never leak into the app.
+
+   The canvas is inserted immediately after #theme (both z-index:-1, both pointer-events:none),
+   so the wave paints ABOVE the album-colour layer and BELOW every surface: #sb (z 5), the tab
+   bar, rows, the ⋮ menu / #shist (z 30), Settings (z 96), About (z 98) and the full player.
+   setTheme() and #theme are completely untouched.
+
+   TUNABLES (one line each):
+     --wave-scrim : strength of the flat scrim painted over the wave for text readability (0 = off)
+     --wave-fade  : the opacity transition used for Home ⇄ every-other-view */
+html[data-fx="full"] #waveCv,
+html[data-fx="bal"]  #waveCv{
+  position:fixed; inset:0; z-index:-1; pointer-events:none; display:block;
+  opacity:var(--wave-op,1);
+  transition:opacity .4s ease;
+}
+/* Readability: the wave is deliberately a dim wash, but Home row titles and .rsub must stay
+   comfortably readable over it. ONE custom property controls the strength — --wave-scrim:0 off. */
+html[data-fx="full"] body::after,
+html[data-fx="bal"]  body::after{
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:rgba(7,7,10,var(--wave-scrim,.25));
+}
+</style>
+
+<script id="v4wavejs">
+/* ================= WAVE 5 (UI-1) — live wave canvas, faithful port =================
+   Plain 2D canvas, no WebGL, no library, no new dependency, no build step — one file.
+   The visual math is the supplied reference, character-for-character (brightness is the one
+   documented change: a nonlinear lift, see `gain`). Safety/perf: fps cap, one rAF loop, pause
+   off-view, debounced resize, zero per-frame allocations, reduced-motion static frame, CSS
+   opacity gating, and — because the visible-window measurement showed the pixel loop janks the
+   MAIN thread at scale 2 — the pixel loop runs in a Blob Web Worker via
+   canvas.transferControlToOffscreen() when the browser supports it (main-thread fallback kept).
+   `gain` is a NONLINEAR LIFT on the final r/g/b (not a multiply): 1 = bit-identical to the
+   reference. The reference math is a DIM navy/indigo wash — it is NOT meant to be bright;
+   1.35 is the agreed tuned value. */
+(function(){
+  'use strict';
+
+  var boot = window.__waveCfg || {};
+  /* classic ⇒ no canvas element at all, no loop. This is the leak-proof branch. */
+  if(boot.mode === 'classic') return;
+
+  /* ---- ONE config object — every knob is a single edit right here ---- */
+  var WAVE = { scale:2, fps:60, gain:1.35, homeOpacity:1, dimOpacity:0.4 };
+  if(boot.mode === 'bal'){ WAVE.scale = 3; WAVE.fps = 30 }          // 'low' | 'medium'
+  /* 'full' keeps the LADDER. The visible-window measurement showed scale 2 / 60 fps could not
+     hold ~55 fps (rAF ~15 fps, 49 long tasks up to 73 ms), so the pixel loop is moved off the
+     main thread (Blob worker + transferControlToOffscreen, see below). The worker cannot do
+     scale 2 at 60 either (~20 fps on this CPU), so the escalated scales stay; the worker's job is
+     to keep the MAIN thread at baseline. Without OffscreenCanvas the same ladder runs on the
+     main thread. One line to revisit if the machine changes. */
+  if(boot.mode === 'full'){ WAVE.scale = 4; WAVE.fps = 60 }         // 'high'
+  if(boot.lowPower){ WAVE.scale = 4; WAVE.fps = 30 }                // defensive: lowPower already ⇒ classic
+
+  /* (1) Brightness — keep `gain`, but lift nonlinearly instead of multiplying:
+       lift = gain - 1
+       lc(c) = min(1, c^(1/gain) + 0.02*lift)
+     At gain = 1 this is BIT-IDENTICAL to the reference (Math.pow(c,1) === c and 0.02*0 === 0,
+     and the reference channels never exceed 1 before this point). Hoisted out of render() so the
+     zero-per-frame-allocation rule still holds. */
+  var lift = WAVE.gain - 1;
+  function lc(c){ return Math.min(1, Math.pow(c, 1 / WAVE.gain) + 0.02 * lift) }
+
+  /* The canvas lives immediately after #theme. Created here (not in the markup) precisely so
+     the "classic" branch above can guarantee it never exists. */
+  var canvas = document.createElement('canvas');
+  canvas.id = 'waveCv';
+  canvas.setAttribute('aria-hidden','true');
+  var theme = document.getElementById('theme');
+  if(theme && theme.parentNode) theme.parentNode.insertBefore(canvas, theme.nextSibling);
+  else document.body.insertBefore(canvas, document.body.firstChild);
+
+  /* Prefer a worker: the pixel loop never touches the main thread. transferControlToOffscreen()
+     must happen BEFORE any getContext() call on this element. */
+  var workerMode = !!(window.Worker && window.OffscreenCanvas && typeof canvas.transferControlToOffscreen === 'function');
+  var ctx = workerMode ? null : canvas.getContext('2d');
+  if(!workerMode && !ctx) return;
+  canvas.style.setProperty('--wave-op', String(WAVE.homeOpacity));
+
+  var width = 0, height = 0, imageData = null, data = null;
+  var startTime = Date.now();
+  var rafId = 0, running = false, frames = 0, lastDraw = 0;
+  window.__wave = { running:false, frames:0 };                      // numeric proof hook
+  var REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  /* ---- lookup tables, built ONCE and reused forever ---- */
+  var SIN_TABLE = new Float32Array(1024), COS_TABLE = new Float32Array(1024);
+  for(var t = 0; t < 1024; t++){ var ang = (t/1024)*Math.PI*2; SIN_TABLE[t] = Math.sin(ang); COS_TABLE[t] = Math.cos(ang) }
+  function fastSin(x){ return SIN_TABLE[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
+  function fastCos(x){ return COS_TABLE[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
+
+  /* Never multiplies by devicePixelRatio — the ImageData is deliberately small and upscaled. */
+  function resizeCanvas(){
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    width  = Math.floor(canvas.width  / WAVE.scale);
+    height = Math.floor(canvas.height / WAVE.scale);
+    imageData = ctx.createImageData(width, height);
+    data = imageData.data;
+  }
+
+  /* Zero allocations per frame: no objects, arrays or closures are created in here. */
+  function render(){
+    var time = (Date.now() - startTime) * 0.001;
+    for(var y = 0; y < height; y++){
+      for(var x = 0; x < width; x++){
+        var u_x = (2*x - width) / height;
+        var u_y = (2*y - height) / height;
+        var a = 0, d = 0;
+        for(var i = 0; i < 4; i++){
+          a += fastCos(i - d + time*0.5 - a*u_x);
+          d += fastSin(i*u_y + a);
+        }
+        var wave      = (fastSin(a) + fastCos(d)) * 0.5;
+        var intensity = 0.3 + 0.4 * wave;
+        var baseVal   = 0.1 + 0.15 * fastCos(u_x + u_y + time*0.3);
+        var blueAcc   = 0.2  * fastSin(a*1.5 + time*0.2);
+        var purpleAcc = 0.15 * fastCos(d*2   + time*0.1);
+        var r  = Math.max(0, Math.min(1, baseVal + purpleAcc*0.8)) * intensity;
+        var gc = Math.max(0, Math.min(1, baseVal + blueAcc*0.6))   * intensity;
+        var b  = Math.max(0, Math.min(1, baseVal + blueAcc*1.2 + purpleAcc*0.4)) * intensity;
+        var idx = (y*width + x) * 4;
+        data[idx] = lc(r)*255; data[idx+1] = lc(gc)*255; data[idx+2] = lc(b)*255; data[idx+3] = 255;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    ctx.imageSmoothingEnabled = true;                 /* reference had false; true gives the soft look */
+    ctx.drawImage(canvas, 0, 0, width, height, 0, 0, canvas.width, canvas.height);
+  }
+
+  function tick(ts){
+    if(!running) return;
+    rafId = requestAnimationFrame(tick);
+    var now = (typeof ts === 'number') ? ts : Date.now();
+    if(now - lastDraw < 1000 / WAVE.fps) return;      /* real fps cap, not a suggestion */
+    lastDraw = now;
+    render();
+    frames++; window.__wave.frames = frames;
+  }
+  /* ONE loop, guarded by a single `running` flag — it can never double-start. */
+  function startLoop(){
+    if(running) return;
+    running = true; window.__wave.running = true;
+    lastDraw = 0;
+    rafId = requestAnimationFrame(tick);
+  }
+  function stopLoop(){
+    running = false; window.__wave.running = false;
+    if(rafId){ cancelAnimationFrame(rafId); rafId = 0 }
+  }
+
+  /* ---- Self-contained pixel engine for the Blob worker. It is stringified with .toString(),
+     so it MUST NOT reference anything outside itself — `self` is passed in as the worker global.
+     The math is identical to the main-thread fallback below. ---- */
+  function waveEngine(self){
+    var canvas = null, ctx = null, W = 0, H = 0, img = null, data = null;
+    var scale = 2, fps = 60, gain = 1.35, lift = 0.35, startTime = Date.now();
+    var running = false, rafId = 0, lastDraw = 0, frames = 0, posted = 0;
+    var SIN = new Float32Array(1024), COS = new Float32Array(1024);
+    for(var t = 0; t < 1024; t++){ var an = (t/1024)*Math.PI*2; SIN[t] = Math.sin(an); COS[t] = Math.cos(an) }
+    function fastSin(x){ return SIN[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
+    function fastCos(x){ return COS[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
+    function lc(c){ return Math.min(1, Math.pow(c, 1 / gain) + 0.02 * lift) }
+    function size(w, h){
+      canvas.width = w; canvas.height = h;
+      W = Math.floor(w / scale); H = Math.floor(h / scale);
+      img = ctx.createImageData(W, H); data = img.data;
+    }
+    function render(){
+      var time = (Date.now() - startTime) * 0.001;
+      for(var y = 0; y < H; y++){
+        for(var x = 0; x < W; x++){
+          var u_x = (2*x - W) / H;
+          var u_y = (2*y - H) / H;
+          var a = 0, d = 0;
+          for(var i = 0; i < 4; i++){
+            a += fastCos(i - d + time*0.5 - a*u_x);
+            d += fastSin(i*u_y + a);
+          }
+          var wave      = (fastSin(a) + fastCos(d)) * 0.5;
+          var intensity = 0.3 + 0.4 * wave;
+          var baseVal   = 0.1 + 0.15 * fastCos(u_x + u_y + time*0.3);
+          var blueAcc   = 0.2  * fastSin(a*1.5 + time*0.2);
+          var purpleAcc = 0.15 * fastCos(d*2   + time*0.1);
+          var r  = Math.max(0, Math.min(1, baseVal + purpleAcc*0.8)) * intensity;
+          var gc = Math.max(0, Math.min(1, baseVal + blueAcc*0.6))   * intensity;
+          var b  = Math.max(0, Math.min(1, baseVal + blueAcc*1.2 + purpleAcc*0.4)) * intensity;
+          var idx = (y*W + x) * 4;
+          data[idx] = lc(r)*255; data[idx+1] = lc(gc)*255; data[idx+2] = lc(b)*255; data[idx+3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(canvas, 0, 0, W, H, 0, 0, canvas.width, canvas.height);
+    }
+    var RAF = (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame
+      : function(cb){ return setTimeout(function(){ cb(Date.now()) }, 1000 / fps) };
+    var CAF = (typeof cancelAnimationFrame === 'function')
+      ? cancelAnimationFrame
+      : function(id){ clearTimeout(id) };
+    function tick(ts){
+      if(!running) return;
+      rafId = RAF(tick);
+      var now = (typeof ts === 'number') ? ts : Date.now();
+      if(now - lastDraw < 1000 / fps) return;
+      lastDraw = now;
+      render();
+      frames++;
+      if(frames - posted >= 1){ posted = frames; self.postMessage({ type:'frames', n:frames }) }   /* test hook: window.__wave.frames */
+    }
+    function start(){ if(running) return; running = true; lastDraw = 0; rafId = RAF(tick) }
+    function stop(){ running = false; if(rafId){ CAF(rafId); rafId = 0 } }
+    self.onmessage = function(e){
+      var m = e.data;
+      if(m.type === 'init'){
+        canvas = m.canvas; ctx = canvas.getContext('2d');
+        scale = m.scale; fps = m.fps; gain = m.gain; lift = gain - 1; startTime = Date.now();
+        size(m.w, m.h);
+        if(m.once) render(); else start();          /* reduced motion ⇒ one frame, no loop */
+      } else if(m.type === 'resize'){
+        size(m.w, m.h);
+        if(!running) render();
+      } else if(m.type === 'start'){ start()
+      } else if(m.type === 'stop'){ stop() }
+    };
+  }
+
+  function setOpacity(op){ canvas.style.setProperty('--wave-op', String(op)) }
+
+  /* Reuses the app's EXISTING view state — no new router. Home = the only animating view;
+     Settings / About live inside the v3js IIFE (unwrappable) so their class state is read here. */
+  function isHomeView(){
+    try{ if(curPage !== 'home') return false }catch(e){ return false }
+    if(document.body.classList.contains('pv')) return false;              // full player / queue
+    var art = document.getElementById('artSec');
+    if(art && !art.hidden) return false;                                  // artist page (v3js-local fn)
+    var sp = document.getElementById('setPanel');
+    if(sp && sp.classList.contains('on')) return false;                   // Settings slide-over
+    var ac = document.getElementById('aboutCard');
+    if(ac && ac.classList.contains('on')) return false;                   // About overlay
+    return true;
+  }
+  function syncView(){
+    var home = isHomeView();
+    setOpacity(home ? WAVE.homeOpacity : WAVE.dimOpacity);
+    if(REDUCED) return;                     /* static frame only — the loop never starts */
+    if(home) startLoop(); else stopLoop();  /* opacity changes never restart a running loop */
+  }
+
+  /* Wrap one GLOBAL function (if it really is a global) so a view switch re-evaluates the wave.
+     openArtist/restoreView are scoped to the v3js IIFE and have no global binding — they are
+     handled by the DOM checks in isHomeView() + the observer below instead. */
+  function wrapGlobal(name){
+    var fn = window[name];
+    if(typeof fn !== 'function') return;
+    window[name] = function(){ var r = fn.apply(this, arguments); syncView(); return r };
+  }
+  function installHooks(){
+    /* View switches that do not pass through the DOM: wrap the SAME global function chain that
+       v3js already wraps. Missing bindings are skipped, never thrown over. */
+    var names = ['goHome','showDyn','openPV','closePV','openArtist','restoreView'];
+    for(var i = 0; i < names.length; i++) wrapGlobal(names[i]);
+    /* Everything else (artist page, Settings, About, .pv) cannot be wrapped from here — it is
+       scoped to the v3js IIFE — and #artSec does not even exist until an artist page opens. So
+       watch class/hidden changes anywhere under <body>; only those two attributes, batched by
+       the observer, and syncView() is cheap and idempotent (the loop is guarded). */
+    try{
+      if(window.MutationObserver){
+        var mo = new MutationObserver(function(){ syncView() });
+        mo.observe(document.body, { attributes:true, attributeFilter:['class','hidden'], subtree:true });
+      }
+    }catch(e){}
+
+    document.addEventListener('DOMContentLoaded', function(){ syncView() });
+    setTimeout(function(){ syncView() }, 450);        /* the 400ms v3hist Home re-render */
+
+    /* Never leave a loop running off-view. */
+    document.addEventListener('visibilitychange', function(){ if(document.hidden) stopLoop(); else syncView() });
+    window.addEventListener('blur', function(){ stopLoop() });
+    window.addEventListener('focus', function(){ syncView() });
+
+    /* Resize: debounce ~150ms, then rebuild the ImageData and repaint ONE frame. */
+    var rt = 0;
+    window.addEventListener('resize', function(){
+      if(rt) clearTimeout(rt);
+      rt = setTimeout(function(){
+        rt = 0;
+        resizeCanvas();
+        if(!running && !workerMode) render();          /* worker repaints its own paused frame */
+      }, 150);
+    });
+  }
+
+  /* ---- Worker escalation: move the pixel loop off the main thread. ---- */
+  var worker = null;
+  if(workerMode){
+    worker = new Worker(URL.createObjectURL(new Blob(
+      ['(' + waveEngine.toString() + ')(self);'],
+      { type:'application/javascript' }
+    )));
+    var off = canvas.transferControlToOffscreen();
+    worker.postMessage({
+      type:'init', canvas:off, w:window.innerWidth, h:window.innerHeight,
+      scale:WAVE.scale, fps:WAVE.fps, gain:WAVE.gain, once:REDUCED
+    }, [off]);
+    worker.onmessage = function(e){ var m = e.data; if(m && m.type === 'frames') window.__wave.frames = m.n };
+    /* Same single-loop guard, but each control is now a message to the worker. */
+    startLoop = function(){ if(running) return; running = true; window.__wave.running = true; worker.postMessage({ type:'start' }) };
+    stopLoop  = function(){ running = false; window.__wave.running = false; worker.postMessage({ type:'stop' }) };
+    resizeCanvas = function(){ worker.postMessage({ type:'resize', w:window.innerWidth, h:window.innerHeight }) };
+  } else {
+    resizeCanvas();
+    if(REDUCED) render();                             /* ONE static frame when motion is reduced */
+  }
+  installHooks();
+  syncView();                                         /* Home is the boot view */
+})();
+</script>
 
 </body>
 </html>
