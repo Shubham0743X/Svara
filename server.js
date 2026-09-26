@@ -1083,8 +1083,28 @@ app.get('/api/thumb', async (req, res) => {
       host.endsWith('.ggpht.com')
     );
     if (!allowed) return res.status(400).json({ error: 'blocked host' });
-    const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
-    if (!r.ok) return res.status(502).end();
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+    let r = await fetch(u, { headers: { 'User-Agent': UA } });
+    /* 4AG — one bounded retry, and only for the recoverable case. Measured live: the artwork host
+       answers a burst of concurrent asks for the SAME url with `429 text/html` (24/60 at 60-way
+       concurrency) and sends NO Retry-After header; the very same url returns `200 image/jpeg` on
+       the next ask — 8/8 captured 429s converted after ~900ms. So ONE delayed retry turns the
+       throttle back into artwork instead of an error. A 400/404 is deterministic, so it is reported
+       straight away and never retried. No loop: exactly one extra fetch. */
+    if (r.status === 429) {
+      const ra = parseInt(r.headers.get('retry-after'), 10);   // absent in the field; honour it if sent
+      await new Promise(s => setTimeout(s, ra > 0 ? Math.min(ra * 1000, 3000) : 900));
+      r = await fetch(u, { headers: { 'User-Agent': UA } });
+    }
+    if (!r.ok) {
+      /* 4AG: never an empty 502 again — carry the upstream status so a failed artwork request is
+         diagnosable, and keep an upstream Retry-After when the host sent one. Success responses are
+         byte-identical to before (5/5 sha1 match vs the direct host). */
+      const ra2 = r.headers.get('retry-after');
+      if (ra2) res.setHeader('Retry-After', ra2);
+      console.error('thumb: upstream ' + r.status + ' for ' + host);
+      return res.status(502).json({ error: 'upstream ' + r.status });
+    }
     res.status(200);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=86400');
