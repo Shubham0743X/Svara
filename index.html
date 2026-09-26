@@ -1584,7 +1584,7 @@ function sugArtistHTML(it){
 }
 function renderSuggest(q){
   var el=$('#shist'); if(!el)return;
-  if(!q){ if(typeof renderSHist==='function')renderSHist(); return }
+  if(!q){ ++sugToken; if(typeof renderSHist==='function')renderSHist(); return }   // 4AF: bump on the empty path too — a late failure can never repaint over “Recent searches”
   var token=++sugToken;
   el.hidden=false;
   /* 4AE: the dropdown used to stay completely empty for ~1.3s (280ms debounce + both
@@ -1596,12 +1596,22 @@ function renderSuggest(q){
   clearTimeout(sugTimer);
   sugTimer=setTimeout(function(){
     Promise.all([
-      fetch('/api/suggest?q='+encodeURIComponent(q)).then(function(r){return r.json()}).catch(function(){return {items:[]}}),
-      fetch('/api/search?q='+encodeURIComponent(q)).then(function(r){return r.json()}).catch(function(){return {items:[]}})
+      fetch('/api/suggest?q='+encodeURIComponent(q)).then(function(r){return r.json()}).catch(function(){return {failed:true}}),
+      fetch('/api/search?q='+encodeURIComponent(q)).then(function(r){return r.json()}).catch(function(){return {failed:true}})
     ]).then(function(res){
       if(token!==sugToken)return;
-      var sugg=(res[0]&&res[0].items||[]).slice(0,4);
-      var items=(res[1]&&res[1].items||[]).slice(0,6);
+      var f0=!!(res[0]&&res[0].failed), f1=!!(res[1]&&res[1].failed);
+      var sugg=(!f0&&res[0]&&res[0].items||[]).slice(0,4);
+      var items=(!f1&&res[1]&&res[1].items||[]).slice(0,6);
+      if(f0 && f1){
+        /* 4AF: BOTH fetches FAILED (server stopped / network down) — the inert "Searching…"
+           row must be replaceable, not permanent. Swap it for an equally inert row instead of
+           falsely claiming "No matches". The token guard above plus the still-current input
+           value keep a late failure from repainting a newer query. */
+        if($('#q').value.trim()===q)
+          el.innerHTML='<button class="shr" type="button" disabled data-ph="1"><span class="ic">'+ic('i-search')+'</span><span class="st">Suggestions unavailable</span></button>';
+        return;
+      }
       if(!sugg.length&&!items.length){el.innerHTML='<div class="shgrp">No matches</div>';return}
       var h='';
       if(sugg.length)h+='<div class="shgrp">Suggestions</div>'+sugg.map(function(s){
@@ -2738,6 +2748,7 @@ doSearch = async function(q, record, filter){
   sFilter = f;
   var gen = ++Sg;      // 4W: bumped BEFORE the fetch — every older doSearch() AND loadMore() is stale now
   S = { q:q, sessionId:null, next:false, loading:false, items:[], filter:f };
+  var st = S;          // 4AF: the state object THIS search owns — a stale failure must never paint a newer search
   /* 4AE: paint the placeholder BEFORE the fetch. The search itself takes ~1.0-1.3s and until
      now the view said nothing for that whole time. `_sPaint` (never `sView`) is the existing
      one-shot handshake with the showDyn wrapper, so the filter chips appear as they would for
@@ -2749,11 +2760,30 @@ doSearch = async function(q, record, filter){
     var r = await fetch('/api/search?q='+encodeURIComponent(q)+'&type='+encodeURIComponent(f));
     var j = await r.json();
     if(gen !== Sg) return;   // a newer search/filter started: no S mutation, no paint, no retitle, no sentinel
-    if(j.error && !(j.items||[]).length){ toast('Search failed: '+j.error); return }
+    if(j.error && !(j.items||[]).length){
+      /* 4AF: a FAILED request must never be mislabelled "No results" (that string stays for an
+         honest empty 200), and it must never leave the 4AE "Searching…" placeholder on screen.
+         Repaint ONLY while this request still owns the view: gen === Sg && S === st. */
+      if(gen === Sg && S === st){
+        st.loading = false;
+        _sPaint = true;
+        showDyn('Results for “'+esc(q)+'”', 'Search failed', '<div class="empty">Search failed — check the connection and try again.</div>');
+      }
+      toast('Search failed: '+j.error); return
+    }
     S.items = j.items||[]; S.sessionId = j.sessionId||null; S.next = !!j.next;
     paintSearch();
     if(S.next && S.filter !== 'all') loadMore();   // page 2 → ~40 results (All never paginates)
-  }catch(e){ if(gen === Sg) toast('Search failed: '+e.message) }
+  }catch(e){
+    if(gen === Sg && S === st){
+      /* 4AF: a rejected fetch (server stopped / network down) used to toast only, leaving
+         "Searching…" on screen forever. Paint the same honest failure state instead. */
+      st.loading = false;
+      _sPaint = true;
+      showDyn('Results for “'+esc(q)+'”', 'Search failed', '<div class="empty">Search failed — check the connection and try again.</div>');
+    }
+    if(gen === Sg) toast('Search failed: '+e.message);
+  }
 };
 (function scrollPaging(){
   var sc = document.getElementById('scroll'); if(!sc) return;
