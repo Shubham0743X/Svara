@@ -3948,7 +3948,14 @@ M3145 1368 c-3 -8 -4 -59 -3 -113 l3 -99 40 -4 c70 -7 143 8 175 34 56 48 49 139 -
    The canvas is inserted immediately after #theme (both z-index:-1, both pointer-events:none),
    so the wave paints ABOVE the album-colour layer and BELOW every surface: #sb (z 5), the tab
    bar, rows, the ⋮ menu / #shist (z 30), Settings (z 96), About (z 98) and the full player.
-   setTheme() and #theme are completely untouched.
+   setTheme() and #theme are completely untouched. (C) On every NON-Home page the canvas
+   COMPOSITES OVER #theme with mix-blend-mode:screen (see the rule below) so #theme's
+   artwork-tinted colour is never hidden; Home keeps the original opaque look, unchanged.
+   v4wavejs flips `mix-blend-mode` in syncView() because only the JS knows Home from non-Home.
+
+   MOTION: the wave ANIMATES on every view (Home at full opacity, every other page at 0.4). It is
+   never frozen on a frame; it only stops when the window is hidden or blurred, and reduced-motion
+   still paints ONE static frame. Overlays (Settings, About, the queue) never change wave state.
 
    TUNABLES (one line each):
      --wave-scrim : strength of the flat scrim painted over the wave for text readability (0 = off)
@@ -3956,6 +3963,10 @@ M3145 1368 c-3 -8 -4 -59 -3 -113 l3 -99 40 -4 c70 -7 143 8 175 34 56 48 49 139 -
 html[data-fx="full"] #waveCv,
 html[data-fx="bal"]  #waveCv{
   position:fixed; inset:0; z-index:-1; pointer-events:none; display:block;
+  /* (C) Composite the wave OVER #theme with `screen` so the artwork-tinted ambient gradient
+     shows through instead of being hidden by the opaque canvas. `lighten`/`plus-lighter` are
+     the tested alternates if this reads wrong on a machine. Never gates clicks (pointer-events:none). */
+  mix-blend-mode:screen;
   opacity:var(--wave-op,1);
   transition:opacity .4s ease;
 }
@@ -3973,7 +3984,7 @@ html[data-fx="bal"]  body::after{
    Plain 2D canvas, no WebGL, no library, no new dependency, no build step — one file.
    The visual math is the supplied reference, character-for-character (brightness is the one
    documented change: a nonlinear lift, see `gain`). Safety/perf: fps cap, one rAF loop, pause
-   off-view, debounced resize, zero per-frame allocations, reduced-motion static frame, CSS
+   hidden/blur, debounced resize, zero per-frame allocations, reduced-motion static frame, CSS
    opacity gating, and — because the visible-window measurement showed the pixel loop janks the
    MAIN thread at scale 2 — the pixel loop runs in a Blob Web Worker via
    canvas.transferControlToOffscreen() when the browser supports it (main-thread fallback kept).
@@ -4175,24 +4186,29 @@ html[data-fx="bal"]  body::after{
 
   function setOpacity(op){ canvas.style.setProperty('--wave-op', String(op)) }
 
-  /* Reuses the app's EXISTING view state — no new router. Home = the only animating view;
-     Settings / About live inside the v3js IIFE (unwrappable) so their class state is read here. */
+  /* Reuses the app's EXISTING view state — no new router. Home is the ONLY view at full opacity;
+     every other PAGE (search, liked, playlist, artist, album, full player) sits at dimOpacity but
+     the wave keeps ANIMATING everywhere — a frozen dim frame reads as broken with the worker's
+     pixel loop. The overlays — Settings (#setPanel), About (#aboutCard) and the queue — are
+     deliberately NOT consulted: they sit ON TOP of a page that is already showing, so opening or
+     closing one must never change the wave. ONLY the PAGE decides (and only `body.pv` — the
+     full-screen player — keeps the 0.4 treatment). */
   function isHomeView(){
     try{ if(curPage !== 'home') return false }catch(e){ return false }
-    if(document.body.classList.contains('pv')) return false;              // full player / queue
+    if(document.body.classList.contains('pv')) return false;              // full player page
     var art = document.getElementById('artSec');
     if(art && !art.hidden) return false;                                  // artist page (v3js-local fn)
-    var sp = document.getElementById('setPanel');
-    if(sp && sp.classList.contains('on')) return false;                   // Settings slide-over
-    var ac = document.getElementById('aboutCard');
-    if(ac && ac.classList.contains('on')) return false;                   // About overlay
     return true;
   }
   function syncView(){
     var home = isHomeView();
     setOpacity(home ? WAVE.homeOpacity : WAVE.dimOpacity);
+    /* (C) Background blending: Home keeps the ORIGINAL opaque look, bit-identical to before.
+       Every other page composites OVER #theme with `screen`, so the artwork-tinted ambient
+       gradient shows through instead of being covered by the alpha-255 canvas. */
+    canvas.style.mixBlendMode = home ? 'normal' : 'screen';
     if(REDUCED) return;                     /* static frame only — the loop never starts */
-    if(home) startLoop(); else stopLoop();  /* opacity changes never restart a running loop */
+    if(!document.hidden) startLoop();       /* wave animates on EVERY view; only hidden/blur stops it */
   }
 
   /* Wrap one GLOBAL function (if it really is a global) so a view switch re-evaluates the wave.
@@ -4208,10 +4224,12 @@ html[data-fx="bal"]  body::after{
        v3js already wraps. Missing bindings are skipped, never thrown over. */
     var names = ['goHome','showDyn','openPV','closePV','openArtist','restoreView'];
     for(var i = 0; i < names.length; i++) wrapGlobal(names[i]);
-    /* Everything else (artist page, Settings, About, .pv) cannot be wrapped from here — it is
-       scoped to the v3js IIFE — and #artSec does not even exist until an artist page opens. So
-       watch class/hidden changes anywhere under <body>; only those two attributes, batched by
-       the observer, and syncView() is cheap and idempotent (the loop is guarded). */
+    /* Everything else (the artist page and .pv) cannot be wrapped from here — it is scoped to
+       the v3js IIFE — and #artSec does not even exist until an artist page opens. So watch
+       class/hidden changes anywhere under <body>; only those two attributes, batched by the
+       observer. syncView() keys off the PAGE alone, so a Settings/About/queue class change is
+       harmless: it re-runs syncView() and changes nothing. The observer must NEVER gate on a
+       panel. */
     try{
       if(window.MutationObserver){
         var mo = new MutationObserver(function(){ syncView() });
