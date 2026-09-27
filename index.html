@@ -1860,11 +1860,14 @@ if(!$('#homeSec').hidden)renderHome();
    Scoped to #artSec so it cannot reach #pv, the mini player or Home.
    −24px === #scroll's inline padding (line 67); #scroll itself is untouched. */
 #artSec .art-hero{position:relative;display:grid;overflow:hidden;margin:10px -24px 0;height:auto;
-  min-height:clamp(340px,56dvh,640px);background:var(--panel)}
+  min-height:clamp(340px,56dvh,640px);background:transparent}
 #artSec .art-fit{grid-area:1/1;align-self:start;aspect-ratio:2.4/1;min-height:0;pointer-events:none}
-#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%}
+#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.8) 72%,rgba(0,0,0,.35) 88%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.8) 72%,rgba(0,0,0,.35) 88%,transparent 100%);
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:100% 100%;mask-size:100% 100%}
 #artSec .art-hero::after{content:'';position:absolute;inset:0;pointer-events:none;   /* soft BOTTOM fade only */
-  background:linear-gradient(180deg,rgba(7,7,10,0) 30%,rgba(7,7,10,.34) 58%,rgba(7,7,10,.78) 84%,var(--bg) 100%)}
+  background:linear-gradient(180deg,transparent 0%,transparent 48%,rgba(7,7,10,.30) 65%,rgba(7,7,10,.45) 78%,rgba(7,7,10,.20) 90%,transparent 100%)}
 #artSec .art-hero.nopic{background:linear-gradient(160deg,#191922,#0a0a0f)}   /* banner failed: no empty box */
 #artSec .art-hero.nopic::after{display:none}
 #artSec .art-head{grid-area:1/1;align-self:end;z-index:2;padding:0 24px 22px}
@@ -3999,7 +4002,7 @@ html[data-fx="bal"]  body::after{
   if(boot.mode === 'classic') return;
 
   /* ---- ONE config object — every knob is a single edit right here ---- */
-  var WAVE = { scale:2, fps:60, gain:1.35, homeOpacity:1, dimOpacity:0.4 };
+  var WAVE = { scale:2, fps:60, gain:1.35, homeOpacity:1, dimOpacity:0.4, artistOpacity:0.55 };
   if(boot.mode === 'bal'){ WAVE.scale = 3; WAVE.fps = 30 }          // 'low' | 'medium'
   /* 'full' keeps the LADDER. The visible-window measurement showed scale 2 / 60 fps could not
      hold ~55 fps (rAF ~15 fps, 49 long tasks up to 73 ms), so the pixel loop is moved off the
@@ -4196,13 +4199,16 @@ html[data-fx="bal"]  body::after{
   function isHomeView(){
     try{ if(curPage !== 'home') return false }catch(e){ return false }
     if(document.body.classList.contains('pv')) return false;              // full player page
-    var art = document.getElementById('artSec');
-    if(art && !art.hidden) return false;                                  // artist page (v3js-local fn)
+    if(isArtistView()) return false;                                      // artist page (v3js-local fn)
     return true;
   }
+  /* The artist page is the ONE non-Home view that may need more than dimOpacity: its hero photo
+     now dissolves INTO the wave (bottom alpha mask), so unlike every other page there is real
+     artwork colour under the `screen` composite. Everything else stays at dimOpacity. */
+  function isArtistView(){ var a = document.getElementById('artSec'); return !!(a && !a.hidden) }
   function syncView(){
     var home = isHomeView();
-    setOpacity(home ? WAVE.homeOpacity : WAVE.dimOpacity);
+    setOpacity(home ? WAVE.homeOpacity : (isArtistView() ? WAVE.artistOpacity : WAVE.dimOpacity));
     /* (C) Background blending: Home keeps the ORIGINAL opaque look, bit-identical to before.
        Every other page composites OVER #theme with `screen`, so the artwork-tinted ambient
        gradient shows through instead of being covered by the alpha-255 canvas. */
