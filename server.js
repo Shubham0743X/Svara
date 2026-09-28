@@ -376,7 +376,18 @@ function backfillRow(dst, src){
 // ROUND-ROBIN (one row from each group per pass) so no single category floods the list and albums
 // AND artists both stay in the mix. Id-bearing duplicates are backfilled; id-less rows use the
 // cautious key and are only skipped when it already exists (never merged across a title).
-function mergeAllRows(base, groups){
+// 4Z-b-1 — THE ONE EXCEPTION to "base order is preserved": the guarded song promotion below.
+// Measured on "aasa kooda": the unfiltered batch floats three kind:'track' label:'Video' covers
+// ("…Live Singing…", "…Slap Remix…") above the canonical kind:'track' label:'Song' row
+// rVqcPUQ2YXI, which the type=song page 1 puts at index 0. The covers' titles are NOT equal to
+// the song's, so no exact-title (or dedupe) rule could ever reach this — only the song category
+// search knows which row is the canonical song. So: if that category's OWN top row looks like the
+// query AND the All list already carries the same id as a Song row with at least one Video row in
+// front of it, that Song row is lifted to just before the first such Video row. Nothing is added
+// or dropped, every other row keeps its relative order, and the length never exceeds ALL_MERGE_CAP.
+// EVERY guard is mandatory; if any one fails this is a plain no-op, and the heuristic is never
+// widened to a fuzzier title match (a wrong promotion is worse than a wrong order).
+function mergeAllRows(base, groups, query){
   const out = base.slice();
   const at = new Map();
   out.forEach((it, i) => at.set(mergeKey(it), i));
@@ -401,6 +412,22 @@ function mergeAllRows(base, groups){
       rendered++;
     }
     if (!advanced) break;
+  }
+  // 4Z-b-1: the guarded song promotion — see the header comment above for the full rationale.
+  const qKey = artistNameKey(query);              // same normaliser as the artist filter: lowercase,
+  const topSong = groups[0] && groups[0][0];      // diacritics stripped, punctuation -> space,
+  if (topSong && topSong.id                     // spaces collapsed, a leading "the" dropped
+      && topSong.label === 'Song'               // (a) the song search's top row is a real Song row
+      && qKey && artistNameKey(topSong.title).indexOf(qKey) === 0) {   // (b) title starts with the query
+    const songAt = out.findIndex(it => it && it.id === topSong.id && it.label === 'Song');  // (c)
+    if (songAt > 0) {
+      let firstVideo = -1;                      // (d) the first label:'Video' row in front of it
+      for (let i = 0; i < songAt; i++) if (out[i] && out[i].label === 'Video') { firstVideo = i; break; }
+      if (firstVideo > -1) {
+        const moved = out.splice(songAt, 1)[0];   // splice-out first: songAt > firstVideo, so the
+        out.splice(firstVideo, 0, moved);         // earlier index is still valid for the insert.
+      }
+    }
   }
   return out;
 }
@@ -439,7 +466,7 @@ app.get('/api/search', async (req, res) => {
     if (type === 'all' && catP) {
       try {
         const cats = await catP;   // [song, album, artist]
-        items = mergeAllRows(items, [mapSearchRows(cats[0], 'song'), mapSearchRows(cats[1], 'album'), mapSearchRows(cats[2], 'artist')]);
+        items = mergeAllRows(items, [mapSearchRows(cats[0], 'song'), mapSearchRows(cats[1], 'album'), mapSearchRows(cats[2], 'artist')], q);
       } catch (e) {
         // soft-fail: keep YouTube's honest unfiltered batch rather than 500 the whole search
         console.error('all merge error (soft-fail):', e.message);
