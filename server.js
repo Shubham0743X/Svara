@@ -15,6 +15,67 @@ const app = express();
 let yt;
 async function getYt(){ if (!yt) yt = await Innertube.create(); return yt; }
 
+/* ================= Wave 4AK — response caching (headers only) =================
+   Measured live against this server, warm process, identical params, hit 1 -> hit 2:
+     suggest 506->164ms · search 690->714ms · radio 1085->1708ms · lyrics 459->490ms ·
+     artist 660->468ms · artist/songs 1401->1348ms · album 309->281ms · thumb 727->262ms
+   Every one of those calls hits youtubei.js again: nothing but /api/thumb sent a Cache-Control
+   header. This wave adds ONLY that header. No server-side response store, no JS/IndexedDB/
+   localStorage layer, no body, no status code and no route signature changes.
+
+   /api/search is DELIBERATELY NEVER CACHED, and that is a measured decision, not caution. Its
+   pagination handle reaches the client INSIDE the body — `{ items, sessionId, next:true }` — and
+   `sessionId` is a key into the in-memory `searchSessions` Map. A replayed body after a restart
+   therefore advertises `next:true` with a handle that can never be resumed: /api/search/next
+   answers `{ items:[], next:false, error:'session expired' }` (verified live with a stale id), the
+   client ends paging and prints "End of results" — page 2+ is silently lost. Freezing that body
+   in a browser cache (or letting its Express ETag answer a 304) would ship exactly that bug, so
+   this route is sent `no-store` until the handle is provable across a restart.
+
+   Failures are NEVER cached: a non-200, a body carrying `error`, or an empty result is sent with
+   `no-store`, so 4AF's "Search failed" state can never become sticky. */
+const CACHE_TTL = {
+  '/api/lyrics': 86400,        // lyrics do not change
+  '/api/album': 1800,
+  '/api/artist': 1800,
+  '/api/artist/songs': 1800,
+  '/api/suggest': 600,
+  '/api/radio': 600
+};
+/* A body may be cached only when it is a successful, non-empty payload. `error` is a plain string
+   on every route that has one ('' when there is none), so truthiness is the test. */
+function cacheableBody(body){
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  if (body.error) return false;                                     // explicit failure
+  if ('id' in body && body.id === null) return false;               // artist not found
+  if (Array.isArray(body.items) && !body.items.length) return false;
+  if (Array.isArray(body.tracks) && !body.tracks.length) return false;
+  if (Array.isArray(body.songs) && !body.songs.length) return false;
+  if ('plain' in body && !body.plain && !body.synced) return false; // lyrics: nothing found
+  return true;
+}
+/* Wrap res.json for ONE request so every response of that route decides its own header — no call
+   site inside the handler has to be rewritten. res.setHeader before the body is written is always
+   legal (res.json has not sent headers yet). */
+function cacheHeaders(res, route){
+  const ttl = CACHE_TTL[route] || 0;
+  const json = res.json.bind(res);
+  res.json = function(body){
+    try {
+      if (ttl && res.statusCode === 200 && cacheableBody(body)) res.setHeader('Cache-Control', 'private, max-age=' + ttl);
+      else res.setHeader('Cache-Control', 'no-store');
+    } catch (e) {}
+    return json(body);
+  };
+}
+/* Routes that must never be cached claim it up front, so the header is set whatever the handler
+   ends up doing (stream pipe, file download, error JSON, or a 206). */
+function noStore(res){
+  try { res.setHeader('Cache-Control', 'no-store') } catch (e) {}
+  const json = res.json.bind(res);
+  res.json = function(body){ try { res.setHeader('Cache-Control', 'no-store') } catch (e) {} return json(body); };
+}
+
 /* ================= helpers ================= */
 function txt(v, seen = new WeakSet()) {
   if (v == null) return '';
@@ -433,6 +494,7 @@ function mergeAllRows(base, groups, query){
 }
 
 app.get('/api/search', async (req, res) => {
+  noStore(res);                     // 4AK: the sessionId in this body dies with the process (see above)
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ items: [], next: false });
   const type = searchTypeOf(req.query.type);
@@ -493,6 +555,7 @@ app.get('/api/search', async (req, res) => {
 });
 
 app.get('/api/search/next', async (req, res) => {
+  noStore(res);                     // 4AK: pagination pages are never cached
   const sessionId = String(req.query.sessionId || '');
   const s = searchSessions.get(sessionId);
   if (!s) return res.json({ items: [], next: false, error: 'session expired' });
@@ -573,6 +636,7 @@ function byline(it){
 function ytStill(id){ return 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg'; }
 
 app.get('/api/radio', async (req, res) => {
+  cacheHeaders(res, '/api/radio');
   const id = String(req.query.id || '');
   const title = String(req.query.title || '');
   const artist = String(req.query.artist || '');
@@ -629,6 +693,7 @@ app.get('/api/radio', async (req, res) => {
 
 /* ================= album ================= */
 app.get('/api/album', async (req, res) => {
+  cacheHeaders(res, '/api/album');
   const id = String(req.query.id || '');
   if (!id) return res.json({ tracks: [], error: 'missing id' });
   try {
@@ -680,6 +745,7 @@ function mapRelatedArtist(i){
   } catch (e) { return null; }
 }
 app.get('/api/artist', async (req, res) => {
+  cacheHeaders(res, '/api/artist');
   const wantId = String(req.query.id || '').trim();
   const wantName = String(req.query.name || '').trim();
   if (!wantId && !wantName) return res.json({ id: null, error: 'missing id or name' });
@@ -810,6 +876,7 @@ async function artistSongRows(youtube, artist){
   return out;
 }
 app.get('/api/artist/songs', async (req, res) => {
+  cacheHeaders(res, '/api/artist/songs');
   const id = String(req.query.id || '').trim();
   const wantName = String(req.query.name || '').trim();
   if (!id) return res.json({ id: null, name: wantName, total: 0, songs: [], error: 'missing id' });
@@ -837,6 +904,7 @@ app.get('/api/artist/songs', async (req, res) => {
 
 /* ================= search suggestions ================= */
 app.get('/api/suggest', async (req, res) => {
+  cacheHeaders(res, '/api/suggest');
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ items: [] });
   try {
@@ -985,6 +1053,7 @@ async function lrclibBest({ title, artist, album, duration }){
 
 // provider=auto (default) | ytm | lrclib   → auto prefers SYNCED lyrics
 app.get('/api/lyrics', async (req, res) => {
+  cacheHeaders(res, '/api/lyrics');
   const want = ['ytm', 'lrclib'].includes(req.query.provider) ? req.query.provider : 'auto';
   const id = String(req.query.id || '');
   const title = String(req.query.title || '');
@@ -1058,6 +1127,7 @@ function pickAudioFile(dir){
   return path.join(dir, files.sort((a, b) => fs.statSync(path.join(dir, b)).size - fs.statSync(path.join(dir, a)).size)[0]);
 }
 app.get('/api/download', async (req, res) => {
+  noStore(res);                     // 4AK: a downloaded file is never cached by the proxy
   const id = String(req.query.id || '');
   if (!id || !/^[\w-]{6,}$/.test(id)) return res.status(400).json({ error: 'bad id' });
   const wantTitle = String(req.query.title || '');
@@ -1154,6 +1224,7 @@ async function getStreamUrl(videoId){
   return url;
 }
 app.get('/api/stream', async (req, res) => {
+  noStore(res);                     // 4AK: never cache audio; Range/seek is unaffected
   try {
     const id = String(req.query.id || '');
     if (!id) return res.status(400).end();
