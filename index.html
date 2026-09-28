@@ -3693,6 +3693,120 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
   };
 })();
 </script>
+<script id="v4artfadejs">
+(function(){
+  /* ================= WAVE 4AI — track-change cover crossfade (JS half) =================
+     Placed AFTER every existing setNowUI wrapper (v3js, then v3art), so this wraps the FINAL
+     version and runs last. No markup change, no new dependency, and onload/onerror are never
+     overwritten — v3art shares #pvImg.
+
+     Why: base setNowUI writes #pvImg.src instantly, so a track change is a hard cut — and until
+     the new URL decodes, the .pvArt gradient is what you see. So when a REAL cover is already
+     on screen we put that old cover on .pvArt's inline background (it sits UNDER the img), set
+     the img to opacity 0 with no transition, and let the incoming image load. On `load` the
+     class comes off: the new cover fades in over the old one, opacity only, .22s (v4artfadecss).
+     ~240ms later the old background is retired — invisible, because an opaque, object-fit:cover
+     img already covers the whole box.
+
+     v3art's retry/fallback ladder is untouched and keeps working: it reassigns #pvImg.src, and
+     the `error` listener below drops the stale cover so a track that fails can never leave the
+     PREVIOUS cover on screen; a later successful load reveals the new cover normally.
+
+     Out-of-order safety (rapid skips): a fade in flight is RE-TARGETED to the newest track
+     instead of being restarted (the img is mid-load then, so it is no longer "a real image"),
+     only pendingId === curArtId may reveal, a stale `load` is rejected by comparing currentSrc,
+     and every clear is token-guarded so a late timer can never wipe a newer fade's background. */
+  var img = document.getElementById('pvImg');
+  var art = document.querySelector('#pv .pvArt');
+  if(!img || !art) return;                    // no player surface at all: nothing to do
+
+  var lastArtId = null;   // track id whose cover #pvImg currently holds
+  var curArtId  = null;   // track id of the LATEST setNowUI() call
+  var curArtSrc = '';     // that call's src (absolute) — used to reject stale `load` events
+  var pendingId = null;   // track id we are fading TO (null ⇒ nothing in flight)
+  var bgToken   = 0;      // identifies which fade owns the inline background
+
+  function reduced(){
+    try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) }catch(e){ return false }
+  }
+  /* .pvArt's own rule is the `background` shorthand, which leaves background-size/-position at
+     their initial values: an un-sized cover would tile at natural size instead of matching the
+     img's object-fit:cover. Set together with the image, cleared together with it. */
+  function paintBg(src){
+    art.style.backgroundImage = 'url("' + String(src).replace(/"/g, '%22') + '")';
+    art.style.backgroundSize = 'cover';
+    art.style.backgroundPosition = 'center';
+  }
+  /* Retire the old cover. `owner` (when given) must still own the background, otherwise a newer
+     fade has already painted its own and this clear would be a gradient flash. */
+  function dropBg(owner){
+    if(owner !== undefined && owner !== bgToken) return;
+    img.classList.remove('artswap');
+    art.style.backgroundImage = '';
+    art.style.backgroundSize = '';
+    art.style.backgroundPosition = '';
+  }
+  function clearFade(){ pendingId = null; dropBg() }
+
+  var _setNow = setNowUI;
+  setNowUI = function(it){
+    var id = (it && it.id) || null;
+    var changed = (id !== null && id !== lastArtId);
+    if(pendingId !== null){
+      /* mid-skip: the img is loading (so it is not "a real image" any more) — keep the old
+         cover already on screen and just point the pending reveal at the newest track. */
+      if(changed) pendingId = id; else clearFade();
+    }else if(changed && !reduced() && img.complete && img.naturalWidth > 0 && img.style.display !== 'none'){
+      var oldSrc = img.currentSrc || img.src || '';
+      if(oldSrc){
+        bgToken++;
+        pendingId = id;
+        paintBg(oldSrc);
+        img.classList.add('artswap');        // opacity 0, transition:none → instant, no flash
+      }
+    }
+    _setNow(it);                             // unchanged — v3art's retry ladder still runs
+    lastArtId = id;
+    curArtId  = id;
+    curArtSrc = img.src || '';
+    /* the new track has no artwork at all: never leave the previous cover sitting there */
+    if(!img.getAttribute('src')) clearFade();
+  };
+
+  /* ONE persistent listener each. onload/onerror are deliberately NOT touched (v3art may share
+     the element), and `load` only reveals the LATEST pending track. */
+  img.addEventListener('load', function(){
+    if(!img.naturalWidth) return;                                        // not a real paint
+    if(pendingId === null) return;                                       // nothing in flight
+    if(pendingId !== curArtId) return;                                   // track changed again
+    if(curArtSrc && img.currentSrc && img.currentSrc !== curArtSrc) return;  // stale load
+    var owner = bgToken;
+    pendingId = null;
+    img.classList.remove('artswap');         // fade the new cover in over the old background
+    setTimeout(function(){ dropBg(owner) }, 240);                        // retire the old cover
+  });
+  img.addEventListener('error', function(){
+    /* a failed track must not leave the PREVIOUS cover on screen; the ladder retries and a later
+       successful load reveals the new cover normally. */
+    clearFade();
+  });
+
+  /* Empty player state (queue cleared / last row removed / track with nothing to play): those
+     paths all call paintControls(), and none of them may leave a half-faded cover behind. */
+  var _paintControls = paintControls;
+  paintControls = function(){
+    if(!queue.length) clearFade();
+    return _paintControls.apply(this, arguments);
+  };
+
+  /* Closing the page mid-load clears now, so reopening can never show a leftover cover. */
+  var _closePV = closePV;
+  closePV = function(){
+    clearFade();
+    return _closePV.apply(this, arguments);
+  };
+})();
+</script>
 <script id="v3hist">
 (function(){
   /* old history entries carry a junk thumb and sometimes no id at all */
@@ -3980,6 +4094,19 @@ html[data-fx="bal"]  body::after{
   content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
   background:rgba(7,7,10,var(--wave-scrim,.25));
 }
+</style>
+
+<style id="v4artfadecss">
+/* ================= WAVE 4AI — track-change cover crossfade (CSS half) =================
+   Exactly two rules, no @keyframes. `transition` only (compositor opacity — no layout, no
+   paint, no loop); `artswap` is INSTANT (transition:none, opacity 0) so the outgoing frame is
+   never itself faded, and removing the class is what fades the incoming cover in over it.
+   Untouched on purpose: #pv's own open/close transition and body.pv #pv (v2css above), the
+   .pvArt gradient, and the v2css prefers-reduced-motion reset — `*{transition:none!important}`
+   wins over this rule, so that reset keeps disabling the fade for free, and v4artfadejs refuses
+   to start one under reduced motion in the first place. */
+#pv .pvArt img{transition:opacity .22s ease}
+#pv .pvArt img.artswap{opacity:0;transition:none}
 </style>
 
 <script id="v4wavejs">
