@@ -505,15 +505,15 @@ async function renderHome(){
   if(!none){
     if(recent.length)h+=`<div class="sec"><h2>Listen again</h2>${railHTML(recent,'la')}</div>`;
     h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button></h2>${listHTML(quickList)}</div>`;
-    if(arts.length)h+=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail"><div class="empty">Loading your albums…</div></div></div>`;
+    if(arts.length)h+=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading your albums…</div>'}</div></div>`;
     h+=`<div class="sec"><h2>Surprise me<button class="go" id="diceBig">🎲 Play a radio from your taste</button></h2><div class="empty" style="padding:6px 2px">Your radio never jumps between languages — it seeds from what you listen to most.</div></div>`;
   }else{
     h+=`<div class="sec"><h2>Welcome to Svara</h2><div class="empty">Search any song and press play.<br>After a few songs, Home fills with <b>Listen again</b>, <b>Quick picks</b> and <b>Albums for you</b> — all from your taste.</div></div>`;
-    h+=`<div class="sec"><h2>Popular right now</h2><div id="startRail"><div class="empty">Loading…</div></div></div>`;
+    h+=`<div class="sec"><h2>Popular right now</h2><div id="startRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
   }
   sec.innerHTML=h;
   // background starter content for empty profile
-  if(none){try{const r=await fetch('/api/search?q=trending');const j=await r.json();const it=(j.items||[]).slice(0,12);$('#startRail').innerHTML=railHTML(it,'start');}catch(e){$('#startRail').innerHTML=''}}
+  if(none){try{const r=await fetch('/api/search?q=trending');const j=await r.json();const it=(j.items||[]).slice(0,12);$('#startRail').innerHTML=railHTML(it,'start');if(typeof skReveal==='function')skReveal(document.getElementById('startRail'));}catch(e){$('#startRail').innerHTML=''}}
   // albums for you
   if(!none&&arts.length){
     try{
@@ -526,6 +526,7 @@ async function renderHome(){
         }catch(e){/* skip artist */}
       }
       $('#albRail').innerHTML=cards?`<div class="railwrap">${cards}</div>`:'<div class="empty">No albums found yet — keep listening and this fills with your artists’ albums.</div>';
+      if(typeof skReveal==='function')skReveal(document.getElementById('albRail'));
     }catch(e){$('#albRail').innerHTML='<div class="empty">Could not load albums right now.</div>'}
   }
 }
@@ -2501,7 +2502,9 @@ async function openArtist(id, name){
   setNav(null);
   curPage = 'artist'; curList = []; artData = null;        // keeps the keeper's homeLine() off
   artFull = []; artFullReq = null; artListOpen = false;    // a new artist ⇒ a new catalogue
-  el.innerHTML = '<div class="empty">Loading artist…</div>';
+  el.innerHTML = (typeof skHero==='function')
+    ? skHero()+'<div class="sec"><h2>Top songs</h2>'+skRows(5,true)+'</div>'
+    : '<div class="empty">Loading artist…</div>';
   var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = 0;
   try{ document.title = 'Loading · Svara' }catch(e){}
   try{
@@ -2510,6 +2513,7 @@ async function openArtist(id, name){
     if(gen !== artGen) return;    // user navigated away while this was loading
     if(!j || !j.id){ el.innerHTML = '<div class="empty">No artist page found for “'+esc(name||'')+'”.</div>'; return }
     renderArtist(j);
+    if(typeof skReveal==='function')skReveal(el);   // 4AJ: ~140ms reveal of the real page
     loadArtistSongs();            // prefetch the whole catalogue (up to 150) for Play all / Mix
   }catch(e){ if(gen === artGen) el.innerHTML = '<div class="empty">Could not load this artist right now.</div>' }
 }
@@ -2784,7 +2788,7 @@ doSearch = async function(q, record, filter){
      a real result set and showDyn() still leaves the artist page. loadMore() is never called
      from here — pagination is untouched. */
   curList = []; register([]); _sPaint = true;
-  showDyn('Results for “'+esc(q)+'”', 'Searching…', '<div class="empty">Searching…</div>');
+  showDyn('Results for “'+esc(q)+'”', 'Searching…', (typeof skRows==='function' ? skRows(8) : '<div class="empty">Searching…</div>'));
   try{
     var r = await fetch('/api/search?q='+encodeURIComponent(q)+'&type='+encodeURIComponent(f));
     var j = await r.json();
@@ -2802,6 +2806,7 @@ doSearch = async function(q, record, filter){
     }
     S.items = j.items||[]; S.sessionId = j.sessionId||null; S.next = !!j.next;
     paintSearch();
+    if(typeof skReveal==='function')skReveal(document.getElementById('dynSec'));   // 4AJ: reveal the real rows
     if(S.next && S.filter !== 'all') loadMore();   // page 2 → ~40 results (All never paginates)
   }catch(e){
     if(gen === Sg && S === st){
@@ -3832,6 +3837,69 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
   };
 })();
 </script>
+<script id="v4skeljs">
+/* ================= WAVE 4AJ — skeleton loaders (markup half) =================
+   Nothing here renders on its own: these helpers are called by the three wait states only
+   (doSearch, openArtist, renderHome). Every helper mirrors the REAL markup MINUS every <img>,
+   every handler attribute, and EVERY data-* hook (no data-play / data-id / data-menu / data-q /
+   data-qp / data-chip / data-artist-id / data-artalbum / data-artrow) — so a skeleton node can
+   never be clicked, never reaches register() and never enters curList. The container carries
+   aria-hidden="true" and pointer-events:none (see v4skelcss).
+
+   On window on purpose: the three call sites live inside the v3js IIFE and resolve these through
+   the scope chain at call time. renderHome() ALSO runs once from the base init (~line 1089),
+   which is parsed BEFORE this block, so each call site keeps the original text as its fallback
+   (`typeof skRows === 'function' ? … : …`): the boot paint is byte-for-byte what it was, and
+   every later repaint uses the skeleton. */
+(function(){
+  'use strict';
+  /* One skeleton row: the real .row/.rt/.rm/.rtitle/.rsub scaffolding, nothing else. `artist`
+     adds the #artSec-only .artalb/.artdur slots, whose widths come from the real rules (and whose
+     ≤1000px display:none comes with them). */
+  function skRow(artist){
+    return '<div class="row'+(artist ? ' artrow' : '')+'">'+
+             '<div class="rt"></div>'+
+             '<div class="rm">'+
+               '<div class="rtitle sk-bar sk-bar-t"></div>'+
+               '<div class="rsub sk-bar sk-bar-s"></div>'+
+             '</div>'+
+             (artist ? '<div class="artalb"></div><div class="artdur"></div>' : '')+
+           '</div>';
+  }
+  function skRows(n, artist){
+    var h = '', i, c = (n > 0 ? n : 6);
+    for(i = 0; i < c; i++) h += skRow(artist);
+    return '<div class="sk-region" aria-hidden="true"><div class="list">'+h+'</div><div class="sk-band"></div></div>';
+  }
+  function skRail(n){
+    var h = '', i, c = (n > 0 ? n : 6);
+    for(i = 0; i < c; i++) h += '<div class="rail sk-card"><div class="art"></div>'+
+                                '<div class="rname sk-bar sk-bar-r"></div>'+
+                                '<div class="rsub2 sk-bar sk-bar-s2"></div></div>';
+    return '<div class="sk-region" aria-hidden="true"><div class="railwrap">'+h+'</div><div class="sk-band"></div></div>';
+  }
+  function skHero(){
+    return '<div class="art-hero sk-hero" aria-hidden="true">'+
+             '<div class="art-fit"></div>'+
+             '<div class="art-head"><div class="art-name sk-bar sk-bar-n"></div></div>'+
+             '<div class="sk-band"></div>'+
+           '</div>';
+  }
+  /* ~140ms reveal on the REAL content after the swap. Cleanup is a setTimeout, NEVER animationend
+     (that event never fires when the v2css reduced-motion reset disables animations). The class
+     itself never sets opacity — only the @keyframes do — so with animations off the content is
+     simply there. */
+  function skReveal(el){
+    if(!el || !el.classList) return;
+    el.classList.remove('sk-reveal');
+    void el.offsetWidth;                     // restart the animation on a repeat swap
+    el.classList.add('sk-reveal');
+    setTimeout(function(){ try{ el.classList.remove('sk-reveal') }catch(e){} }, 200);
+  }
+  window.skRow = skRow; window.skRows = skRows; window.skRail = skRail;
+  window.skHero = skHero; window.skReveal = skReveal;
+})();
+</script>
 <script id="v3hist">
 (function(){
   /* old history entries carry a junk thumb and sometimes no id at all */
@@ -4136,6 +4204,59 @@ html[data-fx="bal"]  body::after{
 #pv .pvArt img.artswap{opacity:0;transition:none}
 #mini .miniL .art img{transition:opacity .22s ease}
 #mini .miniL .art img.artswap{opacity:0;transition:none}
+</style>
+
+<style id="v4skelcss">
+/* ================= WAVE 4AJ — skeleton loaders (paint only) =================
+   The wait states used to be text-only ("Searching…", "Loading artist…", "Loading your
+   albums…", "Loading…"). A skeleton REUSES the real structural classes — .list/.row/.rt/.rm/
+   .rtitle/.rsub, #artSec's .artrow/.artalb/.artdur/.art-hero/.art-fit, .railwrap/.rail/.art/
+   .rname/.rsub2 — so every size, radius, gap, padding and font is INHERITED from 4AC and the
+   base layer and re-specified NOWHERE. This block only PAINTS: a light alpha fill plus ONE
+   shimmer band per region. Nothing here can touch real content: every selector is scoped to
+   .sk-region / .sk-hero / .sk-bar / .sk-card, which exist only in skeleton markup.
+
+   The fill is rgba(255,255,255,.07) — it reads on the dark page AND over the Home wave canvas,
+   and it is never a solid or dark hard-coded colour. The bars carry the EXACT measured line-box
+   heights for their real font sizes (15px → 20px, 13px → 17.33px, 11.5px → 15.33px), so a
+   skeleton row totals the same 8 + 64 + 8 = 80px as a real one.
+
+   The band is ONE .sk-band per region, animating transform only (compositor work — no layout and
+   no re-paint of the rows), and the region clips it with overflow:hidden. It is NOT
+   background-position. It is an ELEMENT, not a ::after, and that is a measured decision: the
+   existing reduced-motion reset is `*{animation:none!important}`, and the universal selector
+   matches ELEMENTS ONLY — a ::after band keeps animating under forced reduce (verified in the
+   renderer: animationName "skband", transform still changing). An element band is disabled by
+   that same existing reset, so no new reduced-motion block is needed anywhere.
+   A region that is itself a flex container (.list, .railwrap) gets a wrapper <div> instead of the
+   classes themselves: a band child inside a flex container would become a flex ITEM and shift
+   the layout. The artist hero already spends its ::after on the soft bottom fade, so its band is
+   the same .sk-band child — one band per region either way.
+
+   Reduced motion: no new media block. The existing v2css
+   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+   leaves every block (and the band) static; .sk-reveal only ever sets opacity inside a
+   @keyframes, so the real content is revealed instantly at full opacity rather than hidden. */
+.sk-region{position:relative;overflow:hidden;pointer-events:none}
+.sk-band{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.07),rgba(255,255,255,0));
+  transform:translateX(-100%);animation:skband 1.45s linear infinite}
+@keyframes skband{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+/* paint: the row art slot, the rail card art, every placeholder bar, and the hero box */
+.sk-region .rt,.sk-card .art,.sk-bar{background:rgba(255,255,255,.07)}
+#artSec .sk-hero{background:rgba(255,255,255,.07)}
+/* the artist row's album / duration slots (widths stay whatever the real rules give them) */
+.sk-region .artalb,.sk-region .artdur{background:rgba(255,255,255,.07);height:12px;border-radius:4px}
+/* placeholder bars: block, rounded, never a font — height is the measured line box above */
+.sk-bar{display:block;border-radius:4px}
+.sk-bar-t{height:20px;width:44%}
+.sk-bar-s{height:17.33px;width:28%}
+.sk-bar-r{height:17.33px;width:68%}
+.sk-bar-s2{height:15.33px;width:42%}
+.sk-bar-n{height:34px;width:46%;max-width:420px}
+/* the swap reveal: keyframes only, so a disabled animation leaves the content visible */
+.sk-reveal{animation:skreveal .14s ease-out}
+@keyframes skreveal{from{opacity:0}to{opacity:1}}
 </style>
 
 <script id="v4wavejs">
