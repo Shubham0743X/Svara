@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svara</title>
 <style>
-:root{--bg:#07070a;--panel:#0f0f15;--panel2:#16161e;--line:#232330;--tx:#f4f4f7;--dim:#9b9baa;--acc:#ff5c7a;--acc2:#ff8fa3;--grad:#ff5c7a;--amb:255,92,122;--amb2:255,92,122}
+:root{--bg:#07070a;--panel:#0f0f15;--panel2:#16161e;--line:#232330;--tx:#f4f4f7;--dim:#9b9baa;--acc:#20E7AC;--acc2:#3DE9B5;--grad:#20E7AC;--amb:32,231,172;--amb2:32,231,172}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{background:var(--bg);color:var(--tx);font-family:system-ui,'Segoe UI',Roboto,Arial,sans-serif;overflow:hidden;display:flex}
@@ -1070,7 +1070,7 @@ document.addEventListener('click',async e=>{
 </script>
 <style id="v2css">
 /* ================= Svara v2 layer ================= */
-:root{--acc-tx:#ff8fa3;--on-acc:#120d14}
+:root{--acc-tx:#9AF4D9;--on-acc:#120d14}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 /* animated mini <-> player (#28) */
 #pv{display:flex;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(20px) scale(.985);
@@ -1211,7 +1211,7 @@ if(psWrap&&psTip&&psGhost){
 var volEl=$('#vol'); if(volEl)volEl.style.setProperty('--v',(volEl.value||80)+'%');
 
 /* 4) true album-art theming (#2) with a race guard (#40) */
-var themeToken=0, themeRaf=0, themeCur={acc:[255,92,122],acc2:[168,85,247],accTx:[255,143,163]};
+var themeToken=0, themeRaf=0, themeCur={acc:[32,231,172],acc2:[61,233,181],accTx:[154,244,217]};
 function rgb2hsl(r,g,b){r/=255;g/=255;b/=255;var mx=Math.max(r,g,b),mn=Math.min(r,g,b),h=0,s=0,l=(mx+mn)/2,d=mx-mn;
   if(d){s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?((g-b)/d+(g<b?6:0)):mx===g?((b-r)/d+2):((r-g)/d+4);h/=6;}return [h,s,l];}
 function hsl2rgb(h,s,l){var r,g,b;if(!s){r=g=b=l}else{var q=l<.5?l*(1+s):l+s-l*s,p=2*l-q,f=function(t){if(t<0)t+=1;if(t>1)t-=1;
@@ -1911,7 +1911,7 @@ if(!$('#homeSec').hidden)renderHome();
 #setPanel .setNum{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
 #setPanel .setPill{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim);flex-shrink:0}
 #setPanel .setPill.ok{color:#7ef0b0;border-color:rgba(126,240,176,.35)}
-#setPanel .setPill.no{color:var(--acc);border-color:rgba(255,92,122,.35)}
+#setPanel .setPill.no{color:var(--acc);border-color:rgba(var(--amb),.35)}
 #setPanel .setLink{font-size:12px;color:var(--acc2);text-decoration:none;flex-shrink:0}
 #setPanel .setLink:hover{text-decoration:underline}
 #setPanel .setSeg{display:inline-flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px;flex-shrink:0}
@@ -1931,7 +1931,7 @@ if(!$('#homeSec').hidden)renderHome();
 #setPanel input[type=range]{width:140px}
 #setPanel .setAct{font-size:12px;font-weight:600;color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;flex-shrink:0}
 #setPanel .setAct:hover{border-color:var(--tx)}
-#setPanel .setAct.danger{color:#ffb3c1;border-color:rgba(255,92,122,.35)}
+#setPanel .setAct.danger{color:#ffb3c1;border-color:rgba(var(--amb),.35)}
 #setPanel .setAct.danger:hover{border-color:var(--acc);color:#fff}
 #setPanel .setCfm{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;flex-wrap:wrap}
 #setPanel .setCfmTx{font-size:12.5px;color:var(--tx)}
