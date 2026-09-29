@@ -1837,22 +1837,23 @@ if(!$('#homeSec').hidden)renderHome();
    itself: aspect-ratio on the container clamps the height and would clip the
    expanded bio (overflow:hidden), while the spacer both floors the height at
    width/2.4 and still lets the box GROW when MORE expands the description.
-   Scoped to #artSec so it cannot reach #pv, the mini player or Home.
+   Scoped to #artSec / #albSec (Wave 4AL reuses this hero on the album page) so it cannot
+   reach #pv, the mini player or Home.
    −24px === #scroll's inline padding (line 67); #scroll itself is untouched. */
-#artSec .art-hero{position:relative;display:grid;overflow:hidden;margin:10px -24px 0;height:auto;
+#artSec .art-hero,#albSec .art-hero{position:relative;display:grid;overflow:hidden;margin:10px -24px 0;height:auto;
   min-height:clamp(340px,56dvh,640px);background:transparent}
-#artSec .art-fit{grid-area:1/1;align-self:start;aspect-ratio:2.4/1;min-height:0;pointer-events:none}
-#artSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;
+#artSec .art-fit,#albSec .art-fit{grid-area:1/1;align-self:start;aspect-ratio:2.4/1;min-height:0;pointer-events:none}
+#artSec .art-herowide,#albSec .art-herowide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;
   -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.8) 72%,rgba(0,0,0,.35) 88%,transparent 100%);
   mask-image:linear-gradient(180deg,#000 0%,#000 58%,rgba(0,0,0,.8) 72%,rgba(0,0,0,.35) 88%,transparent 100%);
   -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:100% 100%;mask-size:100% 100%}
-#artSec .art-hero::after{content:'';position:absolute;inset:0;pointer-events:none;   /* soft BOTTOM fade only */
+#artSec .art-hero::after,#albSec .art-hero::after{content:'';position:absolute;inset:0;pointer-events:none;   /* soft BOTTOM fade only */
   background:linear-gradient(180deg,transparent 0%,transparent 48%,rgba(7,7,10,.30) 65%,rgba(7,7,10,.45) 78%,rgba(7,7,10,.20) 90%,transparent 100%)}
-#artSec .art-hero.nopic{background:linear-gradient(160deg,#191922,#0a0a0f)}   /* banner failed: no empty box */
-#artSec .art-hero.nopic::after{display:none}
-#artSec .art-head{grid-area:1/1;align-self:end;z-index:2;padding:0 24px 22px}
-#artSec .art-name{font-size:clamp(26px,3.4vw,42px);font-weight:800;letter-spacing:-1px;line-height:1.05;text-shadow:0 2px 16px rgba(0,0,0,.7)}
-#artSec .art-aud{font-size:13px;color:#dcdce4;margin-top:7px;text-shadow:0 1px 10px rgba(0,0,0,.75)}
+#artSec .art-hero.nopic,#albSec .art-hero.nopic{background:linear-gradient(160deg,#191922,#0a0a0f)}   /* banner failed: no empty box */
+#artSec .art-hero.nopic::after,#albSec .art-hero.nopic::after{display:none}
+#artSec .art-head,#albSec .art-head{grid-area:1/1;align-self:end;z-index:2;padding:0 24px 22px}
+#artSec .art-name,#albSec .art-name{font-size:clamp(26px,3.4vw,42px);font-weight:800;letter-spacing:-1px;line-height:1.05;text-shadow:0 2px 16px rgba(0,0,0,.7)}
+#artSec .art-aud,#albSec .art-aud{font-size:13px;color:#dcdce4;margin-top:7px;text-shadow:0 1px 10px rgba(0,0,0,.75)}
 #artSec .art-meta{margin-top:18px}
 #artSec .art-desc{font-size:13.5px;color:var(--dim);line-height:1.7;max-width:760px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-shadow:0 1px 12px rgba(0,0,0,.85)}
 #artSec .art-desc.open{display:block;-webkit-line-clamp:unset;overflow:visible}
@@ -1862,12 +1863,12 @@ if(!$('#homeSec').hidden)renderHome();
 #artSec .art-showall{display:block;width:max-content;margin:14px auto 0;font-size:12.5px;color:var(--dim);border:1px solid var(--line);
   border-radius:999px;padding:7px 20px;font-weight:600;cursor:pointer;background:var(--panel)}
 #artSec .art-showall:hover{color:var(--tx);border-color:var(--tx)}
-#artSec .art-count{font-size:13px;font-weight:500;color:var(--dim)}
+#artSec .art-count,#albSec .art-count{font-size:13px;font-weight:500;color:var(--dim)}
 #artSec .artalb{width:190px;flex-shrink:0;font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #artSec .artdur{width:54px;flex-shrink:0;text-align:right;font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 #artSec .artrow{padding-right:4px}
 @media(max-width:1000px){#artSec .artalb{display:none}}
-@media(max-width:660px){#artSec .art-name{font-size:27px}#artSec .art-head{padding:0 18px 16px}#artSec .art-hero{min-height:clamp(300px,52dvh,560px)}}
+@media(max-width:660px){#artSec .art-name,#albSec .art-name{font-size:27px}#artSec .art-head,#albSec .art-head{padding:0 18px 16px}#artSec .art-hero,#albSec .art-hero{min-height:clamp(300px,52dvh,560px)}}
 /* mini-bar artist link: renders like #pvA, click opens the artist, not the player */
 #mSub .alink{color:var(--dim);cursor:pointer}
 #mSub .alink:hover{color:var(--tx);text-decoration:underline;text-underline-offset:2px}
@@ -2128,6 +2129,7 @@ showDyn = function(t,s,h){
   sView = _sPaint; _sPaint = false;
   _showDyn(t,s,h);
   hideArtist();
+  hideAlbum();                                // 4AL: the album page is its own section
   try{ document.title = String(t).replace(/<[^>]+>/g,'') + ' · Svara' }catch(e){}
   try{ syncFilters() }catch(e){}
 };
@@ -2135,6 +2137,7 @@ goHome = function(){
   sView = false; _sPaint = false;
   _goHome();
   hideArtist();
+  hideAlbum();                                // 4AL: the album page is its own section
   try{ document.title = 'Svara' }catch(e){}
   homeLine();
   try{ syncFilters() }catch(e){}
@@ -2571,6 +2574,204 @@ document.addEventListener('click', function(e){
   if((t = closestArtist(e, '[data-artalbum]'))){ e.preventDefault(); e.stopPropagation();
     openAlbum(t.getAttribute('data-artalbum'), t.getAttribute('data-title')||''); return }
 }, true);
+
+/* ---------- WAVE 4AL: the album page ----------
+   /api/album already returns { id, title, artist, thumb, tracks[] } and is cached 1800s, but a
+   click used to play the album BLIND — PLAN.md flags the missing track list. This mirrors the
+   artist view one-for-one: its own section (#albSec), its own snapshot (never artPrev), its own
+   generation token (never artGen — the two views page independently), the same .art-back and
+   .art-acts .pact affordances, and the SAME row renderer search and Home use (listHTML), so 4AC
+   density, the hover play overlay, the ⋮ [data-menu] menu and the 4AI/4AI-b cover crossfade all
+   apply unchanged. openAlbumPage() is installed over the base global at the end of this block, so
+   all three existing callers (the rail handler, the search album row and the artist album tile)
+   reach it with no call-site change. */
+var albPrev = null, albData = null, albGen = 0;
+function albSection(){
+  var el = document.getElementById('albSec');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'albSec'; el.hidden = true;
+    var sc = document.getElementById('scroll');
+    if(sc) sc.insertBefore(el, document.getElementById('dynSec') || null);
+  }
+  return el;
+}
+function hideAlbum(){
+  var el = document.getElementById('albSec');
+  if(el){ el.hidden = true; el.innerHTML = '' }   // a hidden page never keeps a stale skeleton
+  albPrev = null; albData = null;
+  albGen++;                                  // invalidates any album fetch still in flight
+}
+function albBackHTML(){
+  return '<button class="art-back" data-albback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
+}
+/* The album's OWN snapshot — never artPrev. An album opened FROM the artist page must leave the
+   artist's snapshot (and artData/artFull) untouched so the artist's own Back still works. */
+function rememberAlbView(){
+  if(albPrev) return;                       // a second album keeps the ORIGINAL view
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  var a = document.getElementById('artSec'), sc = document.getElementById('scroll');
+  albPrev = {
+    home: document.getElementById('homeSec').hidden,
+    dyn: document.getElementById('dynSec').hidden,
+    art: a ? a.hidden : true,
+    page: curPage, list: curList.slice(), doc: document.title,
+    t: pt.innerHTML, tHid: pt.hidden, tCls: pt.className,
+    s: ps.textContent, sHid: ps.hidden,
+    top: sc ? sc.scrollTop : 0
+  };
+}
+function albRestoreView(){
+  var el = document.getElementById('albSec');
+  if(el){ el.hidden = true; el.innerHTML = '' }   // nothing stale is left behind a Back
+  albGen++;                                  // a pending look-up must not steal the view back
+  var p = albPrev; albPrev = null; albData = null;
+  if(!p) return;
+  document.getElementById('homeSec').hidden = p.home;
+  document.getElementById('dynSec').hidden = p.dyn;
+  var a = document.getElementById('artSec'); if(a) a.hidden = p.art;
+  curPage = p.page; curList = p.list;
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  pt.innerHTML = p.t; pt.hidden = p.tHid; pt.className = p.tCls;
+  ps.textContent = p.s; ps.hidden = p.sHid;
+  setNav(p.page === 'home' ? 'home' : null);
+  try{ document.title = p.doc }catch(e){}
+  var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = p.top;   // the same scroll position
+  syncFilters();
+}
+/* total runtime — only when EVERY row carries a m:ss duration, so the sum is real, not a guess */
+function albTotal(tracks){
+  var total = 0;
+  for(var i = 0; i < tracks.length; i++){
+    var m = /^\s*(\d+):(\d\d)\s*$/.exec(String(tracks[i].duration || ''));
+    if(!m) return '';
+    total += (+m[1]) * 60 + (+m[2]);
+  }
+  return total > 0 ? fmt(total) : '';
+}
+function albumHeadHTML(j, tracks){
+  var pic = heroArt(j);                      // the artist page's own banner ladder (=w2400-h1000-p)
+  var sub = [j.artist || '', tracks.length + ' track' + (tracks.length === 1 ? '' : 's')];
+  var tot = albTotal(tracks); if(tot) sub.push(tot);
+  var line = sub.filter(Boolean).join(' · ');
+  return '<div class="art-hero' + (pic ? '' : ' nopic') + '">' +
+      (pic ? '<img class="art-herowide" fetchpriority="high" decoding="async" alt="" src="' + esc(pic) + '">' : '') +
+      '<div class="art-fit" aria-hidden="true"></div>' +
+      '<div class="art-head">' +
+        '<div class="art-name">' + esc(j.title || 'Album') + '</div>' +
+        (line ? '<div class="art-aud">' + esc(line) + '</div>' : '') +
+        '<div class="art-acts">' +
+          '<button class="pact" data-albplay="1"><span class="ic">' + ic('i-play') + '</span>Play all</button>' +
+          '<button class="pact ghost" data-albshuffle="1"><span class="ic">' + ic('i-shuffle') + '</span>Shuffle</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="sec"><h2>Tracklist <span class="art-count">' + tracks.length + ' songs</span></h2>' + listHTML(tracks) + '</div>';
+}
+function renderAlbum(j, tracks){
+  var el = document.getElementById('albSec'); if(!el) return;
+  albData = j;
+  register(tracks);                          // FIRST …
+  curList = tracks;                          // … then curList, so [data-play] and the ⋮ menu resolve
+  el.innerHTML = albBackHTML() + albumHeadHTML(j, tracks);
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  pt.hidden = true; ps.hidden = true;
+  try{ document.title = String(j.title || 'Album') + ' · Svara' }catch(e){}
+}
+/* the path that existed BEFORE this wave, kept verbatim: /api/search?q=<album>, then play it */
+function albumPlaySimilar(title){
+  if(!title) return;
+  fetch('/api/search?q=' + encodeURIComponent(title))
+    .then(function(r){ return r.json() })
+    .then(function(j){
+      var items = (j && j.items) || [];
+      if(!items.length){ toast('Album unavailable'); return }
+      playList(items, 0, true);
+      toast('▶ Songs from “' + title + '”');
+    })
+    .catch(function(){ toast('Album unavailable') });
+}
+/* empty / error: an inline state — never a skeleton left behind — with the old playback path one
+   click away, because /api/album is known to be intermittently flaky. */
+function albumEmpty(el, title){
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  pt.hidden = true; ps.hidden = true;
+  if(!el) return;
+  el.innerHTML = albBackHTML() +
+    '<div class="empty">Could not load this album right now.' +
+      (title ? '<div class="art-acts"><button class="pact" data-albplay-similar="1" data-title="' + esc(title) + '"><span class="ic">' + ic('i-dice') + '</span>Play similar songs</button></div>' : '') +
+    '</div>';
+  toast('Album unavailable');
+}
+async function openAlbumPage(id, title){
+  if(!id){ toast('Album unavailable'); return }
+  var el = albSection(); if(!el) return;
+  var gen = ++albGen;
+  if(document.body.classList.contains('pv')) closePV();   // reveal the page; playback keeps going
+  rememberAlbView();
+  el.hidden = false;
+  document.getElementById('homeSec').hidden = true;
+  document.getElementById('dynSec').hidden = true;
+  /* NOT hideArtist(): that would wipe artPrev/artData/artFull and bump artGen, so an album opened
+     from the artist page could never return to it. Hiding the element is all that is needed. */
+  var a = document.getElementById('artSec'); if(a) a.hidden = true;
+  setNav(null);
+  curPage = 'album'; curList = []; albData = null;   // keeps the keeper's homeLine() off
+  var pt = document.getElementById('pgTitle'), ps = document.getElementById('pgSub');
+  pt.hidden = true; ps.hidden = true;
+  try{ document.title = (title || 'Album') + ' · Svara' }catch(e){}
+  /* The Back button is painted WITH the loading state: /api/album is sometimes slow, and the
+     artist page's skeleton has no escape hatch of its own. */
+  el.innerHTML = albBackHTML() + ((typeof skHero === 'function')
+    ? skHero() + '<div class="sec"><h2>Tracklist</h2>' + skRows(6) + '</div>'
+    : '<div class="empty">Loading album…</div>');
+  var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = 0;
+  try{
+    var r = await fetch('/api/album?id=' + encodeURIComponent(id));
+    var j = await r.json();
+    if(gen !== albGen) return;               // user navigated away while this was loading
+    if(!j || j.error || !j.tracks || !j.tracks.length){ albumEmpty(el, title || (j && j.title) || ''); return }
+    j.tracks.forEach(function(t){ if(!t.thumb) t.thumb = j.thumb });   // per-track fallback, as before
+    var tracks = j.tracks.filter(function(t){ return t && t.id });
+    if(!tracks.length){ albumEmpty(el, title || j.title || ''); return }
+    renderAlbum(j, tracks);
+    if(typeof skReveal === 'function') skReveal(el);   // 4AJ: ~140ms reveal of the real page
+    syncFilters();
+  }catch(e){ if(gen === albGen) albumEmpty(el, title) }
+}
+/* ONE capture-phase handler for the album page's own affordances — the same shape as the artist
+   handler above, so it runs BEFORE the base [data-play] row handler. The rows stay ordinary
+   [data-play] rows: this handler never touches them. */
+document.addEventListener('click', function(e){
+  var t = closestArtist(e, '[data-albback],[data-albplay],[data-albshuffle],[data-albplay-similar]');
+  if(!t) return;
+  e.preventDefault(); e.stopPropagation();
+  if(t.hasAttribute('data-albback')){ albRestoreView(); return }
+  var pool = ((albData && albData.tracks) || []).filter(function(x){ return x && x.id });
+  if(t.hasAttribute('data-albshuffle')){     // Fisher-Yates copy, then play from the top
+    var sh = pool.slice();
+    for(var i = sh.length - 1; i > 0; i--){ var k = Math.floor(Math.random() * (i + 1)); var tmp = sh[i]; sh[i] = sh[k]; sh[k] = tmp }
+    if(sh.length) playList(sh, 0, true);
+    return;
+  }
+  if(t.hasAttribute('data-albplay')){ if(pool.length) playList(pool, 0, true); return }
+  albumPlaySimilar(t.getAttribute('data-title') || '');
+}, true);
+/* The artist page is the one other full-page view and it knows nothing about #albSec, so opening
+   an artist from an album row would otherwise leave BOTH pages on screen. Wrapped in place — the
+   same idiom v3js already uses for openPV/openArtist/restoreView — so the album page steps aside
+   first and the artist page then remembers the view that was behind it. */
+(function(){
+  var _openArtistAlb = openArtist;
+  openArtist = function(id, name){
+    if(curPage === 'album') albRestoreView();
+    return _openArtistAlb(id, name);
+  };
+})();
+/* Installed over the BASE global — index.html's only other openAlbum. Every caller resolves the
+   name at CLICK time, so the rail handler, the search album row and the artist album tile all
+   reach this function with no change to any of them. */
+window.openAlbum = openAlbumPage;
 
 /* ---------- BUG #5: search paging / infinite scroll ---------- */
 var S = { q:'', sessionId:null, next:false, loading:false, items:[], filter:'all' };
