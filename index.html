@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svara</title>
 <style>
-:root{--bg:#07070a;--panel:#0f0f15;--panel2:#16161e;--line:#232330;--tx:#f4f4f7;--dim:#9b9baa;--acc:#20E7AC;--acc2:#3DE9B5;--grad:#20E7AC;--amb:32,231,172;--amb2:32,231,172}
+:root{--bg:#07070a;--panel:#0f0f15;--panel2:#16161e;--line:#232330;--tx:#f4f4f7;--dim:#9b9baa;--acc:#1FCF9B;--acc2:#2DE0AB;--grad:#1FCF9B;--amb:31,207,155;--amb2:31,207,155}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{background:var(--bg);color:var(--tx);font-family:system-ui,'Segoe UI',Roboto,Arial,sans-serif;overflow:hidden;display:flex}
@@ -1070,7 +1070,7 @@ document.addEventListener('click',async e=>{
 </script>
 <style id="v2css">
 /* ================= Svara v2 layer ================= */
-:root{--acc-tx:#9AF4D9;--on-acc:18,13,20}
+:root{--acc-tx:#9DF0D8;--on-acc:0,0,0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 /* animated mini <-> player (#28) */
 #pv{display:flex;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(20px) scale(.985);
@@ -1211,7 +1211,7 @@ if(psWrap&&psTip&&psGhost){
 var volEl=$('#vol'); if(volEl)volEl.style.setProperty('--v',(volEl.value||80)+'%');
 
 /* 4) true album-art theming (#2) with a race guard (#40) */
-var themeToken=0, themeRaf=0, themeCur={acc:[32,231,172],acc2:[61,233,181],accTx:[154,244,217]};
+var themeToken=0, themeRaf=0, themeCur={acc:[31,207,155],acc2:[45,224,171],accTx:[157,240,216]};
 function rgb2hsl(r,g,b){r/=255;g/=255;b/=255;var mx=Math.max(r,g,b),mn=Math.min(r,g,b),h=0,s=0,l=(mx+mn)/2,d=mx-mn;
   if(d){s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?((g-b)/d+(g<b?6:0)):mx===g?((b-r)/d+2):((r-g)/d+4);h/=6;}return [h,s,l];}
 function hsl2rgb(h,s,l){var r,g,b;if(!s){r=g=b=l}else{var q=l<.5?l*(1+s):l+s-l*s,p=2*l-q,f=function(t){if(t<0)t+=1;if(t>1)t-=1;
@@ -1236,7 +1236,7 @@ function themeAnimate(acc,acc2,accTx){
     /* UI-1e: the accent is rewritten per album and spans near-black to pale yellow, so a static
        foreground fails at one end. SNAP --on-acc to whichever extreme contrasts with THIS frame's
        accent — never interpolated, so no grey mid-tones are ever painted. */
-    s.setProperty('--on-acc',(0.2126*lin(A[0])+0.7152*lin(A[1])+0.0722*lin(A[2]))>0.179?'18,13,20':'255,255,255');
+    s.setProperty('--on-acc',(0.2126*lin(A[0])+0.7152*lin(A[1])+0.0722*lin(A[2]))>0.179?'0,0,0':'255,255,255');
     themeCur={acc:A,acc2:B,accTx:T};
     if(t<1)themeRaf=requestAnimationFrame(step);
   };
