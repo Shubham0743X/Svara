@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svara</title>
 <style>
-:root{--bg:#07070a;--panel:#0f0f15;--panel2:#16161e;--line:#232330;--tx:#f4f4f7;--dim:#9b9baa;--acc:#ff5c7a;--acc2:#a855f7;--grad:linear-gradient(135deg,#ff4d6d,#a855f7);--amb:255,92,122;--amb2:168,85,247}
+:root{--bg:#07070a;--panel:#0f0f15;--panel2:#16161e;--line:#232330;--tx:#f4f4f7;--dim:#9b9baa;--acc:#ff5c7a;--acc2:#ff8fa3;--grad:#ff5c7a;--amb:255,92,122;--amb2:255,92,122}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{background:var(--bg);color:var(--tx);font-family:system-ui,'Segoe UI',Roboto,Arial,sans-serif;overflow:hidden;display:flex}
@@ -124,7 +124,7 @@ img{display:block}
 .mbtn{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--tx)}
 .mbtn:hover{background:var(--panel2)}
 .mbtn .ic{width:20px;height:20px}
-.mbtn.main{background:var(--grad);width:42px;height:42px;box-shadow:0 4px 16px rgba(255,77,109,.35)}
+.mbtn.main{background:var(--grad);width:42px;height:42px;box-shadow:0 4px 16px rgba(var(--amb),.35)}
 .mbtn.main:hover{filter:brightness(1.12)}
 .mbtn.on{color:var(--acc)}
 .miniR{display:flex;align-items:center;gap:4px;flex-shrink:0}
@@ -163,7 +163,7 @@ body.pv #mini{display:none}
 .pbtn.big{width:52px;height:52px}
 .pbtn.big .ic{width:26px;height:26px}
 .pbtn.on{color:var(--acc)}
-#pvPlay{background:var(--grad);box-shadow:0 6px 22px rgba(255,77,109,.35)}
+#pvPlay{background:var(--grad);box-shadow:0 6px 22px rgba(var(--amb),.35)}
 #pvPlay:hover{filter:brightness(1.1)}
 .pvright{width:340px;flex-shrink:0;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px;display:flex;flex-direction:column;min-height:0}
 .tabrow{display:flex;padding:0 6px;border-bottom:1px solid var(--line)}
@@ -1258,9 +1258,9 @@ function themeAnimate(acc,acc2,accTx){
     var A=mix(from.acc,acc),B=mix(from.acc2,acc2),T=mix(from.accTx,accTx),s=document.documentElement.style;
     s.setProperty('--acc','rgb('+A.join(',')+')');
     s.setProperty('--acc2','rgb('+B.join(',')+')');
-    s.setProperty('--grad','linear-gradient(135deg,rgb('+A.join(',')+'),rgb('+B.join(',')+'))');
+    s.setProperty('--grad','rgb('+A.join(',')+')');
     s.setProperty('--amb',A.join(','));
-    s.setProperty('--amb2',B.join(','));
+    s.setProperty('--amb2',A.join(','));
     s.setProperty('--acc-tx','rgb('+T.join(',')+')');
     themeCur={acc:A,acc2:B,accTx:T};
     if(t<1)themeRaf=requestAnimationFrame(step);
@@ -1296,8 +1296,8 @@ setTheme=function(url){
       if(!cand.length)return;
       var hsl=rgb2hsl(cand[0].r,cand[0].g,cand[0].b);
       var acc=hsl2rgb(hsl[0],Math.min(0.92,Math.max(0.52,hsl[1])),Math.min(0.62,Math.max(0.46,hsl[2])));
-      var h2=hsl[0]+0.42; if(h2>1)h2-=1;
-      var acc2=hsl2rgb(h2,Math.min(0.85,Math.max(0.42,hsl[1]*0.9)),0.58);
+      /* UI-1b: acc2 is a SAME-HUE variant of the album accent — adjust S/L, never the hue. */
+      var acc2=hsl2rgb(hsl[0],Math.min(0.85,Math.max(0.42,hsl[1]*0.9)),Math.min(0.7,Math.max(0.52,hsl[2]+0.06)));
       var accTx=acc.map(function(v){return Math.min(255,Math.round(v+(255-v)*0.34))});
       themeAnimate(acc,acc2,accTx);
     }catch(e){}
