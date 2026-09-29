@@ -960,37 +960,6 @@ function parseLrc(s){
   return out;
 }
 
-/* ============ theme ============ */
-function setTheme(url){
-  if(!url)return;
-  const im=new Image();
-  im.onload=()=>{
-    try{
-      const c=document.createElement('canvas');c.width=c.height=40;
-      const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,40,40);
-      const d=x.getImageData(0,0,40,40).data;
-      const b={};for(let i=0;i<d.length;i+=4){if(d[i+3]<128)continue;const k=((d[i]>>4)<<8)|((d[i+1]>>4)<<4)|(d[i+2]>>4);b[k]=(b[k]||0)+1}
-      const s=Object.entries(b).sort((a,b)=>b[1]-a[1]);if(!s.length)return;
-      const k1=+s[0][0];const c1=[(k1>>8)<<4,((k1>>4)&15)<<4,(k1&15)<<4];
-      let c2=null;
-      for(let i=1;i<s.length;i++){const k=+s[i][0];const cc=[(k>>8)<<4,((k>>4)&15)<<4,(k&15)<<4];if(Math.abs(cc[0]-c1[0])+Math.abs(cc[1]-c1[1])+Math.abs(cc[2]-c1[2])>90){c2=cc;break}}
-      if(!c2)c2=c1.map(v=>Math.round(v*.65));
-      const dr=(c,f)=>c.map(v=>Math.min(255,Math.round(v*f)));
-      const rs=document.documentElement.style;
-      rs.setProperty('--amb',dr(c1,.62).join(','));
-      rs.setProperty('--amb2',dr(c2,.5).join(','));
-      const th=$('#theme');
-      th.style.opacity=0;
-      requestAnimationFrame(()=>{
-        th.style.background=`radial-gradient(1100px 760px at 16% -6%, rgba(var(--amb),.34), transparent 62%),radial-gradient(900px 700px at 112% 12%, rgba(var(--amb2),.28), transparent 55%),radial-gradient(1200px 900px at 50% 128%, rgba(var(--amb),.16), transparent 60%)`;
-        th.style.opacity=1;
-      });
-    }catch(e){}
-  };
-  im.onerror=()=>{};
-  im.src='/api/thumb?url='+encodeURIComponent(url);
-}
-
 /* ============ dice (personalized radio) ============ */
 async function diceRadio(){
   const arts=topArtists(3);
@@ -1267,7 +1236,7 @@ function themeAnimate(acc,acc2,accTx){
   };
   themeRaf=requestAnimationFrame(step);
 }
-setTheme=function(url){
+window.setTheme=function(url){
   var token=++themeToken;
   if(!url)return;
   var im=new Image();
@@ -1299,6 +1268,16 @@ setTheme=function(url){
       /* UI-1b: acc2 is a SAME-HUE variant of the album accent — adjust S/L, never the hue. */
       var acc2=hsl2rgb(hsl[0],Math.min(0.85,Math.max(0.42,hsl[1]*0.9)),Math.min(0.7,Math.max(0.52,hsl[2]+0.06)));
       var accTx=acc.map(function(v){return Math.min(255,Math.round(v+(255-v)*0.34))});
+      /* UI-1c: this IS the live setTheme — paint the album-colour ambient here. Single hue: all
+         three radials use --amb, so the wash can never introduce a second colour. */
+      var th=document.getElementById('theme');
+      if(th){
+        th.style.opacity=0;
+        requestAnimationFrame(function(){
+          th.style.background='radial-gradient(1100px 760px at 16% -6%, rgba(var(--amb),.34), transparent 62%),radial-gradient(900px 700px at 112% 12%, rgba(var(--amb),.28), transparent 55%),radial-gradient(1200px 900px at 50% 128%, rgba(var(--amb),.16), transparent 60%)';
+          th.style.opacity=1;
+        });
+      }
       themeAnimate(acc,acc2,accTx);
     }catch(e){}
   };
