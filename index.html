@@ -1118,11 +1118,11 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
 #lyrJump:not([hidden]){display:inline-flex}
 #lyrJump .ic{width:14px;height:14px}
 .lyrnote{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin:4px 0 14px;background:rgba(0,0,0,.25)}
-#lyrBody{font-size:clamp(19px,2.1vw,26px);line-height:1.5;letter-spacing:-.2px;padding:34vh 6px 44vh;white-space:normal}
+#lyrBody{font-size:clamp(19px,2.1vw,26px);line-height:1.5;letter-spacing:-.2px;padding:var(--lpad,36vh) 6px var(--lpad,44vh);white-space:normal}
 #lyrBody .l{margin:14px 0;color:var(--dim);opacity:.35;transition:opacity .25s,color .25s,transform .25s;transform-origin:left center}
 #lyrBody .l.sync{cursor:pointer}
 #lyrBody .l.sync:hover{opacity:.85;color:var(--tx)}
-#lyrBody .l.on{color:#fff;opacity:1;font-weight:inherit;transform:scale(1.02);text-shadow:0 0 26px rgba(var(--amb),.35)}
+#lyrBody .l.on{color:#fff;opacity:1;font-weight:800;transform:scale(1.02);text-shadow:0 0 26px rgba(var(--amb),.35)}
 #lyrBody .lyrmissing{opacity:1;transform:none;font-size:14px;color:var(--dim)}
 body.lyrfull #pvLyrics{position:fixed;inset:0;z-index:80;background:rgba(6,6,10,.72);backdrop-filter:blur(24px);padding:0 6vw 64px;display:flex;flex-direction:column;overflow:hidden}
 body.lyrfull .pvleft{display:none}
@@ -1133,7 +1133,7 @@ body.lyrfull .lyrbar{position:fixed;top:0;left:6vw;right:6vw;z-index:86;border-b
 body.lyrfull .lyrchip{width:auto}
 body.lyrfull .lyrchip button{flex:0 0 auto;padding:6px 12px}
 body.lyrfull #lyrJump{bottom:88px}
-body.lyrfull #lyrBody{font-size:clamp(24px,3.4vw,44px);line-height:1.45;max-width:900px;margin-left:0;margin-right:auto;padding:42vh 0 46vh}
+body.lyrfull #lyrBody{font-size:clamp(24px,3.4vw,44px);line-height:1.45;max-width:900px;margin-left:0;margin-right:auto;padding:var(--lpad,44vh) 0 var(--lpad,46vh)}
 #pvTransport{position:fixed;left:0;right:0;bottom:0;z-index:85;display:none;align-items:center;gap:12px;padding:12px 26px;background:rgba(10,10,14,.84);backdrop-filter:blur(16px);border-top:1px solid var(--line)}
 #trProg{position:absolute;top:0;left:0;right:0;height:2px;background:var(--line);cursor:pointer}
 #trProg::after{content:"";position:absolute;left:0;right:0;top:-7px;bottom:-7px}
@@ -1476,6 +1476,27 @@ function paintLyrChip(){
   a.classList.toggle('on',lyrPref==='ytm');
   b.classList.toggle('on',lyrPref==='lrclib');
 }
+/* 4AO-b: the padding that lets the FIRST and LAST lines reach the centre is exactly half of the
+   visible scrollport — computed, because the panel and fullscreen scrollers differ in height. */
+function sizeLyrPad(){
+  var sc=$('#lyrScroll'), body=$('#lyrBody'); if(!sc||!body)return;
+  var h=sc.clientHeight; if(!h)return;
+  var p=Math.round(h/2)+'px';
+  if(body.style.paddingTop!==p)body.style.paddingTop=p;
+  if(body.style.paddingBottom!==p)body.style.paddingBottom=p;
+}
+/* Re-centre the active line. Smooth for a normal nudge; instant for the initial/forced paint, for a
+   very large jump (> 2 scrollport heights, so the user never watches a long crawl) and under
+   reduced motion. */
+function lyrRecenter(force){
+  if(lyr.cur<0)return;
+  var body=$('#lyrBody'), sc=$('#lyrScroll'); if(!body||!sc)return;
+  var el=body.querySelector('#l'+lyr.cur); if(!el||!el.scrollIntoView)return;
+  var be=el.getBoundingClientRect(), sr=sc.getBoundingClientRect();
+  var dist=Math.abs((be.top+be.bottom)/2-(sr.top+sr.bottom)/2);
+  var beh=(force||lfReduced()||dist>sr.height*2)?'auto':'smooth';
+  try{el.scrollIntoView({block:'center',behavior:beh})}catch(e){}
+}
 function updateLyrJump(){
   var b=$('#lyrJump'); if(!b)return;
   var body=$('#lyrBody'), sc=$('#lyrScroll');
@@ -1486,12 +1507,12 @@ function updateLyrJump(){
 }
 function lyrJumpToCurrent(){
   lyrAuto=true; clearTimeout(lyrAutoT);
-  var body=$('#lyrBody');
-  if(body&&lyr.cur>=0){var el=body.querySelector('#l'+lyr.cur); if(el&&el.scrollIntoView){try{el.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}}}
+  sizeLyrPad(); lyrRecenter(false);
   updateLyrJump();
 }
 ensureLyricsUI=function(){
-  var host=$('#pvLyrics'); if(!host||$('#lyrBar'))return;
+  var host=$('#pvLyrics'); if(!host)return;
+  if($('#lyrBar')){ sizeLyrPad(); return }
   host.innerHTML='<div class="lyrbar" id="lyrBar">'+
       '<div class="lyrt" id="lyrT"></div>'+
       '<div class="lyra" id="lyrA"></div>'+
@@ -1506,10 +1527,12 @@ ensureLyricsUI=function(){
   $('#lyrFull').onclick=toggleLyrFull;
   var j=$('#lyrJump'); if(j)j.onclick=lyrJumpToCurrent;
   var sc=$('#lyrScroll'); if(sc)sc.addEventListener('scroll',updateLyrJump,{passive:true});
+  sizeLyrPad();
 }
 /* track change: follow again (never leave a stale scroll position / pill) */
 var _resetLyrics=resetLyrics;
-resetLyrics=function(){ lyrAuto=true; clearTimeout(lyrAutoT); var r=_resetLyrics.apply(this,arguments); updateLyrJump(); return r };
+resetLyrics=function(){ lyrAuto=true; clearTimeout(lyrAutoT); var r=_resetLyrics.apply(this,arguments); sizeLyrPad(); updateLyrJump(); return r };
+window.addEventListener('resize',sizeLyrPad,{passive:true});
 loadLyrics=async function(){
   var body=$('#lyrBody'); if(!body)return;
   var it=nowItem();
@@ -1546,7 +1569,7 @@ renderLyricsBody=function(){
       body.innerHTML=note+lines.map(function(l,i){
         return '<div class="l sync" id="l'+i+'" data-i="'+i+'" data-t="'+l.t+'">'+(esc(l.x)||'&nbsp;')+'</div>';
       }).join('');
-      paintLyrics(true);
+      sizeLyrPad(); paintLyrics();
       lyr.timer=setInterval(function(){paintLyrics(false)},240);
       return;
     }
@@ -1569,7 +1592,7 @@ function paintLyrics(force){
   if(idx<0){ updateLyrJump(); return }
   var el=body.querySelector('#l'+idx); if(!el){ updateLyrJump(); return }
   el.classList.add('on');
-  if(lyrAuto&&el.scrollIntoView){try{el.scrollIntoView({block:'center',behavior:force?'auto':'smooth'})}catch(e){}}
+  if(lyrAuto)lyrRecenter(force);
   updateLyrJump();
 }
 (function(){
@@ -1647,8 +1670,7 @@ function lyrFullOpen(){
   LF.open=true; lfIcon(true);
   requestAnimationFrame(function(){
     lyrAuto=true; clearTimeout(lyrAutoT);
-    var b=$('#lyrBody');
-    if(b&&lyr.cur>=0){var ln=b.querySelector('#l'+lyr.cur); if(ln&&ln.scrollIntoView){try{ln.scrollIntoView({block:'center',behavior:'auto'})}catch(e){}}}
+    sizeLyrPad(); lyrRecenter(false);
     updateLyrJump();
   });
   if(lfReduced()){ lfClear(el); lfClear(tr); return }
@@ -1685,6 +1707,7 @@ function lyrFullClose(){
     if(token!==LF.token)return;
     document.body.classList.remove('lyrfull');
     lfClear(el); lfClear(tr);
+    sizeLyrPad();
     lfIcon(false);
     try{ var b=$('#lyrFull'); if(b)b.focus() }catch(e){}
   }
@@ -1696,6 +1719,7 @@ function lyrFullKill(){
   LF.token++; clearTimeout(LF.timer); LF.open=false;
   document.body.classList.remove('lyrfull');
   lfClear($('#pvLyrics')); lfClear($('#pvTransport'));
+  sizeLyrPad();
   lfIcon(false);
 }
 function toggleLyrFull(){ if(LF.open)lyrFullClose(); else lyrFullOpen() }
