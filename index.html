@@ -1458,7 +1458,7 @@ function paintLyrChip(){
   a.classList.toggle('on',lyrPref==='ytm');
   b.classList.toggle('on',lyrPref==='lrclib');
 }
-function ensureLyricsUI(){
+ensureLyricsUI=function(){
   var host=$('#pvLyrics'); if(!host||$('#lyrBar'))return;
   host.innerHTML='<div class="lyrbar" id="lyrBar"><div class="lyrt" id="lyrT"></div>'+
     '<div class="lyrchip" id="lyrSeg"><button id="lYT">YouTube Music</button><button id="lLR">LRClib</button></div>'+
