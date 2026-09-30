@@ -1559,23 +1559,93 @@ function paintTransport(){
   var S=$('#trS'); if(S)S.textContent=it?(it.artist||''):'';
   var b=$('#trPlay'); if(b)b.innerHTML='<span class="ic">'+ic(audio.paused?'i-play':'i-pause')+'</span>';
 }
-function toggleLyrFull(){
-  var on=document.body.classList.toggle('lyrfull');
-  var b=$('#lyrFull'); if(b)b.innerHTML='<span class="ic">'+ic(on?'i-collapse':'i-expand')+'</span>';
-  if(on){
-    var tab=document.querySelector('.tab[data-tab="lyr"]');
-    if(tab)tab.click();
-    ensureLyricsUI(); buildTransport(); paintTransport();
-    if(!lyr.loadedFor)loadLyrics();
+/* ===== Wave 4AM — fullscreen lyrics open/close animation =====
+   The fullscreen LAYOUT is untouched: this only controls how #pvLyrics enters and leaves.
+   Open  = cross-fade (opacity .22s) + horizontal stretch from the RIGHT edge leftward to full
+           width (clip-path inset left 100% -> 0 over .34s), transport fading in with it.
+   Close = the exact reverse; on finish the class is dropped and every inline style removed.
+   No transitionend listeners: the v2css reduced-motion reset kills transitions, so the event
+   would never fire — cleanup is always a token-guarded setTimeout. No new CSS rule. */
+var LF={ open:false, token:0, timer:0 };
+function lfReduced(){ try{ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches) }catch(e){ return false } }
+function lfClear(el){ if(el){ el.style.removeProperty('transition'); el.style.removeProperty('clip-path'); el.style.removeProperty('opacity') } }
+function lfIcon(open){ var b=$('#lyrFull'); if(b)b.innerHTML='<span class="ic">'+ic(open?'i-collapse':'i-expand')+'</span>' }
+function lyrFullOpen(){
+  var tab=document.querySelector('.tab[data-tab="lyr"]');
+  if(tab)tab.click();
+  ensureLyricsUI(); buildTransport(); paintTransport();
+  if(!lyr.loadedFor)loadLyrics();
+  var el=$('#pvLyrics'), tr=$('#pvTransport');
+  if(!el){ document.body.classList.add('lyrfull'); LF.open=true; lfIcon(true); return }
+  var already=document.body.classList.contains('lyrfull');   // reopen during the close ramp: retarget, no snap
+  if(!already){
+    if(!lfReduced()){
+      el.style.transition='none'; el.style.clipPath='inset(0 0 0 100%)'; el.style.opacity='0';
+      if(tr){ tr.style.transition='none'; tr.style.opacity='0' }
+    }
+    document.body.classList.add('lyrfull');
   }
+  LF.open=true; lfIcon(true);
+  if(lfReduced()){ lfClear(el); lfClear(tr); return }
+  void el.offsetWidth;                                       // ONE forced reflow: the jump is never seen
+  el.style.transition='opacity .22s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';
+  el.style.clipPath='inset(0 0 0 0)'; el.style.opacity='1';
+  if(tr){ tr.style.transition='opacity .22s ease'; tr.style.opacity='1' }
+  var token=++LF.token;
+  LF.timer=setTimeout(function(){ if(token!==LF.token)return; lfClear(el); lfClear(tr) },380);
 }
+function lyrFullClose(){
+  if(!LF.open && !document.body.classList.contains('lyrfull'))return;   // idempotent
+  LF.open=false;
+  var el=$('#pvLyrics'), tr=$('#pvTransport'), reduced=lfReduced();
+  if(!reduced){
+    if(el){
+      /* `none` does NOT interpolate into a basic shape, so closing from the at-rest state
+         (inline styles already cleared -> computed clip-path:none) would SNAP the clip shut and
+         only the opacity would fade. Materialise the start keyframe (transition:none + ONE
+         reflow) when the panel is at rest; mid-animation the current computed inset already
+         interpolates to the target on its own, so a rapid reopen/close stays smooth. */
+      if(getComputedStyle(el).clipPath==='none'){
+        el.style.transition='none'; el.style.clipPath='inset(0 0 0 0)'; el.style.opacity='1';
+        if(tr){ tr.style.transition='none'; tr.style.opacity='1' }
+        void el.offsetWidth;
+      }
+      el.style.transition='opacity .22s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';
+      el.style.clipPath='inset(0 0 0 100%)'; el.style.opacity='0';
+    }
+    if(tr){ tr.style.transition='opacity .22s ease'; tr.style.opacity='0' }
+  }
+  var token=++LF.token;
+  function finish(){
+    if(token!==LF.token)return;
+    document.body.classList.remove('lyrfull');
+    lfClear(el); lfClear(tr);
+    lfIcon(false);
+    try{ var b=$('#lyrFull'); if(b)b.focus() }catch(e){}
+  }
+  if(reduced){ finish(); return }
+  LF.timer=setTimeout(finish,380);
+}
+/* Synchronous, NO animation — used by the closePV path only (see the wrapper below). */
+function lyrFullKill(){
+  LF.token++; clearTimeout(LF.timer); LF.open=false;
+  document.body.classList.remove('lyrfull');
+  lfClear($('#pvLyrics')); lfClear($('#pvTransport'));
+  lfIcon(false);
+}
+function toggleLyrFull(){ if(LF.open)lyrFullClose(); else lyrFullOpen() }
 document.addEventListener('keydown',function(e){
   if(e.key!=='Escape')return;
-  if(!document.body.classList.contains('lyrfull'))return;
+  if(!LF.open)return;
   e.preventDefault(); e.stopPropagation();
-  document.body.classList.remove('lyrfull');
-  var b=$('#lyrFull'); if(b)b.innerHTML='<span class="ic">'+ic('i-expand')+'</span>';
+  lyrFullClose();
 },true);
+/* closePV is a global; v2js parses before v3js/v4artfadejs, so their later wrappers chain onto
+   this one. Killing the overlay BEFORE the previous closePV runs is deliberate: closePV animates
+   #pv with a transform, which changes the containing block of the fixed overlay — a lingering
+   clip animation there would strand it. */
+var _closePV=closePV;
+closePV=function(){ lyrFullKill(); return _closePV.apply(this,arguments) };
 
 /* 9) live search suggestions (#21) */
 var sugTimer=null, sugToken=0;
