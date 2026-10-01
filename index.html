@@ -1139,6 +1139,17 @@ body.lyrfull #lyrBody{font-size:clamp(24px,3.4vw,44px);line-height:1.45;max-widt
 #trProg::after{content:"";position:absolute;left:0;right:0;top:-7px;bottom:-7px}
 #trProgFill{height:100%;width:0%;background:var(--grad)}
 body.lyrfull #pvTransport{display:flex}
+/* ===== Wave 4AO-c — reveal the player page during the fullscreen-lyrics CLOSE ramp =====
+   body.lyrfull hides the page (.pvleft/.pvbody padding/.pvright/.tabrow) for the WHOLE ~380 ms
+   retract, so only #pvArtBg (the blurred album art) + the .pvtop header were visible — the
+   "blurry page" flash. `lyrreveal` is added ONLY for the duration of the close animation; every
+   value below is the BASE rule's own value (re-read, not invented). Added after the block so it
+   wins by specificity AND order. Removed the instant the close finishes. */
+body.lyrfull.lyrreveal .pvleft{display:flex}
+body.lyrfull.lyrreveal .pvbody{padding:4px 30px 34px}
+body.lyrfull.lyrreveal .pvright{width:340px;flex:0 0 auto;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px}
+body.lyrfull.lyrreveal .tabrow{display:flex!important}
+@media (max-width:920px){body.lyrfull.lyrreveal .pvright{width:290px}}
 #pvTransport .mtT{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pvTransport .mtS{font-size:11.5px;color:var(--dim)}
 /* search suggestions (#21) */
@@ -1658,7 +1669,7 @@ function lyrFullOpen(){
   ensureLyricsUI(); buildTransport(); paintTransport();
   if(!lyr.loadedFor)loadLyrics();
   var el=$('#pvLyrics'), tr=$('#pvTransport');
-  if(!el){ document.body.classList.add('lyrfull'); LF.open=true; lfIcon(true); return }
+  if(!el){ document.body.classList.add('lyrfull'); document.body.classList.remove('lyrreveal'); LF.open=true; lfIcon(true); return }
   var already=document.body.classList.contains('lyrfull');   // reopen during the close ramp: retarget, no snap
   if(!already){
     if(!lfReduced()){
@@ -1673,18 +1684,19 @@ function lyrFullOpen(){
     sizeLyrPad(); lyrRecenter(false);
     updateLyrJump();
   });
-  if(lfReduced()){ lfClear(el); lfClear(tr); return }
+  if(lfReduced()){ document.body.classList.remove('lyrreveal'); lfClear(el); lfClear(tr); return }
   void el.offsetWidth;                                       // ONE forced reflow: the jump is never seen
   el.style.transition='opacity .22s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';
   el.style.clipPath='inset(0 0 0 0)'; el.style.opacity='1';
   if(tr){ tr.style.transition='opacity .22s ease'; tr.style.opacity='1' }
   var token=++LF.token;
-  LF.timer=setTimeout(function(){ if(token!==LF.token)return; lfClear(el); lfClear(tr) },380);
+  LF.timer=setTimeout(function(){ if(token!==LF.token)return; document.body.classList.remove('lyrreveal'); lfClear(el); lfClear(tr) },380);
 }
 function lyrFullClose(){
   if(!LF.open && !document.body.classList.contains('lyrfull'))return;   // idempotent
   LF.open=false;
   var el=$('#pvLyrics'), tr=$('#pvTransport'), reduced=lfReduced();
+  document.body.classList.add('lyrreveal');   // 4AO-c: reveal the page for the whole retract (overlay still fully covers here)
   if(!reduced){
     if(el){
       /* `none` does NOT interpolate into a basic shape, so closing from the at-rest state
@@ -1697,15 +1709,16 @@ function lyrFullClose(){
         if(tr){ tr.style.transition='none'; tr.style.opacity='1' }
         void el.offsetWidth;
       }
-      el.style.transition='opacity .22s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';
+      el.style.transition='opacity .34s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';   // 4AO-c: close only — frost survives the whole retract
       el.style.clipPath='inset(0 0 0 100%)'; el.style.opacity='0';
     }
-    if(tr){ tr.style.transition='opacity .22s ease'; tr.style.opacity='0' }
+    if(tr){ tr.style.transition='opacity .34s ease'; tr.style.opacity='0' }   // 4AO-c: close only — matches the clip
   }
   var token=++LF.token;
   function finish(){
     if(token!==LF.token)return;
     document.body.classList.remove('lyrfull');
+    document.body.classList.remove('lyrreveal');
     lfClear(el); lfClear(tr);
     sizeLyrPad();
     lfIcon(false);
@@ -1718,6 +1731,7 @@ function lyrFullClose(){
 function lyrFullKill(){
   LF.token++; clearTimeout(LF.timer); LF.open=false;
   document.body.classList.remove('lyrfull');
+  document.body.classList.remove('lyrreveal');
   lfClear($('#pvLyrics')); lfClear($('#pvTransport'));
   sizeLyrPad();
   lfIcon(false);
