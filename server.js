@@ -1077,12 +1077,14 @@ async function lrclibBest({ title, artist, album, duration }){
     seen.add(key);
     const tScore = Math.max(...titles.map(t => jaccard(t, row.trackName || '')));
     const aScore = artists.length ? Math.max(...artists.map(a => jaccard(a, row.artistName || ''))) : 0;
-    /* 4AP GUARD: with no trustworthy artist term, accept a candidate ONLY when its title is a
-       strong match (jaccard >= 0.7) AND its duration agrees within the same 12s window dScore
-       uses. Otherwise it is a same-title DIFFERENT song and must be rejected. */
+    /* 4AP-b GUARD: with no trustworthy artist term, accept ONLY a SYNCED candidate — never a
+       plain one (a plain same-title match is exactly the wrong-recording risk 4AP closed). The
+       synced entry must also be a near-exact title match (jaccard >= 0.9) AND agree on duration
+       within 5s. Verified: the untrusted title-only lookup for "Self Aware" returns only plain
+       Temper City rows, so this honestly answers "no timed lyrics" instead of guessing. */
     if (untrusted){
-      const durOk = duration > 0 && row.duration && Math.abs(row.duration - duration) <= 12;
-      if (tScore < 0.7 || !durOk) continue;
+      const durOk = duration > 0 && row.duration && Math.abs(row.duration - duration) <= 5;
+      if (!row.syncedLyrics || tScore < 0.9 || !durOk) continue;
     }
     const dScore = duration > 0 && row.duration
       ? Math.max(0, 1 - Math.abs(row.duration - duration) / 12) : 0.5;

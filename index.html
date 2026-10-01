@@ -595,6 +595,8 @@ function loadAt(seqPos,autoplay=true){
   pendStart=it.id;               // 4AE: a new track always re-arms the “Starting…” state
   audio.src='/api/stream?id='+it.id;
   setNowUI(it);
+  /* 4AP-b: recover a blanked/title-only artist credit by video id — never blocks playback */
+  if(typeof needsCredit==='function' && needsCredit(it)){ try{ repairCredit(it, afterCreditRepair) }catch(e){} }
   if(autoplay)audio.play().catch(()=>{ if(pendStart===it.id){pendStart=null;paintStarting()} });   // 4AE: a refused play() must not leave “Starting…” stuck
   renderQueue();paintRowCursor();
 }
@@ -1463,7 +1465,7 @@ removeFromQueue=function(id){
 var _renderHome=renderHome;
 renderHome=function(){
   var p=_renderHome();
-  var done=function(){try{register(quickList)}catch(e){}};
+  var done=function(){try{register(quickList)}catch(e){} if(typeof repairHomeCredits==='function'){try{repairHomeCredits()}catch(e){}}};
   if(p&&p.then)p.then(done,function(){}); else done();
   return p;
 };
@@ -4270,6 +4272,87 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
 })();
 </script>
 <script id="v3hist">
+/* ================= WAVE 4AP-b: recover the REAL artist credit by video id =================
+   4AP blanked a title-only credit (correctly — the string WAS the track's title). But a blanked
+   entry then replays on Home with no artist and sends artist:'' to /api/lyrics, which 4AP's
+   untrusted guard refuses. The video id IS the song's identity, so the real credit is
+   recoverable: search the TITLE, then adopt a row ONLY when its id matches EXACTLY. Never
+   title-only, never row[0], never a different id. Results are cached per id and each id is
+   fetched at most once per session. */
+function _4apbNorm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim() }
+function needsCredit(it){ if(!it) return false; return !it.artist || _4apbNorm(it.artist) === _4apbNorm(it.title) }
+var _4apbCredit = {};    // id -> {artist, artists, thumb} recovered this session
+var _4apbMiss = {};      // id -> searched, found no exact-id row (never re-fetched)
+var _4apbInflight = {};  // id -> [callbacks] while a fetch is in flight
+function _4apbAdopt(it, c){
+  if(!c || !it) return false;
+  it.artist = c.artist || '';
+  if(c.artists) it.artists = c.artists;
+  if(!it.thumb && c.thumb) it.thumb = c.thumb;
+  try{ if(hist && hist[it.id]){ hist[it.id].artist = it.artist; if(it.thumb) hist[it.id].thumb = it.thumb; LSset('ml_history', hist) } }catch(e){}
+  return !!it.artist;
+}
+function repairCredit(it, done){
+  if(!it || !it.id){ if(done) try{done(it,false)}catch(e){} return }
+  if(!needsCredit(it)){ if(done) try{done(it,false)}catch(e){} return }      // already has a usable credit
+  if(_4apbCredit[it.id]){ var ok=_4apbAdopt(it,_4apbCredit[it.id]); if(done) try{done(it,ok)}catch(e){} return }
+  if(_4apbMiss[it.id]){ if(done) try{done(it,false)}catch(e){} return }        // attempted, no match — never re-fetch
+  if(_4apbInflight[it.id]){ if(done) _4apbInflight[it.id].push(done); return }
+  _4apbInflight[it.id] = done ? [done] : [];
+  fetch('/api/search?q=' + encodeURIComponent(it.title || '') + '&type=song')
+    .then(function(r){ return r.json() })
+    .then(function(j){
+      var row = (j && j.items || []).filter(function(x){ return x && x.id === it.id })[0];   // EXACT id only
+      if(row && row.artist){ _4apbCredit[it.id] = { artist: row.artist, artists: row.artists, thumb: row.thumb } }
+      else { _4apbMiss[it.id] = true }
+    })
+    .catch(function(){ _4apbMiss[it.id] = true })                              // error: leave untouched, don't loop
+    .then(function(){
+      var ok = _4apbCredit[it.id] ? _4apbAdopt(it, _4apbCredit[it.id]) : false;
+      var cbs = _4apbInflight[it.id] || []; delete _4apbInflight[it.id];
+      cbs.forEach(function(cb){ try{ cb && cb(it, ok) }catch(e){} });
+    });
+}
+/* repaint everywhere the credit appears — ONLY when the repaired item is the one playing */
+function afterCreditRepair(it){
+  if(!it || !it.id) return;
+  var n=(typeof nowItem==='function')&&nowItem();
+  if(n && n.id===it.id){
+    try{ if(typeof setNowUI==='function') setNowUI(it) }catch(e){}
+    try{ if(typeof renderQueue==='function') renderQueue() }catch(e){}
+    try{
+      var pl=document.getElementById('pvLyrics');
+      if(pl && !pl.hidden){ if(typeof lyr==='object' && lyr) lyr.loadedFor=null; if(typeof loadLyrics==='function') loadLyrics() }
+    }catch(e){}
+  }
+  if(typeof repairHomeCredits==='function'){ try{ repairHomeCredits() }catch(e){} }
+}
+/* Home: repair the entries actually being rendered — bounded to 8, concurrency 2, deduped,
+   in-flight-guarded, then re-render Home ONCE (debounced) so the rails pick up the values. */
+var _4apbHomeTimer=null;
+function _4apbHomeDirty(){
+  if(_4apbHomeTimer) return;
+  _4apbHomeTimer=setTimeout(function(){ _4apbHomeTimer=null; try{ if(typeof curPage!=='undefined' && curPage==='home') renderHome() }catch(e){} }, 350);
+}
+function repairHomeCredits(){
+  if(typeof curPage==='undefined' || curPage!=='home') return;
+  var ids=[], seen={};
+  var nodes=document.querySelectorAll('#homeSec [data-id]');
+  for(var i=0;i<nodes.length && ids.length<8;i++){
+    var id=nodes[i].getAttribute('data-id'); if(!id||seen[id]) continue; seen[id]=1; ids.push(id);
+  }
+  var queue=[];
+  ids.forEach(function(id){ var e=hist && hist[id]; if(e && needsCredit(e)) queue.push(e) });
+  if(!queue.length) return;
+  var conc=0, idx=0;
+  function pump(){
+    while(conc<2 && idx<queue.length){
+      var e=queue[idx++]; conc++;
+      repairCredit(e, function(item, ok){ conc--; pump(); if(ok) _4apbHomeDirty() });
+    }
+  }
+  pump();
+}
 (function(){
   /* old history entries carry a junk thumb and sometimes no id at all */
   var changed = false;
