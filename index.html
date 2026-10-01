@@ -1498,9 +1498,25 @@ function paintLyrChip(){
 function sizeLyrPad(){
   var sc=$('#lyrScroll'), body=$('#lyrBody'); if(!sc||!body)return;
   var h=sc.clientHeight; if(!h)return;
-  var p=Math.round(h/2)+'px';
-  if(body.style.paddingTop!==p)body.style.paddingTop=p;
-  if(body.style.paddingBottom!==p)body.style.paddingBottom=p;
+  /* 4AO-d: only the SYNCED state has an active line to centre, so only it needs the
+     half-scrollport top/bottom padding. Plain / note / loading / error content must start at
+     the top under the header, or short content floats to the vertical middle. */
+  var synced=lyr.mode==='synced' && lyr.lines && lyr.lines.length;
+  var top, bot;
+  if(synced){ top=Math.round(h/2)+'px'; bot=top; }
+  else { top='10px'; bot=Math.round(h/3)+'px'; }
+  if(body.style.paddingTop!==top)body.style.paddingTop=top;
+  if(body.style.paddingBottom!==bot)body.style.paddingBottom=bot;
+  /* 4AO-d: the top fade only makes sense when a line can scroll under it; the first element of
+     a non-synced state must be fully opaque. The bottom fade stays in both cases. */
+  var grad=synced
+    ?'linear-gradient(to bottom,transparent 0,#000 9%,#000 88%,transparent 100%)'
+    :'linear-gradient(to bottom,#000 0,#000 88%,transparent 100%)';
+  if(sc.style.maskImage!==grad){ sc.style.maskImage=grad; sc.style.webkitMaskImage=grad; }
+  if(!synced){
+    if(sc.scrollTop!==0)sc.scrollTop=0;
+    var j=$('#lyrJump'); if(j&&!j.hidden)j.hidden=true;
+  }
 }
 /* Re-centre the active line. Smooth for a normal nudge; instant for the initial/forced paint, for a
    very large jump (> 2 scrollport heights, so the user never watches a long crawl) and under
@@ -1553,12 +1569,14 @@ window.addEventListener('resize',sizeLyrPad,{passive:true});
 loadLyrics=async function(){
   var body=$('#lyrBody'); if(!body)return;
   var it=nowItem();
-  if(!it){body.innerHTML='<div class="lyrmissing">Nothing playing.</div>';return}
+  if(!it){lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Nothing playing.</div>'; sizeLyrPad(); return}
   var token=++lyrToken;
   lyr.loadedFor=it.id+':'+(lyrPref||'auto');
   var t=$('#lyrT'); if(t)t.textContent=it.title||'';
   var a=$('#lyrA'); if(a)a.textContent=it.artist||'';
+  lyr.mode='loading'; lyr.lines=[]; lyr.cur=-1; clearInterval(lyr.timer); lyr.timer=null;
   body.innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
+  sizeLyrPad();
   var qs=new URLSearchParams();
   qs.set('provider',(lyrPref==='ytm'||lyrPref==='lrclib')?lyrPref:'auto');
   qs.set('id',it.id); qs.set('title',it.title||''); qs.set('artist',it.artist||'');
@@ -1571,7 +1589,7 @@ loadLyrics=async function(){
     renderLyricsBody();
   }catch(e){
     if(token!==lyrToken)return;
-    body.innerHTML='<div class="lyrmissing">Lyrics failed to load.</div>';
+    lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Lyrics failed to load.</div>'; sizeLyrPad();
   }
 };
 renderLyricsBody=function(){
@@ -1582,7 +1600,7 @@ renderLyricsBody=function(){
   if(lyr.synced){
     var lines=parseLrc2(lyr.synced);
     if(lines.length){
-      lyr.lines=lines;
+      lyr.lines=lines; lyr.mode='synced';
       body.innerHTML=note+lines.map(function(l,i){
         return '<div class="l sync" id="l'+i+'" data-i="'+i+'" data-t="'+l.t+'">'+(esc(l.x)||'&nbsp;')+'</div>';
       }).join('');
@@ -1592,10 +1610,14 @@ renderLyricsBody=function(){
     }
   }
   if(lyr.plain){
+    lyr.mode='plain';
     body.innerHTML=note+lyr.plain.split('\n').map(function(l){return '<div class="l">'+(esc(l)||'&nbsp;')+'</div>'}).join('');
+    sizeLyrPad();
     return;
   }
+  lyr.mode='note';
   body.innerHTML=lyr.error?('<div class="lyrmissing">'+esc(lyr.error)+'</div>'):'<div class="lyrmissing">No lyrics found for this track.</div>';
+  sizeLyrPad();
 };
 function paintLyrics(force){
   var body=$('#lyrBody'), lines=lyr.lines;
