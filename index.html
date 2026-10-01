@@ -1126,6 +1126,9 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
 .lyrnote{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin:4px 0 14px;background:rgba(0,0,0,.25)}
 #lyrBody{font-size:clamp(19px,2.1vw,26px);line-height:1.5;letter-spacing:-.2px;padding:var(--lpad,36vh) 6px var(--lpad,44vh);white-space:normal}
 #lyrBody .l{margin:14px 0;color:var(--dim);opacity:.35;transition:opacity .25s,color .25s,transform .25s;transform-origin:left center}
+/* 4AO-e: the anchored target holds line 0 at the top; its 14px top margin would push it past the
+   16px acceptance, so the FIRST line loses that margin (gap = the 10px top padding). */
+#lyrBody .l:first-child{margin-top:0}
 #lyrBody .l.sync{cursor:pointer}
 #lyrBody .l.sync:hover{opacity:.85;color:var(--tx)}
 #lyrBody .l.on{color:#fff;opacity:1;font-weight:800;transform:scale(1.02);text-shadow:0 0 26px rgba(var(--amb),.35)}
@@ -1471,7 +1474,7 @@ renderHome=function(){
 };
 
 /* 8) lyrics: sync + click-to-seek + big view + fullscreen (#25 #26 #27) */
-var lyrToken=0, lyrAuto=true, lyrAutoT=null;
+var lyrToken=0, lyrAuto=true, lyrAutoT=null, lyrInstant=false;
 function parseLrc2(s){
   var out=[];
   String(s||'').split('\n').forEach(function(line){
@@ -1503,49 +1506,67 @@ function sizeLyrPad(){
      the top under the header, or short content floats to the vertical middle. */
   var synced=lyr.mode==='synced' && lyr.lines && lyr.lines.length;
   var top, bot;
-  if(synced){ top=Math.round(h/2)+'px'; bot=top; }
+  /* 4AO-e: the anchored target holds line 0 at the TOP (10px), and only the bottom needs half
+     the scrollport so the LAST line can still reach the centre. */
+  if(synced){ top='10px'; bot=Math.round(h/2)+'px'; }
   else { top='10px'; bot=Math.round(h/3)+'px'; }
   if(body.style.paddingTop!==top)body.style.paddingTop=top;
   if(body.style.paddingBottom!==bot)body.style.paddingBottom=bot;
-  /* 4AO-d: the top fade only makes sense when a line can scroll under it; the first element of
-     a non-synced state must be fully opaque. The bottom fade stays in both cases. */
-  var grad=synced
-    ?'linear-gradient(to bottom,transparent 0,#000 9%,#000 88%,transparent 100%)'
-    :'linear-gradient(to bottom,#000 0,#000 88%,transparent 100%)';
+  /* 4AO-e: line 0 sits at the top, so the top fade would dim it — the mask is fully opaque at
+     the top in EVERY state; the bottom fade is kept. */
+  var grad='linear-gradient(to bottom,#000 0,#000 88%,transparent 100%)';
   if(sc.style.maskImage!==grad){ sc.style.maskImage=grad; sc.style.webkitMaskImage=grad; }
   if(!synced){
     if(sc.scrollTop!==0)sc.scrollTop=0;
     var j=$('#lyrJump'); if(j&&!j.hidden)j.hidden=true;
   }
 }
-/* Re-centre the active line. Smooth for a normal nudge; instant for the initial/forced paint, for a
-   very large jump (> 2 scrollport heights, so the user never watches a long crawl) and under
-   reduced motion. */
-function lyrRecenter(force){
-  if(lyr.cur<0)return;
-  var body=$('#lyrBody'), sc=$('#lyrScroll'); if(!body||!sc)return;
-  var el=body.querySelector('#l'+lyr.cur); if(!el||!el.scrollIntoView)return;
-  var be=el.getBoundingClientRect(), sr=sc.getBoundingClientRect();
-  var dist=Math.abs((be.top+be.bottom)/2-(sr.top+sr.bottom)/2);
-  var beh=(force||lfReduced()||dist>sr.height*2)?'auto':'smooth';
-  try{el.scrollIntoView({block:'center',behavior:beh})}catch(e){}
+/* 4AO-e: the anchored scroll target. The active line sits at the TOP while it is above the centre
+   (target clamps to 0 -> no scrolling at song start) and then follows at the CENTRE once it
+   reaches it. The same target drives line-follow, the pill, tab/fullscreen open and line-click
+   seeks, so the top->centre attach is continuous — no jump when the line crosses the centre. */
+function lyrTarget(){
+  var sc=$('#lyrScroll'), body=$('#lyrBody');
+  if(!sc||!body||lyr.cur<0)return null;
+  var el=body.querySelector('#l'+lyr.cur); if(!el)return null;
+  var sr=sc.getBoundingClientRect(), er=el.getBoundingClientRect();
+  var lineCenter=(er.top+er.bottom)/2-sr.top+sc.scrollTop;   // content-space centre of the line
+  var max=sc.scrollHeight-sc.clientHeight;
+  return Math.max(0, Math.min(lineCenter-sr.height/2, max));
+}
+/* Smooth for every user-visible recentre; instant ONLY for a fresh content replacement
+   (track/provider switch) or under reduced motion. */
+function lyrRecenter(){
+  var sc=$('#lyrScroll'); if(!sc)return;
+  var tgt=lyrTarget(); if(tgt==null)return;
+  var beh=(lyrInstant||lfReduced())?'auto':'smooth';
+  if(Math.abs(sc.scrollTop-tgt)<1)return;
+  try{ sc.scrollTo({top:tgt,behavior:beh}) }catch(e){ sc.scrollTop=tgt }
 }
 function updateLyrJump(){
   var b=$('#lyrJump'); if(!b)return;
   var body=$('#lyrBody'), sc=$('#lyrScroll');
   if(lyrAuto||lyr.cur<0||!lyr.lines||!lyr.lines.length||!body||!sc){ b.hidden=true; return }
-  var el=body.querySelector('#l'+lyr.cur); if(!el){ b.hidden=true; return }
-  var r=el.getBoundingClientRect(), sr=sc.getBoundingClientRect();
-  b.hidden=(r.bottom>sr.top+6&&r.top<sr.bottom-6);
+  var tgt=lyrTarget(); if(tgt==null){ b.hidden=true; return }
+  var el=body.querySelector('#l'+lyr.cur);
+  var tol=el?Math.max(8, el.getBoundingClientRect().height/2):16;   // ~half a line height
+  b.hidden=Math.abs(sc.scrollTop-tgt)<=tol;
 }
 function lyrJumpToCurrent(){
   lyrAuto=true; clearTimeout(lyrAutoT);
-  sizeLyrPad(); lyrRecenter(false);
+  sizeLyrPad(); lyrRecenter();
   updateLyrJump();
+}
+/* 4AO-e: lyrics tab / fullscreen open (or reopen) re-arms follow and smooth-recentres on the
+   anchored target. No auto-resume timer — follow is re-armed here or by the pill only. */
+function lyrReopen(){
+  var host=$('#pvLyrics'); if(!host||host.hidden)return;
+  lyrAuto=true; clearTimeout(lyrAutoT);
+  sizeLyrPad(); lyrRecenter(); updateLyrJump();
 }
 ensureLyricsUI=function(){
   var host=$('#pvLyrics'); if(!host)return;
-  if($('#lyrBar')){ sizeLyrPad(); return }
+  if($('#lyrBar')){ lyrReopen(); return }
   host.innerHTML='<div class="lyrbar" id="lyrBar">'+
       '<div class="lyrt" id="lyrT"></div>'+
       '<div class="lyra" id="lyrA"></div>'+
@@ -1560,12 +1581,22 @@ ensureLyricsUI=function(){
   $('#lyrFull').onclick=toggleLyrFull;
   var j=$('#lyrJump'); if(j)j.onclick=lyrJumpToCurrent;
   var sc=$('#lyrScroll'); if(sc)sc.addEventListener('scroll',updateLyrJump,{passive:true});
-  sizeLyrPad();
+  lyrReopen();
 }
 /* track change: follow again (never leave a stale scroll position / pill) */
 var _resetLyrics=resetLyrics;
 resetLyrics=function(){ lyrAuto=true; clearTimeout(lyrAutoT); var r=_resetLyrics.apply(this,arguments); sizeLyrPad(); updateLyrJump(); return r };
-window.addEventListener('resize',sizeLyrPad,{passive:true});
+window.addEventListener('resize',function(){
+  sizeLyrPad();
+  /* 4AO-e-v: a resize changes the padding AND the anchored target, so with follow ACTIVE the
+     active line would sit off-centre until the next line change (and the pill stays hidden while
+     follow is on). Re-centre on the INSTANT path — geometry is changing and a smooth scroll would
+     fight the drag. When follow is paused, move nothing but the pill. */
+  if(lyrAuto&&lyr.mode==='synced'&&lyr.lines&&lyr.lines.length){
+    lyrInstant=true; try{ lyrRecenter(); } finally { lyrInstant=false; }
+  }
+  updateLyrJump();
+},{passive:true});
 loadLyrics=async function(){
   var body=$('#lyrBody'); if(!body)return;
   var it=nowItem();
@@ -1604,7 +1635,7 @@ renderLyricsBody=function(){
       body.innerHTML=note+lines.map(function(l,i){
         return '<div class="l sync" id="l'+i+'" data-i="'+i+'" data-t="'+l.t+'">'+(esc(l.x)||'&nbsp;')+'</div>';
       }).join('');
-      sizeLyrPad(); paintLyrics();
+      lyrInstant=true; try{ sizeLyrPad(); paintLyrics(); } finally { lyrInstant=false; }
       lyr.timer=setInterval(function(){paintLyrics(false)},240);
       return;
     }
@@ -1624,14 +1655,14 @@ function paintLyrics(force){
   if(!body||!lines||!lines.length)return;
   var t=audio.currentTime||0, lo=0, hi=lines.length-1, idx=-1;
   while(lo<=hi){var mid=(lo+hi)>>1; if(lines[mid].t<=t){idx=mid;lo=mid+1} else hi=mid-1}
-  if(idx===lyr.cur&&!force)return;
+  if(idx===lyr.cur&&!force){ updateLyrJump(); return }   // 4AO-e: re-evaluate the pill every tick
   var prev=lyr.cur>=0?body.querySelector('#l'+lyr.cur):null;
   if(prev)prev.classList.remove('on');
   lyr.cur=idx;
   if(idx<0){ updateLyrJump(); return }
   var el=body.querySelector('#l'+idx); if(!el){ updateLyrJump(); return }
   el.classList.add('on');
-  if(lyrAuto)lyrRecenter(force);
+  if(lyrAuto)lyrRecenter();
   updateLyrJump();
 }
 (function(){
@@ -1709,7 +1740,7 @@ function lyrFullOpen(){
   LF.open=true; lfIcon(true);
   requestAnimationFrame(function(){
     lyrAuto=true; clearTimeout(lyrAutoT);
-    sizeLyrPad(); lyrRecenter(false);
+    sizeLyrPad(); lyrRecenter();
     updateLyrJump();
   });
   if(lfReduced()){ document.body.classList.remove('lyrreveal'); lfClear(el); lfClear(tr); return }
@@ -1748,7 +1779,7 @@ function lyrFullClose(){
     document.body.classList.remove('lyrfull');
     document.body.classList.remove('lyrreveal');
     lfClear(el); lfClear(tr);
-    sizeLyrPad();
+    sizeLyrPad(); updateLyrJump();
     lfIcon(false);
     try{ var b=$('#lyrFull'); if(b)b.focus() }catch(e){}
   }
@@ -1761,7 +1792,7 @@ function lyrFullKill(){
   document.body.classList.remove('lyrfull');
   document.body.classList.remove('lyrreveal');
   lfClear($('#pvLyrics')); lfClear($('#pvTransport'));
-  sizeLyrPad();
+  sizeLyrPad(); updateLyrJump();
   lfIcon(false);
 }
 function toggleLyrFull(){ if(LF.open)lyrFullClose(); else lyrFullOpen() }
