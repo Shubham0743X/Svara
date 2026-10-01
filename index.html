@@ -1474,7 +1474,7 @@ renderHome=function(){
 };
 
 /* 8) lyrics: sync + click-to-seek + big view + fullscreen (#25 #26 #27) */
-var lyrToken=0, lyrAuto=true, lyrAutoT=null, lyrInstant=false;
+var lyrToken=0, lyrAuto=true, lyrAutoT=null, lyrInstant=false, lyrIdleT=null, lyrBusy=false, lyrActive=false;
 function parseLrc2(s){
   var out=[];
   String(s||'').split('\n').forEach(function(line){
@@ -1543,15 +1543,34 @@ function lyrRecenter(){
   if(Math.abs(sc.scrollTop-tgt)<1)return;
   try{ sc.scrollTo({top:tgt,behavior:beh}) }catch(e){ sc.scrollTop=tgt }
 }
+/* 4AO-f: true when the ACTIVE line's vertical centre sits inside the #lyrScroll viewport (8px safety). */
+function lineVisible(){
+  var body=$('#lyrBody'), sc=$('#lyrScroll');
+  if(!body||!sc||lyr.cur<0)return false;
+  var el=body.querySelector('#l'+lyr.cur); if(!el)return false;
+  var r=el.getBoundingClientRect(), sr=sc.getBoundingClientRect();
+  var c=(r.top+r.bottom)/2;
+  return c>=sr.top+8 && c<=sr.bottom-8;
+}
 function updateLyrJump(){
   var b=$('#lyrJump'); if(!b)return;
   var body=$('#lyrBody'), sc=$('#lyrScroll');
   if(lyrAuto||lyr.cur<0||!lyr.lines||!lyr.lines.length||!body||!sc){ b.hidden=true; return }
-  var tgt=lyrTarget(); if(tgt==null){ b.hidden=true; return }
-  var el=body.querySelector('#l'+lyr.cur);
-  var tol=el?Math.max(8, el.getBoundingClientRect().height/2):16;   // ~half a line height
-  b.hidden=Math.abs(sc.scrollTop-tgt)<=tol;
+  /* 4AO-f: visibility-based — the pill is only for an OUT-OF-VIEW active line, never distance. */
+  b.hidden=lineVisible();
 }
+/* 4AO-f: with follow paused, if the active line is (back) in view, resume following it — but never
+   during a gesture (wheel momentum / held drag). Returns true when it re-armed follow. */
+function lyrResume(){
+  if(lyrAuto||lyrBusy||lyrActive)return false;
+  if(lyr.mode!=='synced'||!lyr.lines||!lyr.lines.length)return false;
+  if(!lineVisible())return false;
+  lyrAuto=true; clearTimeout(lyrAutoT); lyrRecenter(); return true;
+}
+function lyrTick(){ lyrResume(); updateLyrJump(); }
+function lyrScheduleIdle(){ clearTimeout(lyrIdleT); lyrIdleT=setTimeout(lyrOnIdle,250) }
+/* 4AO-f: 250ms after the last gesture, resume if the active line is visible (nothing to jump to). */
+function lyrOnIdle(){ lyrIdleT=null; lyrBusy=false; if(!lyrActive)lyrResume(); updateLyrJump(); }
 function lyrJumpToCurrent(){
   lyrAuto=true; clearTimeout(lyrAutoT);
   sizeLyrPad(); lyrRecenter();
@@ -1585,7 +1604,7 @@ ensureLyricsUI=function(){
 }
 /* track change: follow again (never leave a stale scroll position / pill) */
 var _resetLyrics=resetLyrics;
-resetLyrics=function(){ lyrAuto=true; clearTimeout(lyrAutoT); var r=_resetLyrics.apply(this,arguments); sizeLyrPad(); updateLyrJump(); return r };
+resetLyrics=function(){ lyrAuto=true; clearTimeout(lyrAutoT); clearTimeout(lyrIdleT); lyrIdleT=null; lyrBusy=false; lyrActive=false; var r=_resetLyrics.apply(this,arguments); sizeLyrPad(); updateLyrJump(); return r };
 window.addEventListener('resize',function(){
   sizeLyrPad();
   /* 4AO-e-v: a resize changes the padding AND the anchored target, so with follow ACTIVE the
@@ -1655,25 +1674,32 @@ function paintLyrics(force){
   if(!body||!lines||!lines.length)return;
   var t=audio.currentTime||0, lo=0, hi=lines.length-1, idx=-1;
   while(lo<=hi){var mid=(lo+hi)>>1; if(lines[mid].t<=t){idx=mid;lo=mid+1} else hi=mid-1}
-  if(idx===lyr.cur&&!force){ updateLyrJump(); return }   // 4AO-e: re-evaluate the pill every tick
+  if(idx===lyr.cur&&!force){ lyrTick(); return }   // 4AO-e/f: re-evaluate the pill + resume every tick
   var prev=lyr.cur>=0?body.querySelector('#l'+lyr.cur):null;
   if(prev)prev.classList.remove('on');
   lyr.cur=idx;
-  if(idx<0){ updateLyrJump(); return }
-  var el=body.querySelector('#l'+idx); if(!el){ updateLyrJump(); return }
+  if(idx<0){ lyrTick(); return }
+  var el=body.querySelector('#l'+idx); if(!el){ lyrTick(); return }
   el.classList.add('on');
   if(lyrAuto)lyrRecenter();
-  updateLyrJump();
+  lyrTick();
 }
 (function(){
   var host=$('#pvLyrics'); if(!host)return;
+  var inside=function(e){ var sc=$('#lyrScroll'); var t=e.target; return !!(sc&&(t===sc||(t&&t.closest&&t.closest('#lyrScroll')))) };
   var pause=function(e){
-    var sc=$('#lyrScroll'); if(!sc)return;
-    var t=e.target; if(t!==sc&&!(t&&t.closest&&t.closest('#lyrScroll')))return;   // scrolling the lyrics only
+    if(!inside(e))return;                                    // scrolling the lyrics only
+    lyrBusy=true;                                            // 4AO-f: no recentre until idle
+    if(e.type==='pointerdown'||e.type==='touchstart')lyrActive=true;
+    lyrScheduleIdle();
     if(!lyrAuto)return;
     lyrAuto=false; clearTimeout(lyrAutoT); updateLyrJump();
   };
+  var move=function(e){ if(lyrActive&&inside(e))lyrScheduleIdle() };
+  var end=function(){ if(!lyrActive)return; lyrActive=false; lyrScheduleIdle() };
   ['wheel','touchstart','pointerdown'].forEach(function(ev){host.addEventListener(ev,pause,{passive:true})});
+  ['touchmove','pointermove'].forEach(function(ev){host.addEventListener(ev,move,{passive:true})});
+  ['touchend','touchcancel','pointerup','pointercancel'].forEach(function(ev){document.addEventListener(ev,end,{passive:true})});
 })();
 document.addEventListener('click',function(e){
   var l=e.target.closest('#lyrBody .l[data-t]'); if(!l)return;
