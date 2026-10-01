@@ -888,9 +888,13 @@ async function loadLyrics(){
   const lt=$('#lyrT');if(lt)lt.innerHTML=esc(it.title)+'<span>'+esc(it.artist||'')+'</span>';
   lyr.loadedFor=it.id+':'+p;
   $('#lyrBody').innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
+  /* 4AP: a title-only artist string must not be sent as an identity — lrclib would match a
+     same-title DIFFERENT recording. Normalise both and drop the artist when they are equal. */
+  const _nc=s=>String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  const lyrArtist=(it.artist && _nc(it.artist)!==_nc(it.title)) ? it.artist : '';
   const qs=p==='ytm'
     ?'/api/lyrics?provider=ytm&id='+encodeURIComponent(it.id)
-    :'/api/lyrics?provider=lrclib&id='+encodeURIComponent(it.id)+'&title='+encodeURIComponent(it.title)+'&artist='+encodeURIComponent(it.artist||'')+'&duration='+Math.round(audio.duration||0);
+    :'/api/lyrics?provider=lrclib&id='+encodeURIComponent(it.id)+'&title='+encodeURIComponent(it.title)+'&artist='+encodeURIComponent(lyrArtist)+'&duration='+Math.round(audio.duration||0);
   try{
     const r=await fetch(qs);const j=await r.json();
     if(j.error){
@@ -2346,6 +2350,11 @@ function artistLinksHTML(it){
   if(!names.length) names = (it.artists || []).map(a => a && a.name ? String(a.name).trim() : '').filter(Boolean);
   if(!names.length) return esc(flat);
   var norm = function(v){ return String(v == null ? '' : v).replace(/\s+/g,' ').replace(/^[,\s]+|[,\s]+$/g,'').toLowerCase() };
+  /* 4AP: a name that EQUALS the track's own title is not an identity — it is a title-only
+     credit (poisoned by a producer that fell back to a text field holding the title). Render it
+     as PLAIN text: no data-artist-id and no data-artist-name, so it is never clickable and can
+     never dial a wrong channel. Rows with a real credit are untouched. */
+  var tNorm = norm((it && it.title) || '');
   var ids = {}, meta = it.artists || [];
   /* IDs come ONLY from `artists[]`. YouTube ships combined credits
      ("Lofi Sleep Chill & Study", "Alex Kennon, Joris Voorn") as ONE entry with ONE
@@ -2362,6 +2371,7 @@ function artistLinksHTML(it){
     names.forEach(function(n){ var w = norm(n); if(!w || ids[w]) return; if(hay.indexOf(' '+w+' ') >= 0) ids[w] = a.id || '' });
   });
   return names.map(function(n){
+    if(tNorm && norm(n) === tNorm) return esc(n);   /* 4AP: title-only -> plain, never a link */
     var id = ids[norm(n)] || '';
     return '<span class="alink"' + (id ? ' data-artist-id="'+esc(id)+'"' : '') +
       ' data-artist-name="'+esc(n)+'">'+esc(n)+'</span>';
@@ -4263,12 +4273,16 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
 (function(){
   /* old history entries carry a junk thumb and sometimes no id at all */
   var changed = false;
+  /* 4AP: a stored entry whose artist equals its OWN title is a title-only credit (the old
+     /api/radio byline() poison). Clear the artist but KEEP the entry — never bulk-delete. */
+  var _nc=function(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim()};
   try{
     Object.keys(hist||{}).forEach(function(k){
       var e = hist[k]; if(!e || typeof e !== 'object') return;
       if(!e.id){ e.id = k; changed = true }                                   // the key IS the video id
       if(!e.thumb || !/^https?:\/\//i.test(String(e.thumb))){ e.thumb = ''; changed = true }
       if(typeof e.count !== 'number'){ e.count = 1; changed = true }
+      if(e.artist && _nc(e.artist) === _nc(e.title)){ e.artist = ''; changed = true }
     });
     if(changed) LSset('ml_history', hist);
   }catch(e){}

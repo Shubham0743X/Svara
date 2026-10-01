@@ -124,6 +124,28 @@ function extractArtist(item){
   if (parts.length > 1) return parts.slice(1).join('•').trim();
   return '';
 }
+/* 4AP: a TITLE-ONLY "credit" — the resolved artist string is just the track's own title. This is
+   what a producer writes when NO structured credit exists and it falls back to a text field that
+   happens to hold the title. The measured case is the up-next panel: PlaylistPanelVideo carries
+   short_byline/long_byline/subtitle/author ALL empty, `album.name` equal to the title on singles
+   (verified live: title "Self Aware", album "Self Aware", artists [Temper City]) and byline()
+   fell through to that album name. Such a string is not an identity — it must never be shown,
+   dialled as an artist, stored in history, or fed to lyrics matching. */
+function normCredit(s){
+  return String(s == null ? '' : s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function isTitleOnlyCredit(artist, title){
+  const a = normCredit(artist), t = normCredit(title);
+  return !!a && a === t;
+}
+// was there ANY structured credit on the row? (this is the gate: a real credit is never touched)
+function hasStructuredCredit(i){
+  return (Array.isArray(i.artists) && i.artists.length) ||
+         (Array.isArray(i.authors) && i.authors.length) ||
+         !!i.author;
+}
 // artist objects WITH channel ids, alongside the flat `artist` string (never replaces it).
 // youtubei.js 18 shapes: song rows -> `artists[]`, video rows -> `authors[]`,
 // album/playlist rows -> a single `author`. Each entry: { name, channel_id }.
@@ -234,13 +256,23 @@ function mapTrack(i, fallbackThumb, isAlbum, withLabel){
     const kind = rowKind(i, isAlbum);
     const isArtistRow = kind === 'artist';
     const artName = isArtistRow ? (txt(i.name) || flexText(i, 0)) : '';
+    const title = isArtistRow ? (artName || txt(i.title)) : txt(i.title);
+    let artist = isArtistRow ? artName : extractArtist(i);
+    let artists = isArtistRow ? (i.id ? [{ name: artName, id: i.id }] : []) : artistList(i);
+    /* 4AP: no structured credit AND the resolved string equals the title -> drop the poison
+       (artist:'', artists:[]). A row carrying real artists[]/authors[]/author credits is NEVER
+       touched, and artist rows keep their name. */
+    if (!isArtistRow && !hasStructuredCredit(i) && isTitleOnlyCredit(artist, title)){
+      artist = '';
+      artists = [];
+    }
     return {
       id: i.id,
       kind,
       label: withLabel ? rowLabel(i) : '',   // 4W-D2: the All list's own per-row type label
-      title: isArtistRow ? (artName || txt(i.title)) : txt(i.title),
-      artist: isArtistRow ? artName : extractArtist(i),
-      artists: isArtistRow ? (i.id ? [{ name: artName, id: i.id }] : []) : artistList(i),
+      title,
+      artist,
+      artists,
       sub: txt(i.subtitle) || txt(i.album) || '',
       thumb: bestUrl(th) || fallbackThumb || '',
       duration: i.duration?.text ? String(i.duration.text) : ''
@@ -655,11 +687,18 @@ app.get('/api/radio', async (req, res) => {
           const vid = it?.video_id || it?.id;
           if (!vid || vid === id) continue;
           const art = bestUrl(thumbsOf(it));
+          /* 4AP: the panel node has NO byline fields on singles — byline() then fell through to
+             `it.album.name`, which equals the track title, so the artist WAS the title. Use the
+             structured credit first (artists[] → authors[] → author, via extractArtist) and only
+             fall back to byline() when there is none; then never let a title-only string out. */
+          const rTitle = txt(it.title);
+          let rArtist = extractArtist(it) || byline(it);
+          if (isTitleOnlyCredit(rArtist, rTitle)) rArtist = '';
           items.push({
             id: vid,
             kind: 'track',
-            title: txt(it.title),
-            artist: byline(it),
+            title: rTitle,
+            artist: rArtist,
             artists: artistList(it),
             sub: '',
             thumb: art || ytStill(vid),
@@ -994,6 +1033,11 @@ async function lrclibBest({ title, artist, album, duration }){
   if (!title) return null;
   const titles = titleVariants(title);
   const artists = artistVariants(artist);
+  /* 4AP: a missing / title-only artist cannot corroborate a match on its own. `artists` is EMPTY
+     when artistVariants('') runs — Math.max of an empty list is -Infinity, which silently sank
+     every empty-artist request to "no lyrics". Treat it as UNTRUSTED instead and gate the
+     candidate on the title AND the duration (see the loop). */
+  const untrusted = !artist || isTitleOnlyCredit(artist, title);
   const pool = [];
   const push = (row, how) => { if (row && (row.syncedLyrics || row.plainLyrics)) pool.push({ ...row, _how: how }); };
 
@@ -1032,7 +1076,14 @@ async function lrclibBest({ title, artist, album, duration }){
     if (seen.has(key)) continue;
     seen.add(key);
     const tScore = Math.max(...titles.map(t => jaccard(t, row.trackName || '')));
-    const aScore = Math.max(...artists.map(a => jaccard(a, row.artistName || '')));
+    const aScore = artists.length ? Math.max(...artists.map(a => jaccard(a, row.artistName || ''))) : 0;
+    /* 4AP GUARD: with no trustworthy artist term, accept a candidate ONLY when its title is a
+       strong match (jaccard >= 0.7) AND its duration agrees within the same 12s window dScore
+       uses. Otherwise it is a same-title DIFFERENT song and must be rejected. */
+    if (untrusted){
+      const durOk = duration > 0 && row.duration && Math.abs(row.duration - duration) <= 12;
+      if (tScore < 0.7 || !durOk) continue;
+    }
     const dScore = duration > 0 && row.duration
       ? Math.max(0, 1 - Math.abs(row.duration - duration) / 12) : 0.5;
     let score = 0.5 * tScore + 0.3 * aScore + 0.2 * dScore;
