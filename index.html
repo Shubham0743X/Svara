@@ -3601,6 +3601,8 @@ function setRender(){
     : '<div class="setRow stack"><div><div class="setLbl">yt-dlp</div><div class="setVal">—</div></div></div>';
   h += '</div>';
   h += '<div class="setGrp"><h3>Data</h3>';
+  /* Wave 4AS: History opens a PAGE (music only, with dates) instead of toggling a setting. */
+  h += setRow('History','<span class="ic" style="width:12px;height:12px;vertical-align:-2px;margin-right:5px">'+ic('i-clock')+'</span>'+Object.keys(hist||{}).length+' tracks','<button class="setAct" type="button" data-setact="histpage">Open</button>');
   h += (setCfm==='hist')
     ? setCfmRow('Clear all listening history?','Clear','hist_yes')
     : setRow('Clear history','Empties Home’s history rows ('+Object.keys(hist||{}).length+' tracks)','<button class="setAct danger" type="button" data-setact="hist">Clear</button>');
@@ -3920,6 +3922,7 @@ document.addEventListener('click', function(e){
   if(a){
     var act = a.getAttribute('data-setact');
     if(act==='close'){ setShow(false); return }
+    if(act==='histpage'){ setShow(false); openHistory(true); return }   /* Wave 4AS: the History page */
     if(act==='about'){ aboutShow(true); return }             // Wave 4F: card on top of the panel
     if(act==='cancel'){ setCfm = ''; setRender(); return }
     if(act==='hist'){ setCfm = 'hist'; setRender(); return }
@@ -5242,6 +5245,132 @@ function toggleTasteExcluded(it){
 }
 /* Home's Quick picks are the taste-scored list — repaint so the change shows immediately. */
 try{ if(typeof curPage !== 'undefined' && curPage === 'home') renderHome() }catch(e){}
+</script>
+
+<style>
+/* ===== Wave 4AS ===== */
+/* STEP 1 - the listening-history page (music only, grouped by date) */
+.hbar{display:flex;justify-content:flex-end;padding:0 4px 8px}
+.hgrp{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);opacity:.8;padding:14px 8px 6px}
+.hdate{margin-left:auto;font-size:11.5px;color:var(--dim);white-space:nowrap;padding-left:14px;font-variant-numeric:tabular-nums}
+.hrm{width:30px;height:30px;border-radius:50%;color:var(--dim);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hrm:hover{color:#ffb3c1;background:var(--panel2)}
+.hrm .ic{width:15px;height:15px}
+/* STEP 2 - a bigger fullscreen toggle, on BOTH surfaces (panel + fullscreen). Only #lyrFull,
+   never the transport's .lyrbtn buttons. */
+#lyrFull{width:38px;height:38px}
+#lyrFull .ic{width:20px;height:20px}
+/* STEP 3 - in FULLSCREEN only, the header keeps nothing but the collapse button. The side
+   panel (.lyrbar at rest) is untouched: title, artist and chips stay exactly as before. */
+body.lyrfull #lyrT,body.lyrfull #lyrA,body.lyrfull #lyrSeg{display:none}
+body.lyrfull .lyrbar{display:flex;align-items:center;justify-content:flex-end;padding:18px 0 14px}
+/* STEP 4 - the REAL mini player (art, clickable title/artist, live progress, transport)
+   at the bottom of the fullscreen lyrics view; the old text-only #pvTransport is hidden.
+   Overrides the v2css "hidden while player open" state and sits ABOVE #pvLyrics (80)/#pvTransport (85). */
+body.lyrfull #mini{display:flex;opacity:1;transform:none;pointer-events:auto;left:0;right:0;z-index:90}
+body.lyrfull #pvTransport{display:none!important}
+/* keep the lyrics scroller - and its bottom fade - clear of the bar */
+body.lyrfull #pvLyrics{padding-bottom:76px}
+/* during the 4AO-c close ramp, fade the mini with the retracting overlay */
+body.lyrfull.lyrreveal #mini{opacity:0;pointer-events:none;transition:opacity .34s ease}
+</style>
+
+<script id="v4asjs">
+/* ===== Wave 4AS - Listening history page (Settings -> History) =====
+   Reads the SAME 'ml_history' shape notePlay() already writes ({id,title,artist,thumb,count,last});
+   never changes that write path or the key. Music only - no provider pills. Rows reuse the global
+   [data-play] row contract (curList + register) so a click plays through the normal path. */
+var HIST_CFM = false;
+function _4asPad(n){ return (n<10?'0':'')+n }
+function _4asDate(t){
+  if(!t) return '';
+  var d=new Date(t), now=new Date();
+  var hm=_4asPad(d.getHours())+':'+_4asPad(d.getMinutes());
+  var s=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  var day=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  if(day===s) return hm;
+  if(day===s-864e5) return 'Yesterday \u00b7 '+hm;
+  var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  return d.getDate()+' '+m+' '+d.getFullYear()+', '+hm;
+}
+function _4asGroupKey(t){
+  var d=new Date(t), now=new Date();
+  var s=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  var day=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  if(day===s) return 'Today';
+  if(day===s-864e5) return 'Yesterday';
+  if(t>=Date.now()-7*864e5) return 'This week';
+  var m=['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()];
+  return m+' '+d.getFullYear();
+}
+function _4asHistItems(){
+  return Object.keys(hist||{}).map(function(k){ var e=hist[k]; if(!e) return null; if(!e.id) e.id=k; return e })
+    .filter(function(e){ return e && e.id })
+    .sort(function(a,b){ return (b.last||0)-(a.last||0) });
+}
+function _4asRowHTML(it){
+  var cur=(typeof nowItem==='function')&&nowItem()&&nowItem().id===it.id;
+  var ph=it.thumb?'':'<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+  return '<div class="row hrow'+(cur?' cur':'')+'" data-play="1" data-id="'+esc(it.id)+'">'+
+    '<div class="rt">'+ph+'<img loading="lazy" src="'+esc(thumb(it,THUMB_ROW))+'">'+
+      '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
+    '<div class="rm"><div class="rtitle">'+esc(it.title||'')+'</div><div class="rsub">'+esc(it.artist||'')+'</div></div>'+
+    '<div class="hdate">'+esc(_4asDate(it.last))+'</div>'+
+    '<button class="hrm" type="button" data-hrm="'+esc(it.id)+'" title="Remove from history" aria-label="Remove from history"><span class="ic">'+ic('i-x')+'</span></button>'+
+  '</div>';
+}
+function _4asHistHTML(){
+  var items=_4asHistItems();
+  if(!items.length) return '<div class="empty">No listening history yet. Play a song and it will show up here with the date and time.</div>';
+  var h='<div class="hbar"><button class="setAct'+(HIST_CFM?' danger':'')+'" type="button" data-histcfm="1">'+(HIST_CFM?'Confirm clear?':'Clear all')+'</button></div>';
+  var lastKey=null;
+  items.forEach(function(it){
+    var k=_4asGroupKey(it.last||0);
+    if(k!==lastKey){ h+='<div class="hgrp">'+esc(k)+'</div>'; lastKey=k }
+    h+=_4asRowHTML(it);
+  });
+  return h;
+}
+function openHistory(reset){
+  if(reset) HIST_CFM=false;
+  var items=_4asHistItems();
+  try{ showDyn('History', items.length+' track'+(items.length===1?'':'s'), _4asHistHTML()) }catch(e){}
+  curList=items; register(items);
+}
+/* Repaint Home ONLY when it is the visible page (goHome() re-renders it on return anyway):
+   re-rendering #homeSec while it is hidden would race the async album rail against another
+   render and surface an unhandled rejection. Always swallow the async rejection regardless. */
+function _4asHomeRepaint(){
+  if(typeof curPage==='undefined'||curPage!=='home') return;
+  try{ var p=renderHome(); if(p&&typeof p.catch==='function')p.catch(function(){}) }catch(e){}
+}
+/* Same repaints setClearHist() does: sidebar counts + Home rails. */
+function _4asRemove(id){
+  if(!id||!hist[id]) return;
+  delete hist[id];
+  try{ LSset('ml_history',hist) }catch(e){}
+  try{ updatePlRows() }catch(e){}
+  _4asHomeRepaint();
+  openHistory();
+  toast('Removed from history');
+}
+function _4asClearAll(){
+  hist={};
+  try{ LSset('ml_history',{}) }catch(e){}
+  try{ updatePlRows() }catch(e){}
+  _4asHomeRepaint();
+  openHistory();
+  toast('History cleared');
+}
+/* ONE delegated click handler for the page itself (Clear-all confirm + per-row remove).
+   The settings row is handled inside the v3js [data-setact] handler. */
+document.addEventListener('click', function(e){
+  var t=e.target; if(!t||!t.closest||!t.closest('#dynSec')) return;
+  var rm=t.closest('[data-hrm]');
+  if(rm){ e.stopPropagation(); _4asRemove(rm.getAttribute('data-hrm')); return }
+  var cf=t.closest('[data-histcfm]');
+  if(cf){ if(!HIST_CFM){ HIST_CFM=true; openHistory(); } else { _4asClearAll(); } return }
+});
 </script>
 
 </body>
