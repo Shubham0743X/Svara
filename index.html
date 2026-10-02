@@ -481,7 +481,9 @@ function topArtists(n){
 function topRecent(n){return Object.values(hist).sort((a,b)=>b.last-a.last).slice(0,n||12)}
 function topScored(n){
   const now=Date.now();
-  return Object.values(hist).map(h=>{const rec=Math.max(0,1-(now-h.last)/ (14*864e5));const c=Math.min(1,h.count/20);return{h,s:c*.7+rec*.3}})
+  return Object.values(hist)
+    .filter(h=>!(typeof tasteExcluded==='function'&&tasteExcluded(h&&h.id)))   /* 4AR: kept out of taste scoring */
+    .map(h=>{const rec=Math.max(0,1-(now-h.last)/ (14*864e5));const c=Math.min(1,h.count/20);return{h,s:c*.7+rec*.3}})
     .sort((a,b)=>b.s-a.s).slice(0,n||12).map(x=>x.h);
 }
 function notePlay(it){
@@ -689,6 +691,7 @@ function insertNext(it){
 }
 function removeFromQueue(id){
   const qi=queue.findIndex(x=>x.id===id);if(qi<0)return;
+  if(typeof AUTO_QUEUE_IDS!=='undefined'&&AUTO_QUEUE_IDS.indexOf(id)>=0)AUTO_QUEUE_IDS=AUTO_QUEUE_IDS.filter(function(x){return x!==id});   /* 4AR: shadowed copy kept consistent */
   const wasCur=nowItem()?.id===id;
   queue.splice(qi,1);
   if(!queue.length){seq=[];cur=-1;audio.pause();audio.removeAttribute('src');$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue();return}
@@ -763,6 +766,9 @@ function openMenu(ev,id){
     <button class="mi" data-a="${esc(id)}" data-act="next"><span class="ic">${ic('i-next')}</span>Play next</button>
     <button class="mi" data-a="${esc(id)}" data-act="qadd"><span class="ic">${ic('i-plus')}</span>Add to queue</button>
     ${queued?`<button class="mi dim" data-a="${esc(id)}" data-act="qrm"><span class="ic">${ic('i-x')}</span>Remove from queue</button>`:''}
+    ${(typeof tasteExcluded==='function'&&tasteExcluded(id))
+      ?`<button class="mi" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-plus')}</span>Add back to taste</button>`
+      :`<button class="mi dim" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-x')}</span>Remove from taste</button>`}
     <div class="sep"></div>
     <button class="mi" data-a="${esc(id)}" data-act="pl"><span class="ic">${ic('i-save')}</span>Save to playlist</button>
     <button class="mi" data-a="${esc(id)}" data-act="dl"><span class="ic">${ic('i-download')}</span>Download</button>`;
@@ -786,6 +792,7 @@ document.addEventListener('click',e=>{
     else if(act==='next')insertNext(it);
     else if(act==='qadd'){addQueue(it,true);toast('Added to queue')}
     else if(act==='qrm')removeFromQueue(it.id);
+    else if(act==='taste')toggleTasteExcluded(it);   /* 4AR */
     else if(act==='pl')openPlModal(it);
     else if(act==='dl')downloadTrack(it);
   }
@@ -1018,7 +1025,7 @@ $('#pvFab').onclick=()=>{
   if(queue.length)openPV();else toast('Play something first');
 };
 $('#pvMin').onclick=()=>closePV();
-$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;audio.pause();audio.removeAttribute('src');$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue()};
+$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;if(typeof AUTO_QUEUE_IDS!=='undefined')AUTO_QUEUE_IDS=[];audio.pause();audio.removeAttribute('src');$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue()};
 $('#mFav').onclick=()=>toggleFav(nowItem());
 $('#pvFav').onclick=()=>toggleFav(nowItem());
 $('#pvMenu').onclick=e=>{const it=nowItem();if(it){idItem[it.id]=it;openMenu(e,it.id)}};
@@ -1458,6 +1465,7 @@ addQueue=function(it){
 removeFromQueue=function(id){
   var curIt=nowItem(), curId=curIt?curIt.id:null;
   var qi=queue.findIndex(function(x){return x.id===id}); if(qi<0)return;
+  if(typeof AUTO_QUEUE_IDS!=='undefined'&&AUTO_QUEUE_IDS.indexOf(id)>=0)AUTO_QUEUE_IDS=AUTO_QUEUE_IDS.filter(function(x){return x!==id});   /* 4AR: dropped entry can no longer be an auto-added one */
   var wasCur=curId===id;
   queue.splice(qi,1);
   if(!queue.length){seq=[];cur=-1;audio.pause();audio.removeAttribute('src');$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue();return}
@@ -3398,7 +3406,7 @@ function pickBalanced(pool, want){
   var seen={}, out=[], perArtist={}, lastArtist='';
   pool.forEach(function(it){ if(it && it.id) seen[it.id]=seen[it.id]||it });
   var list = Object.keys(seen).map(function(k){ return seen[k] })
-    .filter(function(it){ return recentIds.indexOf(it.id)<0 });
+    .filter(function(it){ return recentIds.indexOf(it.id)<0 && !(typeof tasteExcluded==='function' && tasteExcluded(it.id)) });
   for(var round=0; round<3 && out.length<want; round++){
     list.forEach(function(it){
       if(out.length>=want) return;
@@ -3445,6 +3453,7 @@ function appendRadio(items){
   var added = 0;
   items.forEach(function(it){
     if(!it || !it.id) return;
+    if(typeof tasteExcluded==='function' && tasteExcluded(it.id)) return;   /* 4AR: never auto-added */
     if(queue.some(function(x){ return x.id===it.id })) return;
     if(recentIds.indexOf(it.id)>=0) return;
     var a = String(it.artist||'').split(',')[0].trim().toLowerCase();
@@ -3452,6 +3461,7 @@ function appendRadio(items){
     if(a && cnt>=2) return;
     register([it]);
     queue.push(it); seq.push(queue.length-1);
+    if(typeof markAutoQueued==='function') markAutoQueued(it.id);   /* 4AR: this entry is auto-added */
     added++;
   });
   if(added) renderQueue();
@@ -3534,7 +3544,7 @@ downloadTrack = async function(it){
 /* ================== Wave 4E: settings slide-over ================== */
 /* Every localStorage key this app owns (WAVE0-NOTES inventory) + the frozen settings
    keys (PLAN §8). Export/import use this list; nothing else is accepted on import. */
-var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto','sv_liked_albums'];   /* 4AQ */
+var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto','sv_liked_albums','sv_taste_excluded'];   /* 4AQ + 4AR */
 var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_logo'];
 var SET_KEYS = SET_LIVE.concat(SET_NEW);
 var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null, aboutOpen = false;
@@ -5191,6 +5201,47 @@ document.addEventListener('click', function(e){
 try{ if(typeof curPage!=='undefined' && curPage==='home') renderHome() }catch(e){}
 /* The sidebar was built before likedAlbumCount existed — refresh so the count is right. */
 try{ refreshSidebar() }catch(e){}
+</script>
+
+<script id="v4arjs">
+/* ===== Wave 4AR — "Remove from taste": exclude a track from every AUTOMATIC pick =====
+   Track-level (by video id) ONLY — the artist's other songs stay in taste. Explicit actions
+   (search, clicking it, Play now, Play next, Add to queue, playlists, Listen again) are
+   untouched; only the automatic paths filter it out: the dice/radio pool, the similar/autoplay
+   handoff, and taste scoring. */
+var TASTE_EXCLUDED = LSget('sv_taste_excluded', []) || [];
+if(!Array.isArray(TASTE_EXCLUDED)) TASTE_EXCLUDED = [];
+function tasteExcluded(id){ return !!id && TASTE_EXCLUDED.indexOf(id) >= 0 }
+function setTasteExcluded(id, on){
+  if(!id) return;
+  if(on){ if(TASTE_EXCLUDED.indexOf(id) < 0) TASTE_EXCLUDED = TASTE_EXCLUDED.concat([id]) }
+  else TASTE_EXCLUDED = TASTE_EXCLUDED.filter(function(x){ return x !== id });
+  LSset('sv_taste_excluded', TASTE_EXCLUDED);
+}
+/* Ids the autoplay handoff (appendRadio) appended to the queue. The queue NEVER holds two entries
+   with the same id — base addQueue and the v2js insertNext both dedupe by id — so an id reliably
+   identifies the entry. Cleared whenever playList() replaces the queue (an explicit list), so an
+   explicitly queued track can never be mistaken for an auto-added one. This survives syncSeq()
+   and loadAt() because neither touches it (they only reorder indices into `queue`). */
+var AUTO_QUEUE_IDS = [];
+function markAutoQueued(id){ if(id && AUTO_QUEUE_IDS.indexOf(id) < 0) AUTO_QUEUE_IDS.push(id) }
+var _4arPlayList = playList;
+playList = function(list, idx, openPv){ AUTO_QUEUE_IDS = []; return _4arPlayList(list, idx, openPv) };
+function toggleTasteExcluded(it){
+  if(!it || !it.id) return;
+  var on = !tasteExcluded(it.id);
+  setTasteExcluded(it.id, on);
+  if(on){
+    /* only an entry an AUTOMATIC path added may be dropped; an explicitly queued one stays */
+    if(AUTO_QUEUE_IDS.indexOf(it.id) >= 0){
+      AUTO_QUEUE_IDS = AUTO_QUEUE_IDS.filter(function(x){ return x !== it.id });
+      if(typeof removeFromQueue === 'function' && queue.some(function(x){ return x && x.id === it.id })) removeFromQueue(it.id);
+    }
+  }
+  toast(on ? "Removed from taste — won't play on its own" : 'Added back to taste');
+}
+/* Home's Quick picks are the taste-scored list — repaint so the change shows immediately. */
+try{ if(typeof curPage !== 'undefined' && curPage === 'home') renderHome() }catch(e){}
 </script>
 
 </body>
