@@ -1031,7 +1031,7 @@ $('#prog').onclick=e=>{if(audio.duration){const r=e.currentTarget.getBoundingCli
 $('#pseek').oninput=e=>{const v=+e.target.value/10;if(audio.duration)audio.currentTime=v/100*audio.duration;e.target.style.setProperty('--v',v+'%')};
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
 document.addEventListener('click',e=>{const nav=e.target.closest('[data-nav]');if(nav){nav.dataset.nav==='home'?goHome():openLiked()}});
-document.addEventListener('click',e=>{const pl=e.target.closest('[data-lib]');if(pl){const v=pl.dataset.lib;if(v==='liked'){curPage='lib';openLiked()}else openPl(v.slice(3))}});
+document.addEventListener('click',e=>{const pl=e.target.closest('[data-lib]');if(pl){const v=pl.dataset.lib;if(v==='liked'){curPage='lib';openLiked()}else if(v==='albums'){openLikedAlbums()}else openPl(v.slice(3))}});   /* 4AQ: 'albums' must not fall into openPl(v.slice(3)) */
 /* tabs */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
@@ -1343,12 +1343,17 @@ function updatePlRows(){
       esc(n)+'<span class="cnt">'+pls[n].length+'</span></button>'+
       '<button class="plmenu" data-plmenu="'+esc(n)+'" title="Playlist options"><span class="ic">'+ic('i-dots')+'</span></button></div>';
   };
-  var h='<div class="sbt">Your library</div><button class="plrow'+(v2Page.t==='liked'?' on':'')+'" data-lib="liked"><span class="ic">'+ic('i-heart')+'</span>Liked music<span class="cnt">'+Object.keys(favs).length+'</span></button>';
+  var h='<div class="sbt">Your library</div><button class="plrow'+(v2Page.t==='liked'?' on':'')+'" data-lib="liked"><span class="ic">'+ic('i-heart')+'</span>Liked music<span class="cnt">'+Object.keys(favs).length+'</span></button>'
+    +'<button class="plrow'+(v2Page.t==='alb'?' on':'')+'" data-lib="albums"><span class="ic">'+ic('i-heart')+'</span>Liked albums<span class="cnt">'+(typeof likedAlbumCount==='function'?likedAlbumCount():0)+'</span></button>';
   if(pinned.length)h+='<div class="sbt">Pinned</div>'+pinned.map(function(n){return row(n,true)}).join('');
   if(rest.length)h+='<div class="sbt">Playlists</div>'+rest.map(function(n){return row(n,false)}).join('');
   if(!names.length)h+='<div class="sbt" style="opacity:.4">No playlists yet</div>';
   host.innerHTML=h;
 }
+/* 4AQ: this live renderer lives inside the v2js IIFE, so appended layers cannot see it by name.
+   Expose it under its own global (the base updatePlRows stays untouched) so the Liked-albums
+   layer can refresh the real sidebar. */
+window.svUpdatePlRows = updatePlRows;
 var _openLiked=openLiked, _openPl=openPl, _goHome=goHome;
 openLiked=function(){v2Page={t:'liked'};_openLiked();updatePlRows()};
 openPl=function(n){v2Page={t:'pl',name:n};_openPl(n);updatePlRows()};
@@ -2537,7 +2542,8 @@ railCard = function(it, ctx){
   var ph = thumb(it,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="rail" data-rail="'+esc(ctx)+'" data-id="'+esc(it.id)+'" data-title="'+esc(it.title||'')+'">'+
     '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it,THUMB_RAIL))+'" onerror="this.style.display=\'none\'">'+
-      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
+      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div>'+
+      (ctx==='al' && typeof albHeartHTML==='function' ? albHeartHTML(it) : '')+'</div>'+
     '<div class="rname">'+esc(it.title)+'</div>'+
     '<div class="rsub2">'+artistLinksHTML(it)+'</div></div>';
 };
@@ -2640,10 +2646,13 @@ function albumCard(a){
   var ph = thumb(a,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="rail" data-artalbum="'+esc(a.id)+'" data-title="'+esc(a.title||'')+'">'+
     '<div class="art">'+ph+'<img loading="lazy" alt="" data-src="'+esc(thumb(a,THUMB_RAIL))+'" onerror="this.style.display=\'none\'">'+
-      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
+      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div>'+
+      (typeof albHeartHTML==='function' ? albHeartHTML(a) : '')+'</div>'+
     '<div class="rname">'+esc(a.title)+'</div>'+
     '<div class="rsub2">'+(a.year ? esc(a.year) : esc(a.artist||''))+'</div></div>';
 }
+/* 4AQ: expose albumCard so the appended Liked-albums layer (outside this IIFE) renders with it. */
+window.albumCard = albumCard;
 function relatedCard(a){
   var ph = thumb(a,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="art-relcard" data-artist-id="'+esc(a.id||'')+'" data-artist-name="'+esc(a.name||'')+'">'+
@@ -2816,6 +2825,10 @@ function mixArtist(){
    base [data-play] row handler never starts playback from an artist click. */
 function closestArtist(e, sel){ try{ return e.target.closest(sel) }catch(err){ return null } }
 document.addEventListener('click', function(e){
+  /* 4AQ: an album heart inside an artist album tile must never open the album. This handler is
+     registered BEFORE the 4AQ heart handler, so it fires first — without this guard the
+     [data-artalbum] branch below would hijack the heart click. */
+  if(closestArtist(e, '[data-albheart]')) return;
   var t = closestArtist(e, '[data-artist-id],[data-artist-name]');
   if(t){
     e.preventDefault(); e.stopPropagation();
@@ -2933,6 +2946,7 @@ function albumHeadHTML(j, tracks){
         '<div class="art-acts">' +
           '<button class="pact" data-albplay="1"><span class="ic">' + ic('i-play') + '</span>Play all</button>' +
           '<button class="pact ghost" data-albshuffle="1"><span class="ic">' + ic('i-shuffle') + '</span>Shuffle</button>' +
+          (typeof albHeartHeroHTML==='function' ? albHeartHeroHTML(j) : '') +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -3520,7 +3534,7 @@ downloadTrack = async function(it){
 /* ================== Wave 4E: settings slide-over ================== */
 /* Every localStorage key this app owns (WAVE0-NOTES inventory) + the frozen settings
    keys (PLAN §8). Export/import use this list; nothing else is accepted on import. */
-var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto'];
+var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto','sv_liked_albums'];   /* 4AQ */
 var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_logo'];
 var SET_KEYS = SET_LIVE.concat(SET_NEW);
 var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null, aboutOpen = false;
@@ -5099,6 +5113,84 @@ html[data-fx="bal"]  body::after{
   installHooks();
   syncView();                                         /* Home is the boot view */
 })();
+</script>
+
+<style id="v4aqcss">
+/* ===== Wave 4AQ — liked albums: heart on album covers + hero action ===== */
+.alheart{position:absolute;top:7px;right:7px;z-index:3;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(12,12,18,.62);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transform:scale(.9);transition:opacity .14s,transform .14s,background .14s,color .14s}
+.alheart .ic{width:16px;height:16px}
+.alheart:hover{background:rgba(26,26,36,.88)}
+.rail:hover .alheart,.alheart.on{opacity:1;transform:none}
+.alheart.on{color:var(--acc)}
+.alheart.on svg{fill:var(--acc);stroke:none}
+.art-acts .pact.ghost.alik.on{color:var(--acc);border-color:var(--acc)}
+.art-acts .pact.ghost.alik.on svg{fill:var(--acc);stroke:none}
+@media (hover:none){.alheart{opacity:1;transform:none}}
+</style>
+<script id="v4aqjs">
+/* ===== Wave 4AQ — liked albums (index.html only; sv_liked_albums) =====
+   Remote albums the app surfaces (Home “Albums for you”, artist “Albums & singles”, the
+   album page) can be liked. Never touches pls/sv_pls (user playlists) or pins/sv_pins. */
+var LIKED_ALBUMS = LSget('sv_liked_albums', {}) || {};
+if(typeof LIKED_ALBUMS !== 'object' || Array.isArray(LIKED_ALBUMS)) LIKED_ALBUMS = {};
+function likedAlbumCount(){ return Object.keys(LIKED_ALBUMS).length }
+/* The live sidebar renderer is inside the v2js IIFE — reach it through the alias it publishes. */
+function refreshSidebar(){
+  try{ if(typeof svUpdatePlRows==='function') svUpdatePlRows(); else if(typeof updatePlRows==='function') updatePlRows(); }catch(e){}
+}
+function isAlbumLiked(id){ return !!(id && LIKED_ALBUMS[id]) }
+function saveLikedAlbums(){ LSset('sv_liked_albums', LIKED_ALBUMS) }
+function likedAlbumList(){ return Object.keys(LIKED_ALBUMS).map(function(k){ return LIKED_ALBUMS[k] }).filter(function(x){ return x && x.id }) }
+function albHeartHTML(a){
+  var liked = isAlbumLiked(a && a.id);
+  return '<button class="alheart'+(liked?' on':'')+'" data-albheart="1" data-albid="'+esc(a.id)+'" data-albtitle="'+esc(a.title||'')+'" data-albartist="'+esc(a.artist||'')+'" data-albthumb="'+esc(a.thumb||'')+'" data-albyear="'+esc(a.year||'')+'" title="'+(liked?'Unlike album':'Like album')+'"><span class="ic">'+ic('i-heart')+'</span></button>';
+}
+function albHeartHeroHTML(j){
+  var liked = isAlbumLiked(j && j.id);
+  var yr = (typeof albData!=='undefined' && albData && albData.year) || '';
+  return '<button class="pact ghost alik'+(liked?' on':'')+'" data-albheart="1" data-albid="'+esc(j.id)+'" data-albtitle="'+esc(j.title||'')+'" data-albartist="'+esc(j.artist||'')+'" data-albthumb="'+esc(j.thumb||'')+'" data-albyear="'+esc(yr)+'" title="'+(liked?'Unlike album':'Like album')+'"><span class="ic">'+ic('i-heart')+'</span>'+(liked?'Liked':'Like')+'</button>';
+}
+function paintAlbHeart(el){
+  var liked = isAlbumLiked(el.getAttribute('data-albid'));
+  el.classList.toggle('on', liked);
+  el.setAttribute('title', liked?'Unlike album':'Like album');
+  if(el.classList.contains('alik')) el.innerHTML = '<span class="ic">'+ic('i-heart')+'</span>'+(liked?'Liked':'Like');
+}
+function renderLikedAlbumsView(){
+  var items = likedAlbumList();
+  showDyn('Liked albums', items.length+' albums', items.length ? '<div class="railwrap">'+items.map(albumCard).join('')+'</div>' : '<div class="empty">No liked albums yet — tap the ♥ on an album cover.</div>');
+  if(typeof skReveal==='function'){ var d=document.getElementById('dynSec'); if(d) skReveal(d) }
+  refreshSidebar();
+}
+function openLikedAlbums(){
+  v2Page = {t:'alb'};
+  if(!likedAlbumList().length){ toast('No liked albums yet — tap the ♥'); refreshSidebar(); return }
+  renderLikedAlbumsView();
+}
+function isLikedAlbumsViewOpen(){
+  var t = document.getElementById('pgTitle');
+  return !!(t && !t.hidden && String(t.textContent||'').trim()==='Liked albums');
+}
+/* ONE capture-phase handler — registered after the artist/album-page capture handlers, so the
+   guard added to the artist handler is what stops it hijacking a heart inside an album tile.
+   stopPropagation() here is what stops the base [data-rail] bubble handler from opening/playing. */
+document.addEventListener('click', function(e){
+  var b = null; try{ b = e.target.closest('[data-albheart]') }catch(err){ b = null }
+  if(!b) return;
+  e.preventDefault(); e.stopPropagation();
+  var id = b.getAttribute('data-albid'); if(!id) return;
+  var was = !!LIKED_ALBUMS[id];
+  if(was){ delete LIKED_ALBUMS[id] }
+  else { LIKED_ALBUMS[id] = { id:id, title:b.getAttribute('data-albtitle')||'', artist:b.getAttribute('data-albartist')||'', thumb:b.getAttribute('data-albthumb')||'', year:b.getAttribute('data-albyear')||'' } }
+  saveLikedAlbums();
+  try{ var ns = document.querySelectorAll('[data-albheart]'); for(var i=0;i<ns.length;i++) if(ns[i].getAttribute('data-albid')===id) paintAlbHeart(ns[i]) }catch(err){}
+  if(isLikedAlbumsViewOpen()) renderLikedAlbumsView(); else refreshSidebar();
+  toast(was ? 'Removed from Liked albums' : 'Added to Liked albums');
+}, true);
+/* Home was painted before this layer existed — repaint so the rail hearts appear. */
+try{ if(typeof curPage!=='undefined' && curPage==='home') renderHome() }catch(e){}
+/* The sidebar was built before likedAlbumCount existed — refresh so the count is right. */
+try{ refreshSidebar() }catch(e){}
 </script>
 
 </body>
