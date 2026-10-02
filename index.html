@@ -5275,6 +5275,25 @@ body.lyrfull #pvLyrics{padding-bottom:76px}
 body.lyrfull.lyrreveal #mini{opacity:0;pointer-events:none;transition:opacity .34s ease}
 </style>
 
+<style id="v4asbcss">
+/* ===== Wave 4AS-b - History page readability (STYLING ONLY) =====
+   Everything is scoped to the History page's own classes (.hrow / .hgrp / .hdate / .hbar) or to
+   #scroll only WHILE History is mounted (#dynSec holds the .hbar Clear-all bar). The shared
+   .row / .rt / .rtitle / .rsub / .list / .sub rules are never touched, so Liked music, playlists,
+   search, the album and artist pages keep their current sizes. No markup and no JS changed. */
+.hrow{padding:10px 12px}                       /* was 7px 8px */
+.hrow + .hrow{margin-top:4px}                  /* History rows are block children of #dynSec
+                                                  (no .list gap); give the list a 4px rhythm */
+.hrow .rt{width:52px;height:52px}              /* was 44px - radius/aspect/gradient kept */
+.hrow .rtitle{font-size:15px}                  /* was 14px - weight/colour unchanged */
+.hrow .rsub{font-size:13px}                    /* was 12px */
+.hdate{font-size:12.5px}                       /* was 11.5px - dim colour / auto-left kept */
+.hgrp{font-size:11.5px}                        /* was 10.5px - uppercase + letter-spacing kept */
+.hbar .setAct{font-size:14px}                  /* Clear all - was the 13.33px UA default */
+/* the "N tracks" subtitle is the shared #pgSub; re-size it only while History is mounted */
+#scroll:has(#dynSec:not([hidden]) .hbar) #pgSub{font-size:14px}   /* was 13px */
+</style>
+
 <script id="v4asjs">
 /* ===== Wave 4AS - Listening history page (Settings -> History) =====
    Reads the SAME 'ml_history' shape notePlay() already writes ({id,title,artist,thumb,count,last});
