@@ -5171,7 +5171,7 @@ function paintAlbHeart(el){
 }
 function renderLikedAlbumsView(){
   var items = likedAlbumList();
-  showDyn('Liked albums', items.length+' albums', items.length ? '<div class="railwrap">'+items.map(albumCard).join('')+'</div>' : '<div class="empty">No liked albums yet — tap the ♥ on an album cover.</div>');
+  showDyn('Liked albums', items.length+' albums', items.length ? '<div class="railwrap algrid">'+items.map(albumCard).join('')+'</div>' : '<div class="empty">No liked albums yet — tap the ♥ on an album cover.</div>');
   if(typeof skReveal==='function'){ var d=document.getElementById('dynSec'); if(d) skReveal(d) }
   refreshSidebar();
 }
@@ -5613,6 +5613,36 @@ var _t=0;
 function scheduleScan(){ if(_t) return; _t=setTimeout(function(){ _t=0; scan() },60) }
 try{ new MutationObserver(scheduleScan).observe(document.body,{childList:true,subtree:true}) }catch(e){}
 scan();
+})();
+</script>
+
+<style id="v4avcss">
+/* ===== Wave 4AV-A — Liked albums: a responsive grid instead of a horizontal rail =====
+   DOUBLE class only, so the base .railwrap/.rail rules and every other .railwrap
+   (Home 'Listen again' / 'Albums for you', artist 'Albums & singles', the 4AJ skeleton)
+   keep rendering exactly as they do today. The class is added only by the 4AQ renderer. */
+.railwrap.algrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:24px 12px;align-items:start;overflow:visible}
+.railwrap.algrid .rail{width:auto;min-width:0}
+</style>
+
+<script id="v4avjs">
+/* ===== Wave 4AV-B — the mini "Up next" button always opens the Up next tab =====
+   #miniOpen and #pvFab are untouched: openPV() never changes the tabs, so they keep restoring
+   whatever tab was last selected. #queueBtn is reassigned here; when the fullscreen lyrics
+   overlay is open it is collapsed FIRST through the same path the #lyrFull button uses (that
+   button's onclick is toggleLyrFull, which lives inside the v2js IIFE and is not global). */
+(function(){
+  'use strict';
+  var qb=document.getElementById('queueBtn');
+  if(qb) qb.onclick=function(){
+    if(document.body.classList.contains('lyrfull')){
+      var f=document.getElementById('lyrFull');
+      if(f) f.click();                       /* = toggleLyrFull(), the #lyrFull collapse path */
+    }
+    openPV();
+    var up=document.querySelector('.tab[data-tab="up"]');
+    if(up) up.click();                       /* reuse the existing .tab handler, no duplicated logic */
+  };
 })();
 </script>
 
