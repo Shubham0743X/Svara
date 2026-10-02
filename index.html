@@ -5373,5 +5373,229 @@ document.addEventListener('click', function(e){
 });
 </script>
 
+<script id="v4iconsjs">
+/* ===== Wave 4AU — the hand-picked outline icons + their one-shot click animations =====
+   The six glyphs below are the user's files copied verbatim (only the two play/pause <animate>
+   elements gained begin="indefinite"). Skip back / shuffle numbers come from the original icon
+   set; Skip forward is an explicit MIRROR of Skip back and the GitHub redraw is the FALLBACK —
+   there were no original animation sources for either (stated in the report).
+   Play/pause: ONE persistent <svg> per button, with that button's own innerHTML locked, so the
+   many paintControls() callers can no longer destroy a running morph. The sprite symbols are
+   left untouched (still used by menus and buttons not in this wave). index.html ONLY. */
+(function(){
+'use strict';
+var NS='http://www.w3.org/2000/svg';
+function reduced(){ try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) }catch(e){ return false } }
+
+/* ---------- the six SVGs (verbatim; play/pause got begin="indefinite") ---------- */
+/* SVG 1 — Play to pause: static d is the PAUSE shape; used when the state becomes PLAYING. */
+var PP_PLAY_TO_PAUSE=
+  '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 18l-2 0l0 -12l2 0l0 12M15 6l2 0l0 12l-2 0l0 -12">'+
+  '<animate fill="freeze" begin="indefinite" attributeName="d" dur="0.6s" keyTimes="0;0.33;1" values="M13 15l-5 3l0 -12l5 3l0 0M13 9l5 3l0 0l-5 3l0 0;M13 15l-5 3l0 -12l5 3l0 6M13 9l5 3l0 0l-5 3l0 -6;M9 18l-2 0l0 -12l2 0l0 12M15 6l2 0l0 12l-2 0l0 -12"/></path>';
+/* SVG 2 — Pause to play: static d is the PLAY shape; used when the state becomes PAUSED. */
+var PP_PAUSE_TO_PLAY=
+  '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 15l-5 3l0 -12l5 3l0 0M13 9l5 3l0 0l-5 3l0 0">'+
+  '<animate fill="freeze" begin="indefinite" attributeName="d" dur="0.6s" keyTimes="0;0.33;1" values="M9 18l-2 0l0 -12l2 0l0 12M15 6l2 0l0 12l-2 0l0 -12;M13 15l-5 3l0 -12l5 3l0 6M13 9l5 3l0 0l-5 3l0 -6;M13 15l-5 3l0 -12l5 3l0 0M13 9l5 3l0 0l-5 3l0 0"/></path>';
+/* SVG 3 — Skip back */
+var SKIP_BACK='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z"></path><path d="M3 20V4"></path></g></svg>';
+/* SVG 4 — Skip Forward */
+var SKIP_FWD='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4v16"></path><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"></path></g></svg>';
+/* SVG 5 — Shuffle */
+var SHUFFLE='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22"></path><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"></path><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"></path></g></svg>';
+/* SVG 6 — Github (the fallback redraw target) */
+var GITHUB='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5 c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5 .28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5 -2.64-.5-5.36-.5-8 0 C6 2 5 2 5 2 c-.3 1.15-.3 2.35 0 3.5 A5.403 5.403 0 0 0 4 9 c0 3.5 3 5.5 6 5.5 -.39.49-.68 1.05-.85 1.65 -.17.6-.22 1.23-.15 1.85v4" opacity="1" pathLength="1" stroke-dashoffset="0px" stroke-dasharray="1px 1px"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></g></svg>';
+
+/* ---------- one-shot animation helper (skip / shuffle) ---------- */
+function once(node, frames, opts){
+  if(!node || reduced()) return null;
+  try{
+    node.style.transformBox='fill-box';
+    if(node.__v4au){ try{ node.__v4au.cancel() }catch(e){} }
+    var a=node.animate(frames, opts);
+    node.__v4au=a;
+    return a;
+  }catch(e){ return null }
+}
+function animSkipBack(btn){
+  var svg=btn && btn.querySelector('.ic svg'); if(!svg) return;
+  var head=svg.querySelector('path[d^="M17.971 4.285"]');
+  var bar=svg.querySelector('path[d="M3 20V4"]');
+  once(head,[
+    {transform:'translateX(0)',offset:0,easing:'ease-in-out'},
+    {transform:'translateX(-2.2px)',offset:.42,easing:'ease-in-out'},
+    {transform:'translateX(0.6px)',offset:.74,easing:'ease-in-out'},
+    {transform:'translateX(0)',offset:1,easing:'ease-in-out'}
+  ],{duration:1000,easing:'ease-in-out'});
+  if(bar) bar.style.transformOrigin='50% 50%';
+  once(bar,[
+    {transform:'translateX(0) scaleY(1)',offset:0,easing:'ease-in-out'},
+    {transform:'translateX(-0.7px) scaleY(1.1)',offset:.42,easing:'ease-in-out'},
+    {transform:'translateX(0.2px) scaleY(0.98)',offset:.74,easing:'ease-in-out'},
+    {transform:'translateX(0) scaleY(1)',offset:1,easing:'ease-in-out'}
+  ],{duration:1000,easing:'ease-in-out',delay:80});
+}
+/* Skip forward is the MIRROR of Skip back — there was no original animation file for it. */
+function animSkipForward(btn){
+  var svg=btn && btn.querySelector('.ic svg'); if(!svg) return;
+  var head=svg.querySelector('path[d^="M6.029 4.285"]');
+  var bar=svg.querySelector('path[d="M21 4v16"]');
+  once(head,[
+    {transform:'translateX(0)',offset:0,easing:'ease-in-out'},
+    {transform:'translateX(2.2px)',offset:.42,easing:'ease-in-out'},
+    {transform:'translateX(-0.6px)',offset:.74,easing:'ease-in-out'},
+    {transform:'translateX(0)',offset:1,easing:'ease-in-out'}
+  ],{duration:1000,easing:'ease-in-out'});
+  if(bar) bar.style.transformOrigin='50% 50%';
+  once(bar,[
+    {transform:'translateX(0) scaleY(1)',offset:0,easing:'ease-in-out'},
+    {transform:'translateX(0.7px) scaleY(1.1)',offset:.42,easing:'ease-in-out'},
+    {transform:'translateX(-0.2px) scaleY(0.98)',offset:.74,easing:'ease-in-out'},
+    {transform:'translateX(0) scaleY(1)',offset:1,easing:'ease-in-out'}
+  ],{duration:1000,easing:'ease-in-out',delay:80});
+}
+/* Only the two arrowheads move; the original looped forever on hover, here it is ONE cycle. */
+function animShuffle(btn){
+  var svg=btn && btn.querySelector('.ic svg'); if(!svg) return;
+  var a1=svg.querySelector('path[d="m18 14 4 4-4 4"]');
+  var a2=svg.querySelector('path[d="m18 2 4 4-4 4"]');
+  var kf=[
+    {transform:'translateX(0)',offset:0,easing:'ease-in-out'},
+    {transform:'translateX(1.8px)',offset:.5,easing:'ease-in-out'},
+    {transform:'translateX(0)',offset:1,easing:'ease-in-out'}];
+  once(a1,kf,{duration:1000,easing:'ease-in-out'});
+  once(a2,kf,{duration:1000,easing:'ease-in-out',delay:120});
+}
+
+/* ---------- skip / shuffle button wiring ---------- */
+var SKIP_TARGETS={
+  prevBtn:SKIP_BACK, pPrev:SKIP_BACK, trPrev:SKIP_BACK,
+  nextBtn:SKIP_FWD,  pNext:SKIP_FWD,  trNext:SKIP_FWD,
+  pShuffle:SHUFFLE,  miniShuf:SHUFFLE
+};
+var ANIM={ prevBtn:animSkipBack, pPrev:animSkipBack, trPrev:animSkipBack,
+           nextBtn:animSkipForward, pNext:animSkipForward, trNext:animSkipForward,
+           pShuffle:animShuffle, miniShuf:animShuffle };
+function applyOne(id){
+  var b=document.getElementById(id); if(!b) return;
+  if(b.getAttribute('data-4au')==='1') return;      // never re-insert
+  var span=b.querySelector('.ic');
+  if(!span){ span=document.createElement('span'); span.className='ic'; b.appendChild(span) }
+  span.innerHTML=SKIP_TARGETS[id];
+  b.setAttribute('data-4au','1');
+  var fn=ANIM[id];
+  b.addEventListener('click', function(){ try{ fn(b) }catch(e){} });   // no preventDefault / stopPropagation
+}
+function applyIcons(){ for(var id in SKIP_TARGETS) applyOne(id) }
+
+/* ---------- play / pause: one persistent svg + locked innerHTML ---------- */
+function makePP(){
+  var s=document.createElementNS(NS,'svg');
+  s.setAttribute('viewBox','0 0 24 24');
+  s.setAttribute('width','24'); s.setAttribute('height','24');
+  s.setAttribute('aria-hidden','true');
+  return s;
+}
+/* an own innerHTML that IGNORES writes — no paintControls() caller can destroy the running morph */
+function lockHTML(el){
+  try{
+    var d=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
+    if(!d || !d.get) return;
+    Object.defineProperty(el,'innerHTML',{
+      configurable:true,
+      get:function(){ return d.get.call(this) },
+      set:function(){ /* locked */ }
+    });
+  }catch(e){}
+}
+var PP=[];
+function setupPP(id){
+  var b=document.getElementById(id); if(!b) return null;
+  var span=b.querySelector('.ic');
+  if(!span){ span=document.createElement('span'); span.className='ic'; b.appendChild(span) }
+  var svg=makePP();
+  span.innerHTML=''; span.appendChild(svg);
+  lockHTML(b);
+  var st={svg:svg,last:null};
+  PP.push(st);
+  return st;
+}
+function ppSeed(st){
+  var playing=!audio.paused;
+  st.last=playing;
+  st.svg.innerHTML = playing?PP_PLAY_TO_PAUSE:PP_PAUSE_TO_PLAY;   // static — no morph on load
+}
+function ppSync(){
+  var playing=!audio.paused;
+  for(var i=0;i<PP.length;i++){
+    var st=PP[i];
+    if(st.last===playing) continue;                                // same state — touch nothing
+    st.last=playing;
+    st.svg.innerHTML = playing?PP_PLAY_TO_PAUSE:PP_PAUSE_TO_PLAY;
+    if(reduced()) continue;                                        // correct static shape only
+    var an=st.svg.querySelector('animate');
+    if(an && an.beginElement) an.beginElement();                   // same task — never rAF
+  }
+}
+
+/* ---------- About GitHub: fallback redraw on hover ---------- */
+function ghAnim(path){
+  if(reduced()) return;
+  var a=path.__v4ghA;
+  if(a && a.playState==='running') return;    // do not restart until the previous run finished
+  try{ if(a) a.cancel() }catch(e){}
+  try{ path.__v4ghA=path.animate([{strokeDashoffset:1},{strokeDashoffset:0}],{duration:600,easing:'ease-out'}) }catch(e){}
+}
+function ghWire(el,path){
+  el.addEventListener('mouseenter', function(){ ghAnim(path) });
+  /* ABOUT.github is empty today, so the link renders as a DISABLED <button>; if that element does
+     not receive the mouse, the surrounding .abLinks row does the job instead. */
+  if(el.disabled){
+    var row=el.closest('.abLinks') || el.parentNode;
+    if(row && !row.__v4ghRow){
+      row.__v4ghRow=1;
+      var inside=false;
+      row.addEventListener('mouseover', function(e){
+        var r=el.getBoundingClientRect();
+        var on=e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+        if(on && !inside){ inside=true; ghAnim(path) }
+        else if(!on){ inside=false }
+      });
+      row.addEventListener('mouseout', function(){ inside=false });
+    }
+  }
+}
+function decorateAbout(){
+  var body=document.getElementById('abBody'); if(!body) return;
+  var links=body.querySelectorAll('.abIco');
+  for(var i=0;i<links.length;i++){
+    var el=links[i];
+    if(el.__v4gh) continue;
+    var lbl=(el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'');
+    if(!/github/i.test(lbl)) continue;
+    var span=el.querySelector('.ic');
+    if(span) span.innerHTML=GITHUB;
+    var path=el.querySelector('path[pathLength="1"]') || el.querySelector('path');
+    el.__v4gh=1;
+    if(path) ghWire(el,path);
+  }
+}
+
+/* ---------- boot ---------- */
+function scan(){ try{ applyIcons(); decorateAbout() }catch(e){} }
+try{
+  var s1=setupPP('playBtn'); if(s1) ppSeed(s1);
+  var s2=setupPP('pvPlay');  if(s2) ppSeed(s2);
+}catch(e){}
+var _pc=window.paintControls;
+if(typeof _pc==='function'){
+  window.paintControls=function(){ var r=_pc.apply(this,arguments); try{ ppSync() }catch(e){} return r };
+}
+var _t=0;
+function scheduleScan(){ if(_t) return; _t=setTimeout(function(){ _t=0; scan() },60) }
+try{ new MutationObserver(scheduleScan).observe(document.body,{childList:true,subtree:true}) }catch(e){}
+scan();
+})();
+</script>
+
 </body>
 </html>
