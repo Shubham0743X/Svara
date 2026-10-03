@@ -497,7 +497,15 @@ function notePlay(it){
 }
 
 /* ============ home sections ============ */
+/* 4AW: renderHome() is async and its post-await writes target #startRail / #albRail, which live
+   INSIDE #homeSec. A concurrent render (e.g. setClearHist() firing while one is mid-flight)
+   replaces sec.innerHTML and those nodes vanish, so the stale render threw "Cannot set properties
+   of null". homeGen is a render-generation counter: every call takes a token, and after EVERY
+   await it bails if a newer render has started, so an older request can never overwrite newer
+   content. Every post-await write is also null-checked. The happy path is unchanged. */
+var homeGen=0;
 async function renderHome(){
+  var gen=++homeGen;
   const sec=$('#homeSec');
   const recent=topRecent(12),scored=topScored(10),arts=topArtists(3);
   let h=`<div class="chips">${['Energize','Party','Relax','Sad','Focus','Workout'].map(m=>`<button class="chip" data-chip="${m}">${m}</button>`).join('')}</div>`;
@@ -514,7 +522,7 @@ async function renderHome(){
   }
   sec.innerHTML=h;
   // background starter content for empty profile
-  if(none){try{const r=await fetch('/api/search?q=trending');const j=await r.json();const it=(j.items||[]).slice(0,12);$('#startRail').innerHTML=railHTML(it,'start');if(typeof skReveal==='function')skReveal(document.getElementById('startRail'));}catch(e){$('#startRail').innerHTML=''}}
+  if(none){try{const r=await fetch('/api/search?q=trending');const j=await r.json();const it=(j.items||[]).slice(0,12);if(gen!==homeGen)return;const sr=document.getElementById('startRail');if(sr)sr.innerHTML=railHTML(it,'start');if(typeof skReveal==='function')skReveal(document.getElementById('startRail'));}catch(e){if(gen!==homeGen)return;var sr2=document.getElementById('startRail');if(sr2)sr2.innerHTML=''}}
   // albums for you
   if(!none&&arts.length){
     try{
@@ -523,12 +531,15 @@ async function renderHome(){
         try{
           const r=await fetch('/api/search?q='+encodeURIComponent(a)+'&type=album');
           const j=await r.json();
+          if(gen!==homeGen)return;                 // 4AW: a newer render owns the DOM now
           (j.items||[]).slice(0,4).forEach(al=>{cards+=railCard(al,'al')});
         }catch(e){/* skip artist */}
       }
-      $('#albRail').innerHTML=cards?`<div class="railwrap">${cards}</div>`:'<div class="empty">No albums found yet — keep listening and this fills with your artists’ albums.</div>';
+      if(gen!==homeGen)return;                   // 4AW: checked after the LAST await too
+      var ar=document.getElementById('albRail');
+      if(ar)ar.innerHTML=cards?`<div class="railwrap">${cards}</div>`:'<div class="empty">No albums found yet — keep listening and this fills with your artists’ albums.</div>';
       if(typeof skReveal==='function')skReveal(document.getElementById('albRail'));
-    }catch(e){$('#albRail').innerHTML='<div class="empty">Could not load albums right now.</div>'}
+    }catch(e){if(gen!==homeGen)return;var ar2=document.getElementById('albRail');if(ar2)ar2.innerHTML='<div class="empty">Could not load albums right now.</div>'}
   }
 }
 
@@ -1060,7 +1071,14 @@ function ensureLyricsUI(){
 /* keyboard */
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'){if(e.key==='Escape')e.target.blur();return}
-  if(e.code==='Space'){e.preventDefault();togglePlay()}
+  /* 4AW: Space must not hijack a focused control. When the event target is inside a button /
+     link / [role="button"] / form control, let the browser's native activation run: no
+     preventDefault, no togglePlay. Space on the body still toggles playback. */
+  if(e.code==='Space'){
+    var st=e.target;
+    if(st && st.closest && st.closest('button,a,[role="button"],input,textarea,select')) return;
+    e.preventDefault();togglePlay();
+  }
   if(e.code==='ArrowRight')audio.currentTime=Math.min(audio.duration||0,(audio.currentTime||0)+5);
   if(e.code==='ArrowLeft')audio.currentTime=Math.max(0,(audio.currentTime||0)-5);
   if(e.key==='Escape'){hideMenu();closeModal();if(document.body.classList.contains('pv'))closePV()}
@@ -3087,10 +3105,16 @@ function searchRowHTML(it){
       '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+esc(it.sub||'Artist')+'</div></div></div>';
   }
   if(kind === 'album'){
+    /* 4AW: search-result album rows get the SAME 4AQ heart (albHeartHTML) the rail/tile/hero
+       surfaces use — reusing its exact class + data-alb* attributes, so the ONE existing capture
+       listener handles it. `it` carries title/artist/thumb/kind (no `year`), so the year falls
+       back to what exists — never invented. Placed in `.rr` (the trailing slot) so the absolute
+       `.alheart` rule below re-anchors it there; `.rt` has overflow:hidden and would clip it. */
     return '<div class="row srow-album" data-openalbum="'+esc(it.id)+'" data-title="'+esc(it.title)+'" title="Open album">'+
       '<div class="rt"><img loading="lazy" src="'+esc(thumb(it,THUMB_ROW))+'">'+
         '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
-      '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+esc(it.sub||'Album')+'</div></div></div>';
+      '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+esc(it.sub||'Album')+'</div></div>'+
+      '<div class="rr">'+(typeof albHeartHTML==='function' ? albHeartHTML(it) : '')+'</div></div>';
   }
   return rowHTML(it);
 }
@@ -3357,6 +3381,10 @@ document.addEventListener('click', function(e){
 }, true);
 /* An album row carries an ALBUM id, not playable audio — open the album page, never the player. */
 document.addEventListener('click', function(e){
+  /* 4AW: a 4AQ album heart inside an album search row must never open the album. This handler
+     is registered BEFORE the 4AQ heart handler, so it fires first — without this guard the row
+     click below would hijack the heart (exactly the artist-tile guard added in 4AQ). */
+  if(e.target && e.target.closest){ try{ if(e.target.closest('[data-albheart]')) return }catch(err){} }
   var t = e.target && e.target.closest ? e.target.closest('[data-openalbum]') : null;
   if(!t) return;
   e.preventDefault(); e.stopPropagation();
@@ -5139,6 +5167,12 @@ html[data-fx="bal"]  body::after{
 .art-acts .pact.ghost.alik.on{color:var(--acc);border-color:var(--acc)}
 .art-acts .pact.ghost.alik.on svg{fill:var(--acc);stroke:none}
 @media (hover:none){.alheart{opacity:1;transform:none}}
+/* 4AW: the same heart, on a search-result ALBUM row. The row is not a .rail, so the reveal rule
+   above never fires — give the row its own. It lives in the trailing .rr slot and is absolutely
+   positioned against the .row (8px padding), matching the 7px inset used on cover hearts. */
+.row.srow-album{position:relative}
+.row.srow-album:hover .alheart,.row.srow-album .alheart.on{opacity:1;transform:none}
+@media (hover:none){.row.srow-album .alheart{opacity:1;transform:none}}
 </style>
 <script id="v4aqjs">
 /* ===== Wave 4AQ — liked albums (index.html only; sv_liked_albums) =====
