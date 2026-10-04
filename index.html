@@ -1361,18 +1361,29 @@ var pins=LSget('sv_pins',[])||[], v2Page={t:null,name:null};
 function savePins(){LSset('sv_pins',pins)}
 function updatePlRows(){
   var host=$('#plList'); if(!host)return;
+  /* 4BB-fix: v2Page records the LAST library selection, not the CURRENT view. Now that the base
+     layers paint THIS renderer (E1), a repaint triggered by a non-library view — search results,
+     the artist page, the album page, History — used to keep that old row highlighted. Honour the
+     selection only while the matching view is actually on screen (pgTitle is hidden on the artist
+     and album pages, so it can never match there). v2Page itself is deliberately left untouched:
+     the rename/delete handlers and the openLiked/openPl/goHome wrappers still read and write it. */
+  var vT=v2Page.t, vN=v2Page.name, pt=document.getElementById('pgTitle');
+  var onView=(pt && !pt.hidden) ? String(pt.textContent||'').trim() : '';
+  if(vT==='liked' && onView!=='Liked music') vT=null;
+  else if(vT==='pl' && onView!==String(vN||'')) vT=null;
+  else if(vT==='alb' && !(typeof isLikedAlbumsViewOpen==='function' && isLikedAlbumsViewOpen())) vT=null;
   var names=Object.keys(pls);
   var pinned=pins.filter(function(n){return pls[n]});
   var rest=names.filter(function(n){return pinned.indexOf(n)<0});
   var row=function(n,isPin){
-    var on=(v2Page.t==='pl'&&v2Page.name===n);
+    var on=(vT==='pl'&&vN===n);
     return '<div class="plrowwrap"><button class="plrow'+(on?' on':'')+'" data-lib="pl:'+esc(n)+'">'+
       (isPin?'<span class="pin"><span class="ic">'+ic('i-pin')+'</span></span>':'<span class="ic">'+ic('i-list')+'</span>')+
       esc(n)+'<span class="cnt">'+pls[n].length+'</span></button>'+
       '<button class="plmenu" data-plmenu="'+esc(n)+'" title="Playlist options"><span class="ic">'+ic('i-dots')+'</span></button></div>';
   };
-  var h='<div class="sbt">Your library</div><button class="plrow'+(v2Page.t==='liked'?' on':'')+'" data-lib="liked"><span class="ic">'+ic('i-heart')+'</span>Liked music<span class="cnt">'+Object.keys(favs).length+'</span></button>'
-    +'<button class="plrow'+(v2Page.t==='alb'?' on':'')+'" data-lib="albums"><span class="ic">'+ic('i-heart')+'</span>Liked albums<span class="cnt">'+(typeof likedAlbumCount==='function'?likedAlbumCount():0)+'</span></button>';
+  var h='<div class="sbt">Your library</div><button class="plrow'+(vT==='liked'?' on':'')+'" data-lib="liked"><span class="ic">'+ic('i-heart')+'</span>Liked music<span class="cnt">'+Object.keys(favs).length+'</span></button>'
+    +'<button class="plrow'+(vT==='alb'?' on':'')+'" data-lib="albums"><span class="ic">'+ic('i-heart')+'</span>Liked albums<span class="cnt">'+(typeof likedAlbumCount==='function'?likedAlbumCount():0)+'</span></button>';
   if(pinned.length)h+='<div class="sbt">Pinned</div>'+pinned.map(function(n){return row(n,true)}).join('');
   if(rest.length)h+='<div class="sbt">Playlists</div>'+rest.map(function(n){return row(n,false)}).join('');
   if(!names.length)h+='<div class="sbt" style="opacity:.4">No playlists yet</div>';
@@ -1382,6 +1393,14 @@ function updatePlRows(){
    Expose it under its own global (the base updatePlRows stays untouched) so the Liked-albums
    layer can refresh the real sidebar. */
 window.svUpdatePlRows = updatePlRows;
+/* 4BB: the BASE global updatePlRows() paints the old sidebar (no Liked-albums row, highlight
+   driven by curPage). Every base-layer caller — goHome, showDyn, toggleFav, addToPlaylist,
+   the settings repaints, the history clear — resolves that GLOBAL name, so re-point it at this
+   modern renderer. The base function body is untouched; only the global binding changes. */
+window.updatePlRows = updatePlRows;
+/* 4BB: v2Page is IIFE-local, so openLikedAlbums() (in v4aqjs) could never highlight its row.
+   Publish a setter so an outside layer can move the page state and repaint in one step. */
+window.svSetPage = function(t,name){ v2Page = {t:t||null,name:name||null}; updatePlRows() };
 var _openLiked=openLiked, _openPl=openPl, _goHome=goHome;
 openLiked=function(){v2Page={t:'liked'};_openLiked();updatePlRows()};
 openPl=function(n){v2Page={t:'pl',name:n};_openPl(n);updatePlRows()};
@@ -5219,8 +5238,11 @@ function renderLikedAlbumsView(){
   refreshSidebar();
 }
 function openLikedAlbums(){
-  v2Page = {t:'alb'};
+  /* 4BB: v2Page lives inside the v2js IIFE — assigning it here wrote a DIFFERENT global that the
+     sidebar renderer never reads, so the Liked-albums row never highlighted. Move the page state
+     through the setter that IIFE publishes (guarded: the empty state must NOT change the highlight). */
   if(!likedAlbumList().length){ toast('No liked albums yet — tap the ♥'); refreshSidebar(); return }
+  if(typeof svSetPage==='function') svSetPage('alb');
   renderLikedAlbumsView();
 }
 function isLikedAlbumsViewOpen(){
@@ -6042,6 +6064,22 @@ if(typeof _pc2==='function'){
   window.paintControls=function(){ var r=_pc2.apply(this,arguments); try{ repSync() }catch(e){} return r };
 }
 })();
+</script>
+<script id="v4bbjs">
+/* ===== Wave 4BB — the ⋮ menu must close on a CAPTURE-phase click =====
+   hideMenu() is only reached from the base BUBBLE listener, but the artist-page and album-page
+   handlers run in the CAPTURE phase and stopPropagation(), so a Back click there never reaches
+   it and the menu stayed open. Capture listeners on the SAME document node all still run after
+   stopPropagation() (only stopImmediatePropagation() would block them), so this layer closes the
+   menu there. Clicks inside #menu keep their own handling and any [data-menu] (⋮) opens/switches
+   the menu itself, so those are skipped. */
+document.addEventListener('click', function(e){
+  var t = e.target; if(!t || !t.closest) return;
+  if(t.closest('#menu')) return;          /* menu items keep their own handling */
+  if(t.closest('[data-menu]')) return;    /* ⋮ opens/switches the menu itself */
+  var m = document.getElementById('menu');
+  if(m && !m.hidden){ try{ hideMenu() }catch(err){} }
+}, true);
 </script>
 </body>
 </html>
