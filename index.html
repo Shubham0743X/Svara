@@ -265,7 +265,7 @@ body.pv #pvFab{display:none}
 <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></symbol>
 <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
 <symbol id="i-repeat1" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M12.4 9.5v5.2"/><path d="M10.9 9.8 12.4 9.5v1.6"/></symbol>
-<symbol id="i-dice" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="15" height="15" rx="4"/><circle class="f" cx="9" cy="9" r="1.5"/><circle class="f" cx="15" cy="9" r="1.5"/><circle class="f" cx="9" cy="15" r="1.5"/><circle class="f" cx="15" cy="15" r="1.5"/></symbol>
+<symbol id="i-dice" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M12 21c3.75 0 5.625 0 6.939-.955a5 5 0 0 0 1.106-1.106C21 17.625 21 15.749 21 12s0-5.625-.955-6.939a5 5 0 0 0-1.106-1.106C17.625 3 15.749 3 12 3s-5.625 0-6.939.955A5 5 0 0 0 3.955 5.06C3 6.375 3 8.251 3 12s0 5.625.955 6.939a5 5 0 0 0 1.106 1.106C6.375 21 8.251 21 12 21"/><path d="M8.25 8H8m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm-.25 8H8m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm7.75 0H16m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm-4.25-4H12m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm3.75-4H16m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Z"/></symbol>
 <symbol id="i-dots" viewBox="0 0 24 24"><circle class="f" cx="12" cy="5" r="1.7"/><circle class="f" cx="12" cy="12" r="1.7"/><circle class="f" cx="12" cy="19" r="1.7"/></symbol>
 <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 17v1.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V17"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
@@ -5905,5 +5905,143 @@ paint();
 }
 #shist .shr.on .x{opacity:1}
 </style>
+
+<script id="v4icons2js">
+/* ===== Wave 4BA — animated Repeat + Up next (Task C, the dice, is a pure sprite edit above) =====
+   Vanilla WAAPI, index.html only. Repeat reuses the EXACT v4iconsjs play/pause protection: ONE
+   persistent inline <svg> per button plus the button's own innerHTML locked with
+   Object.defineProperty — so paintControls()' innerHTML= writes are silently ignored and the svg
+   is never rebuilt mid-animation. Listeners are ADDED alongside the existing onclick handlers
+   (cycleRepeat / the 4AV queueBtn handler) — never replaced, so no click is delayed. */
+(function(){
+'use strict';
+/* the SAME rest test the settings gear uses: OS matchMedia OR the saved sv_set_reduceMotion */
+function reduced(){
+  try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true }catch(e){}
+  try{ if(localStorage.getItem('sv_set_reduceMotion')==='true') return true }catch(e){}
+  return false;
+}
+/* one own innerHTML that IGNORES writes — identical to v4iconsjs lockHTML() */
+function lockHTML(el){
+  try{
+    var d=Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML');
+    if(!d || !d.get) return;
+    Object.defineProperty(el,'innerHTML',{ configurable:true, get:function(){ return d.get.call(this) }, set:function(){} });
+  }catch(e){}
+}
+
+/* ---------------- TASK A — repeat ---------------- */
+var REPEAT_SVG='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v-1a4 4 0 0 1 4-4h14" opacity="1"></path><path d="M21 13v1a4 4 0 0 1-4 4H3" opacity="1"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14" pathLength="1" stroke-dashoffset="0px" stroke-dasharray="1px 1px"></path><path d="M21 13v1a4 4 0 0 1-4 4H3" pathLength="1" stroke-dashoffset="0px" stroke-dasharray="1px 1px"></path><path d="m17 2 4 4-4 4"></path><path d="m7 22-4-4 4-4"></path><g class="rep-one" style="display:none"><path d="M12.4 9.5v5.2"></path><path d="M10.9 9.8 12.4 9.5v1.6"></path></g></g></svg>';
+var REPS=[];
+function repSetup(id){
+  var b=document.getElementById(id); if(!b) return null;
+  var span=b.querySelector('.ic');
+  if(!span){ span=document.createElement('span'); span.className='ic'; b.appendChild(span) }
+  span.innerHTML=REPEAT_SVG;
+  var svg=span.querySelector('svg');
+  var ps=svg.querySelectorAll('path');           // [0..5] = p1..p6; [6],[7] = the rep-one glyph
+  var st={ btn:b, svg:svg, p:[ps[0],ps[1],ps[2],ps[3],ps[4],ps[5]], one:svg.querySelector('.rep-one'), ans:[] };
+  /* explicit REST state (p3/p4 hidden or you see doubled lines) */
+  ps[0].style.opacity=1; ps[1].style.opacity=1;
+  ps[2].style.opacity=0; ps[3].style.opacity=0;
+  ps[2].style.strokeDasharray='0.34 1'; ps[3].style.strokeDasharray='0.34 1';
+  ps[4].style.transformBox='fill-box'; ps[4].style.transformOrigin='50% 50%'; ps[4].style.transform='scale(1)';
+  ps[5].style.transformBox='fill-box'; ps[5].style.transformOrigin='50% 50%'; ps[5].style.transform='scale(1)';
+  lockHTML(b);                                    // paintControls() can no longer replace the svg
+  b.addEventListener('click', function(){ repPlay(st) });   // alongside onclick — no delay
+  REPS.push(st);
+  return st;
+}
+function repPlay(st){
+  if(reduced()) return;
+  for(var i=0;i<st.ans.length;i++){ try{ st.ans[i].cancel() }catch(e){} }
+  st.ans=[];
+  var p=st.p;
+  /* p1 / p2: opacity 1->0.3 over 200ms, hold, return to 1 at t=1800ms over 300ms (one anim 2100ms) */
+  var fade=[
+    {opacity:1,offset:0,easing:'ease-out'},
+    {opacity:.3,offset:.0952,easing:'ease-out'},
+    {opacity:.3,offset:.8571,easing:'ease-out'},
+    {opacity:1,offset:1,easing:'ease-out'}];
+  st.ans.push(p[0].animate(fade,{duration:2100}));
+  st.ans.push(p[1].animate(fade,{duration:2100}));
+  /* p3 pulse-top: dash travels along the top line into the arrowhead */
+  st.ans.push(p[2].animate([
+    {opacity:0,strokeDashoffset:0,offset:0,easing:'linear'},
+    {opacity:1,strokeDashoffset:0,offset:.04,easing:'linear'},
+    {opacity:1,strokeDashoffset:-1,offset:.46,easing:'linear'},
+    {opacity:0,strokeDashoffset:-1,offset:.5,easing:'linear'},
+    {opacity:0,strokeDashoffset:-1,offset:1,easing:'linear'}],{duration:1800}));
+  /* p4 pulse-bottom */
+  st.ans.push(p[3].animate([
+    {opacity:0,strokeDashoffset:0,offset:0,easing:'linear'},
+    {opacity:0,strokeDashoffset:0,offset:.5,easing:'linear'},
+    {opacity:1,strokeDashoffset:0,offset:.54,easing:'linear'},
+    {opacity:1,strokeDashoffset:-1,offset:.96,easing:'linear'},
+    {opacity:0,strokeDashoffset:-1,offset:1,easing:'linear'}],{duration:1800}));
+  /* p5 head-top */
+  st.ans.push(p[4].animate([
+    {transform:'scale(1)',offset:0,easing:'ease-in-out'},
+    {transform:'scale(1)',offset:.4,easing:'ease-in-out'},
+    {transform:'scale(1.3)',offset:.48,easing:'ease-in-out'},
+    {transform:'scale(1)',offset:.58,easing:'ease-in-out'},
+    {transform:'scale(1)',offset:1,easing:'ease-in-out'}],{duration:1800}));
+  /* p6 head-bottom */
+  st.ans.push(p[5].animate([
+    {transform:'scale(1)',offset:0,easing:'ease-in-out'},
+    {transform:'scale(1)',offset:.9,easing:'ease-in-out'},
+    {transform:'scale(1.3)',offset:.98,easing:'ease-in-out'},
+    {transform:'scale(1)',offset:1,easing:'ease-in-out'}],{duration:1800}));
+}
+/* the "1" mark lives in the persistent svg, so it is shown/hidden after every paintControls */
+function repSync(){
+  var one = (repeat==='one');
+  for(var i=0;i<REPS.length;i++){ if(REPS[i].one) REPS[i].one.style.display = one ? 'inline' : 'none' }
+}
+
+/* ---------------- TASK B — up next ---------------- */
+var UPNEXT_SVG='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.625 4.5H18.375C19.4105 4.5 20.25 5.33947 20.25 6.375C20.25 7.41053 19.4105 8.25 18.375 8.25H5.625C4.58947 8.25 3.75 7.41053 3.75 6.375C3.75 5.33947 4.58947 4.5 5.625 4.5Z"></path><path d="M3.75 19.5H20.25" opacity="1"></path><path d="M3.75 15.75H20.25" opacity="1"></path><path d="M3.75 12H20.25" opacity="1"></path></g></svg>';
+function qSetup(id){
+  var b=document.getElementById(id); if(!b) return null;
+  var span=b.querySelector('.ic');
+  if(!span){ span=document.createElement('span'); span.className='ic'; b.appendChild(span) }
+  span.innerHTML=UPNEXT_SVG;
+  var svg=span.querySelector('svg');
+  /* map the three lines by their d, NOT document order */
+  var l1=null,l2=null,l3=null;
+  var all=svg.querySelectorAll('path');
+  for(var i=0;i<all.length;i++){
+    var d=all[i].getAttribute('d');
+    if(d==='M3.75 12H20.25') l1=all[i];
+    else if(d==='M3.75 15.75H20.25') l2=all[i];
+    else if(d==='M3.75 19.5H20.25') l3=all[i];
+  }
+  var st={ btn:b, lines:[l1,l2,l3], ans:[] };
+  b.addEventListener('click', function(){ qPlay(st) });       // alongside the existing onclick
+  return st;
+}
+function qPlay(st){
+  if(reduced()) return;
+  for(var i=0;i<st.ans.length;i++){ try{ st.ans[i].cancel() }catch(e){} }
+  st.ans=[];
+  var delays=[100,250,400];                                    // l1 (y12), l2 (y15.75), l3 (y19.5)
+  for(var j=0;j<3;j++){
+    var p=st.lines[j]; if(!p) continue;
+    p.style.fill='none';
+    st.ans.push(p.animate([{opacity:0},{opacity:1}],{duration:200,delay:delays[j],easing:'ease-out',fill:'none'}));
+  }
+}
+
+/* ---------------- boot ---------------- */
+try{ repSetup('repBtn'); repSetup('pRep'); }catch(e){}
+try{ qSetup('queueBtn'); }catch(e){}
+try{ repSync(); }catch(e){}
+/* chain onto the CURRENT paintControls (v4iconsjs already wrapped it) — never replace behaviour */
+var _pc2=window.paintControls;
+if(typeof _pc2==='function'){
+  window.paintControls=function(){ var r=_pc2.apply(this,arguments); try{ repSync() }catch(e){} return r };
+}
+})();
+</script>
 </body>
 </html>
