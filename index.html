@@ -5621,18 +5621,14 @@ function ppSync(){
   }
 }
 
-/* ---------- About GitHub: the REAL AnimateIcons "github" hover animation ----------
-   Replaces the old placeholder "outline redraw" fallback (stroke-dashoffset 1 -> 0 over 600ms).
-   Three Web Animations parts start TOGETHER on hover / keyboard focus-visible, one 1000ms
-   ease-in-out pass: 1) the whole <svg> pulse-scales 1 -> 1.05 -> 1 (one-shot); 2) the BODY path
-   (pathLength="1") shortens its dash to 60% and slides (strokeDasharray 1 1 -> 0.6 1 -> 1 1,
-   strokeDashoffset 0 -> -0.4 -> 0, opacity 1 -> .7 -> 1, one-shot); 3) the TAIL path swings
-   rotate 0 -> 20deg -> -15deg -> 0, iterations:Infinity (loops while active). On release the loop
-   is cancelled and the tail eases back to 0deg in 300ms from its CURRENT sampled angle (no jump);
-   scale/body finish naturally. Re-enter samples the angle again and starts the loop with that
-   value at BOTH ends (no jump at start or at the loop boundary). prefers-reduced-motion: nothing
-   animates at all. transform-box/origin are set inline (svg root fill-box + 50% 50% centre; tail
-   fill-box + 90% 50% right-end pivot) so the pulse grows from the centre and the tail swings. */
+/* ---------- About GitHub: the AnimateIcons "github" TAIL WIGGLE (hover / focus-visible) ----------
+   Only the hand/tail path (d="M9 18c-4.51 2-5-2-7-2") animates; the SVG markup (GITHUB) is unchanged.
+   On hover / keyboard focus-visible ONE 1000ms ease-in-out loop starts: the tail swings
+   rotate 0 -> 20deg -> -15deg -> 0, iterations:Infinity, pivoting at its right end
+   (transform-box:fill-box + origin 90% 50%). The loop's first AND last keyframes are the CURRENT
+   sampled angle (no jump at start or at the loop boundary). On release the loop is cancelled and
+   the tail eases back to 0deg in 300ms from its CURRENT sampled angle (no jump); re-enter samples
+   the angle again and starts with that value at both ends. prefers-reduced-motion: nothing animates. */
 function ghAngle(node){
   try{
     var t=getComputedStyle(node).transform;
@@ -5649,25 +5645,7 @@ function ghStart(el){
   var a0=ghAngle(st.tail);                                   // sample BEFORE cancelling loop/return
   if(st.returnAn){ try{ st.returnAn.cancel() }catch(e){} st.returnAn=null }
   if(st.tailAn){ try{ st.tailAn.cancel() }catch(e){} st.tailAn=null }
-  /* 1) whole svg: scale pulse (one-shot, finishes naturally) */
-  try{ if(st.scaleAn) st.scaleAn.cancel() }catch(e){}
-  try{
-    st.scaleAn=st.svg.animate([
-      {transform:'scale(1)',offset:0,easing:'ease-in-out'},
-      {transform:'scale(1.05)',offset:.5,easing:'ease-in-out'},
-      {transform:'scale(1)',offset:1,easing:'ease-in-out'}
-    ],{duration:1000,easing:'ease-in-out'});
-  }catch(e){}
-  /* 2) BODY path: dash shortens to 60% and slides, opacity dips (one-shot) */
-  try{ if(st.bodyAn) st.bodyAn.cancel() }catch(e){}
-  try{
-    st.bodyAn=st.body.animate([
-      {strokeDasharray:'1 1',strokeDashoffset:0,opacity:1,offset:0,easing:'ease-in-out'},
-      {strokeDasharray:'0.6 1',strokeDashoffset:-0.4,opacity:.7,offset:.5,easing:'ease-in-out'},
-      {strokeDasharray:'1 1',strokeDashoffset:0,opacity:1,offset:1,easing:'ease-in-out'}
-    ],{duration:1000,easing:'ease-in-out'});
-  }catch(e){}
-  /* 3) TAIL path: swing loop; first AND last keyframes are the sampled angle (no jump) */
+  /* TAIL path: swing loop; first AND last keyframes are the sampled angle (no jump) */
   try{
     st.tailAn=st.tail.animate([
       {transform:'rotate('+a0+'deg)',offset:0,easing:'ease-in-out'},
@@ -5735,9 +5713,8 @@ function decorateAbout(){
     var paths=el.querySelectorAll('path');
     var st={ svg:svgEl, body:paths[0]||null, tail:paths[1]||null,
              hovered:false, focused:false, active:false,
-             scaleAn:null, bodyAn:null, tailAn:null, returnAn:null };
+             tailAn:null, returnAn:null };
     el.__v4gh=st;                              // state object is the guard too
-    if(svgEl){ svgEl.style.transformBox='fill-box'; svgEl.style.transformOrigin='50% 50%' }
     if(st.tail){ st.tail.style.transformBox='fill-box'; st.tail.style.transformOrigin='90% 50%' }
     if(svgEl && st.body && st.tail) ghWire(el);
   }
