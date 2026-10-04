@@ -731,7 +731,8 @@ function refreshHearts(){
 }
 function addToPlaylist(name,it){
   if(!pls[name])pls[name]=[];
-  if(!pls[name].find(x=>x.id===it.id))pls[name].push({id:it.id,title:it.title,artist:it.artist||'',thumb:it.thumb||'',duration:it.duration||''});
+  if(pls[name].find(x=>x.id===it.id)){ toast('Already in “'+name+'”'); return }
+  pls[name].push({id:it.id,title:it.title,artist:it.artist||'',thumb:it.thumb||'',duration:it.duration||''});
   saveAll();updatePlRows();toast('Saved to “'+name+'”');
 }
 function openPlModal(it){
