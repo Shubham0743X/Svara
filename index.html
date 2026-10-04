@@ -303,7 +303,7 @@ body.pv #pvFab{display:none}
     </div>
     <div class="topr">
       <button class="tic" id="diceBtn" title="Radio from your taste"><span class="ic"><svg><use href="#i-dice"/></svg></span></button>
-      <button class="tic" id="setBtn" type="button" title="Settings" aria-label="Settings" aria-haspopup="dialog" aria-expanded="false"><span class="ic"><svg><use href="#i-settings"/></svg></span></button>
+      <button class="tic" id="setBtn" type="button" title="Settings" aria-label="Settings" aria-haspopup="dialog" aria-expanded="false"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></button>
     </div>
   </header>
 
@@ -508,7 +508,10 @@ async function renderHome(){
   var gen=++homeGen;
   const sec=$('#homeSec');
   const recent=topRecent(12),scored=topScored(10),arts=topArtists(3);
-  let h=`<div class="chips">${['Energize','Party','Relax','Sad','Focus','Workout'].map(m=>`<button class="chip" data-chip="${m}">${m}</button>`).join('')}</div>`;
+  /* 4AX: ADDENDUM order — Relax, Romance, Feel Good, Party, Energize, Focus first, then the
+     remaining existing chips (Sad, Workout). Same markup/behaviour; clicking still runs
+     doSearch(label+' songs') as before. */
+  let h=`<div class="chips">${['Relax','Romance','Feel Good','Party','Energize','Focus','Sad','Workout'].map(m=>`<button class="chip" data-chip="${m}">${m}</button>`).join('')}</div>`;
   const none=!Object.keys(hist).length;
   quickList=scored;
   if(!none){
@@ -3629,8 +3632,14 @@ function setRender(){
     : '<div class="setRow stack"><div><div class="setLbl">yt-dlp</div><div class="setVal">—</div></div></div>';
   h += '</div>';
   h += '<div class="setGrp"><h3>Data</h3>';
-  /* Wave 4AS: History opens a PAGE (music only, with dates) instead of toggling a setting. */
-  h += setRow('History','<span class="ic" style="width:12px;height:12px;vertical-align:-2px;margin-right:5px">'+ic('i-clock')+'</span>'+Object.keys(hist||{}).length+' tracks','<button class="setAct" type="button" data-setact="histpage">Open</button>');
+  /* Wave 4AS: History opens a PAGE (music only, with dates) instead of toggling a setting.
+     Wave 4AX: the WHOLE row is the affordance now — the "Open" button is gone. The setRow output
+     (label + hint + a chevron instead of a control) is wrapped in .setRowAct, which carries
+     data-setact="histpage"; the delegated handler resolves it with closest(), so no JS change is
+     needed for the click. setRow() itself and every other row are untouched. */
+  h += '<div class="setRowAct" data-setact="histpage" tabindex="0" role="button">'+
+    setRow('History','<span class="ic" style="width:12px;height:12px;vertical-align:-2px;margin-right:5px">'+ic('i-clock')+'</span>'+Object.keys(hist||{}).length+' tracks','<span class="setChev">›</span>')+
+    '</div>';
   h += (setCfm==='hist')
     ? setCfmRow('Clear all listening history?','Clear','hist_yes')
     : setRow('Clear history','Empties Home’s history rows ('+Object.keys(hist||{}).length+' tracks)','<button class="setAct danger" type="button" data-setact="hist">Clear</button>');
@@ -5677,6 +5686,130 @@ scan();
     var up=document.querySelector('.tab[data-tab="up"]');
     if(up) up.click();                       /* reuse the existing .tab handler, no duplicated logic */
   };
+})();
+</script>
+
+<style id="v4axcss">
+/* ===== Wave 4AX ===== */
+/* PART 1 — the whole Settings "History" row is the affordance (.setRowAct wrapper). It contains a
+   normal .setRow, so the Data group's border rhythm (border-bottom on .setRow) is unchanged; the
+   wrapper only adds the pointer/hover/focus treatment and a chevron in the trailing slot. */
+.setRowAct{cursor:pointer;border-radius:10px}
+.setRowAct:hover{background:var(--panel)}
+.setRowAct:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+.setRowAct .setChev{color:var(--dim);font-size:16px;line-height:1}
+/* PART 3 — History page group headers (TODAY / YESTERDAY / THIS WEEK / MONTH YEAR): bigger and
+   near-white. Appended last, so it wins over the 4AS / 4AS-b rules by source order. Uppercase and
+   the spacing scale are kept; grouping logic, group order and .hdate are untouched. */
+.hgrp{font-size:13px;color:var(--tx);opacity:1;letter-spacing:1.2px}
+</style>
+
+<script id="v4axjs">
+/* ===== Wave 4AX — keyboard access for the clickable History settings row =====
+   The removed "Open" button was the only focusable element in that row, so .setRowAct carries
+   tabindex="0" role="button" and needs Enter/Space activation. ONE listener; the delegated
+   [data-setact] click handler does the rest. 4AW (committed) already stops the global Space
+   shortcut from hijacking [role="button"] targets, so Space reaches us without toggling playback. */
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Enter' && e.key !== ' ' && e.code !== 'Space') return;
+  var el = null; try{ el = e.target && e.target.closest ? e.target.closest('.setRowAct') : null }catch(err){ el = null }
+  if(!el) return;
+  e.preventDefault();
+  el.click();
+});
+</script>
+
+<script id="v4settingsjs">
+/* ===== Wave 4AY — the animated Settings gear (#setBtn) =====
+   #setBtn now owns an INLINE copy of the i-settings glyph. The sprite <symbol id="i-settings">
+   is left untouched, so every other settings icon in the app is unaffected — only this button
+   can spin. The glyph turns 0 -> 180deg while the panel opens and 180 -> 0deg while it closes,
+   both driven by ONE spring (stiffness 50 / damping 10 / mass 1) integrated once per animation
+   frame with RK4. No CSS transition and no @keyframes: the angle is written straight to the
+   element's transform each frame.
+
+   State is read from aria-expanded, which setShow() already maintains — this file never calls
+   setShow(), so the panel's open/close logic is completely untouched. It listens to all four
+   close paths for free, because Settings button, X button, Escape and click-outside all funnel
+   through setShow(), and setShow() is the only writer of aria-expanded. */
+(function(){
+'use strict';
+/* ---- ONE config object — every knob is a single edit right here ---- */
+var GEAR = { stiffness:50, damping:10, mass:1, open:180, closed:0, eps:0.5 };
+/* the SAME rest test the 4AU/4AV icon animations use, plus the saved user preference that the
+   Settings panel already exposes (sv_set_reduceMotion). Either one => snap, never animate. */
+function reduced(){
+  try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true }catch(e){}
+  try{ if(localStorage.getItem('sv_set_reduceMotion')==='true') return true }catch(e){}
+  return false;
+}
+
+var btn = document.getElementById('setBtn');
+var svg = btn && btn.querySelector('.ic svg');
+if(!btn || !svg) return;
+
+/* spin about the glyph's own centre. The default transform-box is the SVG view-box, so 50% 50%
+   resolves to (12,12) — the gear's centre — and the rotated teeth still sit inside the 18px box
+   (max glyph radius ~10.4/24*18 = 7.8px < 9px), so nothing is clipped. */
+svg.style.transformOrigin = '50% 50%';
+svg.style.willChange = 'transform';
+
+var angle = 0, vel = 0, target = 0, raf = 0, last = 0;
+
+function paint(){ svg.style.transform = 'rotate(' + angle + 'deg)' }
+
+/* the whole spring, written out so the arithmetic is auditable. State is (angle, vel);
+   a = ( -k*(angle - target) - c*vel ) / m . Classic RK4 over the frame's dt — with the brief's
+   constants this gives the expected peak of ~187.8deg at ~0.63s and a 0.5deg settle at ~1.03s. */
+function accel(a, v){ return (-GEAR.stiffness * (a - target) - GEAR.damping * v) / GEAR.mass }
+function integrate(dt){
+  var k1x = vel,                  k1v = accel(angle, vel);
+  var k2x = vel + dt/2*k1v,       k2v = accel(angle + dt/2*k1x, vel + dt/2*k1v);
+  var k3x = vel + dt/2*k2v,       k3v = accel(angle + dt/2*k2x, vel + dt/2*k2v);
+  var k4x = vel + dt*k3v,         k4v = accel(angle + dt*k3x,     vel + dt*k3v);
+  angle += dt/6 * (k1x + 2*k2x + 2*k3x + k4x);
+  vel   += dt/6 * (k1v + 2*k2v + 2*k3v + k4v);
+}
+
+/* ONE rAF loop. It is started only by a target change and stops the moment the spring is at
+   rest, so no frame is scheduled while the gear sits still — including at page load. */
+function frame(now){
+  raf = 0;
+  if(!last) last = now;
+  var dt = (now - last) / 1000; last = now;
+  if(dt > 0.1) dt = 0.1;              /* a backgrounded tab must not teleport the gear */
+  integrate(dt);
+  paint();
+  if(Math.abs(angle - target) < GEAR.eps && Math.abs(vel) < GEAR.eps){
+    angle = target; vel = 0; paint();  /* land exactly, then stop: no frame is re-queued */
+    return;
+  }
+  raf = requestAnimationFrame(frame);
+}
+function kick(){ if(raf) return; last = 0; raf = requestAnimationFrame(frame) }
+
+/* the ONLY entry point: an aria-expanded change (written by setShow) becomes a spin. */
+function sync(){
+  var open = btn.getAttribute('aria-expanded') === 'true';
+  var next = open ? GEAR.open : GEAR.closed;
+  if(next === target) return;
+  target = next;
+  if(reduced()){                       /* reduced motion: snap, never animate */
+    angle = target; vel = 0; paint();
+    if(raf){ cancelAnimationFrame(raf); raf = 0 }
+    return;
+  }
+  kick();
+}
+
+/* setShow() writes aria-expanded synchronously, so the observer callback runs before the next
+   paint and the very first visible frame already shows the gear turning. */
+try{ new MutationObserver(sync).observe(btn, { attributes:true, attributeFilter:['aria-expanded'] }) }catch(e){}
+
+/* static at load: seed from the attribute, paint once, and never start the loop. */
+target = btn.getAttribute('aria-expanded') === 'true' ? GEAR.open : GEAR.closed;
+angle = target;
+paint();
 })();
 </script>
 
