@@ -5813,5 +5813,18 @@ paint();
 })();
 </script>
 
+<style id="v4ayhitcss">
+/* 4AY — make the search-dropdown row highlight clearly visible on mouse hover and on
+   arrow-key navigation. #shist's own background is var(--panel2) and the previous .on rule
+   (line ~1198) painted the SAME colour, so the highlighted row was invisible; hover
+   (var(--panel)) was too subtle to read. This block is appended as the LAST stylesheet, so it
+   wins the equal-specificity tie by source order and edits no existing rule. */
+#shist .shr:hover,
+#shist .shr.on{
+  background:linear-gradient(90deg,rgba(var(--amb),.18),rgba(var(--amb2),.12));
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);
+}
+#shist .shr.on .x{opacity:1}
+</style>
 </body>
 </html>
