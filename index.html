@@ -457,7 +457,7 @@ function rowHTML(it){
     <div class="rt"><img loading="lazy" src="${esc(thumb(it,THUMB_ROW))}" onerror="this.style.display='none'">
       <div class="ov"><span class="ic">${ic('i-play')}</span></div></div>
     <div class="rm"><div class="rtitle">${esc(it.title)}</div><div class="rsub">${esc(subOf(it))}</div></div>
-    <div class="rr">${favs[it.id]?`<span class="likedH">${ic('i-heart')}</span>`:''}
+    <div class="rr"><button class="favh${favs[it.id]?' on':''}" type="button" data-fav="${esc(it.id)}" aria-label="${favs[it.id]?'Remove from Liked music':'Add to Liked music'}"><span class="ic">${ic(favs[it.id]?'i-heart':'i-heart-o')}</span></button>
     <button class="dots" data-menu="${esc(it.id)}"><span class="ic">${ic('i-dots')}</span></button></div></div>`;
 }
 function listHTML(items){return `<div class="list">${(items||[]).map(rowHTML).join('')}</div>`}
@@ -2419,7 +2419,7 @@ renderQueue = function(){
       '<div class="rm"><div class="rtitle">'+esc(x.title)+'</div>'+
         '<div class="rsub">'+(isCur?'<span class="np">Now playing</span> · ':'')+A+
           (x.duration ? (A ? ' • ' : '')+esc(x.duration) : '')+'</div></div>'+
-      '<div class="rr"><button class="dots" data-menu="'+esc(x.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
+      '<div class="rr">'+'<button class="favh'+(favs[x.id]?' on':'')+'" type="button" data-fav="'+esc(x.id)+'" aria-label="'+(favs[x.id]?'Remove from Liked music':'Add to Liked music')+'"><span class="ic">'+ic(favs[x.id]?'i-heart':'i-heart-o')+'</span></button>'+'<button class="dots" data-menu="'+esc(x.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
   }).join('');
   register(queue);
   if($('#pvFab')) syncFab();
@@ -2565,7 +2565,7 @@ function artSongRowHTML(it){
       '<div class="rsub">'+artistLinksHTML(it)+'</div></div>'+
     '<div class="artalb">'+esc(it.sub||'')+'</div>'+
     '<div class="artdur">'+esc(it.duration||'')+'</div>'+
-    '<div class="rr">'+(favs[it.id] ? '<span class="likedH">'+ic('i-heart')+'</span>' : '')+
+    '<div class="rr">'+'<button class="favh'+(favs[it.id]?' on':'')+'" type="button" data-fav="'+esc(it.id)+'" aria-label="'+(favs[it.id]?'Remove from Liked music':'Add to Liked music')+'"><span class="ic">'+ic(favs[it.id]?'i-heart':'i-heart-o')+'</span></button>'+
     '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
 }
 function artSongsHTML(items){ return '<div class="list">'+(items||[]).map(artSongRowHTML).join('')+'</div>' }
@@ -2579,7 +2579,7 @@ rowHTML = function(it){
     '<div class="rt"><img loading="lazy" src="'+esc(thumb(it,THUMB_ROW))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="ic">'+ic('i-play')+'</span></div></div>'+
     '<div class="rm"><div class="rtitle">'+esc(it.title)+'</div><div class="rsub">'+subHTML(it)+'</div></div>'+
-    '<div class="rr">'+(favs[it.id] ? '<span class="likedH">'+ic('i-heart')+'</span>' : '')+
+    '<div class="rr">'+'<button class="favh'+(favs[it.id]?' on':'')+'" type="button" data-fav="'+esc(it.id)+'" aria-label="'+(favs[it.id]?'Remove from Liked music':'Add to Liked music')+'"><span class="ic">'+ic(favs[it.id]?'i-heart':'i-heart-o')+'</span></button>'+
     '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
 };
 /* railCard lives in the base layer and is used by the Home rails ("Listen again",
@@ -6129,6 +6129,42 @@ body.sv-ambhome #ambGlow{--ambA:.38; --ambB:.32}   /* Home's own alpha pair — 
   }
   sync();
 })();
+</script>
+<style id="v4bdcss">
+/* ===== Wave 4BD — song-row hover hearts + wider action gap =====
+   .favh is the per-row Like toggle: hidden until the row is hovered (or focused), except a
+   LIKED song's heart is always visible. i-heart's path carries class .f → fills with currentColor,
+   so .favh.on colours it accent; i-heart-o stays an outline stroke. The .rr gap widens from 2px
+   to 8px so the heart sits clear of the ⋮ (the Rule is an override of the base .rr above). */
+.favh{padding:7px;border-radius:50%;color:var(--tx);opacity:0;transition:opacity .12s,color .12s,background .12s}
+.favh .ic{width:17px;height:17px}
+.favh:hover{background:var(--panel)}
+.row:hover .favh,.favh:focus-visible{opacity:1}
+.favh.on{color:var(--acc);opacity:1}
+.rr{display:flex;align-items:center;gap:8px;flex-shrink:0}
+</style>
+<script id="v4bdjs">
+/* ===== Wave 4BD — the ⋮ menu must close on scroll, and every song row gets a Like heart =====
+   (A) scroll does NOT bubble, so a capture-phase listener on document is REQUIRED to catch a
+       scroll inside #scroll, the Home rails, #pvQueue or #lyrScroll and hide the fixed #menu.
+       resize closes it too (the menu's fixed position goes stale). Nothing here preventDefault()s
+       or stopPropagation()s. openMenu/hideMenu and the older layers are NOT touched.
+   (B) ONE delegated capture-phase click handler for [data-fav] hearts. stopPropagation() at the
+       document capture stage stops the click reaching the row's [data-play]/[data-artrow] handler,
+       the base bubble handler, bindQueueClicks (#pvQueue) and the artist/album handlers — so the
+       heart toggles Like without playing the row or opening ⋮. toggleFav() repaints Home/#dynSec;
+       the direct innerHTML/class update covers the artist rows and the queue, which it does not. */
+document.addEventListener('scroll', function(){ var m=document.getElementById('menu'); if(m && !m.hidden) m.hidden=true; }, { capture:true, passive:true });
+window.addEventListener('resize', function(){ var m=document.getElementById('menu'); if(m && !m.hidden) m.hidden=true; }, { passive:true });
+document.addEventListener('click', function(e){
+  var b = e.target && e.target.closest ? e.target.closest('[data-fav]') : null; if(!b) return;
+  e.preventDefault(); e.stopPropagation();
+  var it = idItem[b.getAttribute('data-fav')]; if(!it) return;
+  toggleFav(it);
+  b.classList.toggle('on', !!favs[it.id]);
+  b.innerHTML = '<span class="ic">' + ic(favs[it.id] ? 'i-heart' : 'i-heart-o') + '</span>';
+  if(b.closest('#pvQueue') && typeof renderQueue === 'function') renderQueue();
+}, true);
 </script>
 </body>
 </html>
