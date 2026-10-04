@@ -6081,5 +6081,54 @@ document.addEventListener('click', function(e){
   if(m && !m.hidden){ try{ hideMenu() }catch(err){} }
 }, true);
 </script>
+<style id="v4ambcss">
+/* ===== Wave 4BC — album-colour ambient wash on EVERY view (additive layer) =====
+   #ambGlow is a THIRD negative-z layer, appended after #theme and #waveCv, so it paints above both:
+   on Home it tints over the canvas, on every other view it sits above the dimmed canvas and #theme.
+   STATIC — no animation, no rAF loop; the only motion is the opacity fade, which the v2css
+   prefers-reduced-motion reset already kills. #theme, setTheme() and #waveCv are NOT touched.
+   The two custom properties in body.sv-ambhome are the ONLY tuning knobs (Home's alpha pair). */
+#ambGlow{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:0;
+  transition:opacity .5s ease;
+  --ambA:.50; --ambB:.42;
+  background:
+    radial-gradient(900px 620px at 8% -8%, rgba(var(--amb),var(--ambA)), transparent 62%),
+    radial-gradient(820px 580px at 108% 4%, rgba(var(--amb),var(--ambB)), transparent 58%);}
+body.sv-amb #ambGlow{opacity:1}
+body.sv-ambhome #ambGlow{--ambA:.38; --ambB:.32}   /* Home's own alpha pair — the ONLY tuning knobs */
+</style>
+<script id="v4ambjs">
+/* ===== Wave 4BC — show the wash only when a track is loaded =====
+   Additive: nothing here reads or writes #theme, #waveCv or --amb; it only toggles two body
+   classes from state the app already keeps (nowItem() + #homeSec[hidden]). sync() is driven by
+   the app's OWN repaint path (paintControls — the audio 'play'/'pause' listeners and every queue
+   change call it) plus one MutationObserver on #homeSec, which every page switch flips. No loop. */
+(function(){
+  var g=document.createElement('div');
+  g.id='ambGlow';
+  g.setAttribute('aria-hidden','true');
+  document.body.appendChild(g);            /* LAST element of body → above #theme and #waveCv */
+  var home=document.getElementById('homeSec');
+  function songLoaded(){ return (typeof nowItem==='function') && !!nowItem() }
+  function onHome(){ return !!(home && !home.hidden) }
+  function sync(){
+    try{
+      var s=songLoaded();
+      document.body.classList.toggle('sv-amb',s);
+      document.body.classList.toggle('sv-ambhome',s&&onHome());
+    }catch(e){}
+  }
+  /* chain onto the CURRENT paintControls (its other layers already wrapped it) — call theirs FIRST */
+  var _pc=window.paintControls;
+  if(typeof _pc==='function'){
+    window.paintControls=function(){ var r=_pc.apply(this,arguments); try{ sync() }catch(e){} return r };
+  }
+  /* every page switch flips #homeSec.hidden, so ONE observer covers Home ⇄ every other view */
+  if(home && window.MutationObserver){
+    try{ new MutationObserver(sync).observe(home,{attributes:true,attributeFilter:['hidden']}) }catch(e){}
+  }
+  sync();
+})();
+</script>
 </body>
 </html>
