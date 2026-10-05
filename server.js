@@ -1320,6 +1320,22 @@ app.get('/api/system', (req, res) => {
   res.json({ version, ytdlp: YTDLP, ytdlpFound: fs.existsSync(YTDLP) });
 });
 
+/* ================= fonts (Wave 4BG — read-only, files live in ./fonts) ================= */
+const FONT_DIR = path.join(__dirname, 'fonts');
+const FONT_MIME = { '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2' };
+app.get('/fonts/:file', (req, res) => {
+  const name = String(req.params.file || '');
+  const ext = path.extname(name).toLowerCase();
+  if (!FONT_MIME[ext] || !/^[A-Za-z0-9._-]+$/.test(name) || name.includes('..')) return res.status(404).end();
+  const full = path.join(FONT_DIR, name);
+  if (!full.startsWith(FONT_DIR + path.sep)) return res.status(404).end();
+  let st; try { st = fs.statSync(full); } catch (e) { return res.status(404).end(); }
+  if (!st.isFile()) return res.status(404).end();
+  res.setHeader('Content-Type', FONT_MIME[ext]);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(full);
+});
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 const srv = app.listen(3000, '127.0.0.1', () => console.log('🎵 Svara → http://localhost:3000'));
 // Wave 4AD: warm the memoised Innertube client ONCE after the server is up. Measured:
