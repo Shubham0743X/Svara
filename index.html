@@ -3240,8 +3240,8 @@ function topResultAction(mod, id, name){
 function paintSearch(){
   /* 4W: type=all is YouTube's raw answer and can carry playlists/podcasts Svara can neither play
      nor open. They are dropped HERE, at render time, so the API stays an honest mirror and no dead
-     row or “not playable” pill can appear. The header counts only the VISIBLE rows. */
-  var vis = S.items.filter(function(it){ return ((it && it.kind) || 'track') !== 'other' });
+     row or “not playable” pill can appear. 4BF: label 'Video' rows (YouTube video uploads) are dropped too. The header counts only the VISIBLE rows. */
+  var vis = S.items.filter(function(it){ if(((it && it.kind) || 'track') === 'other') return false; if(it && it.label === 'Video') return false; /* 4BF: YouTube video uploads are not songs */ return true; });
   var html = topResultHTML(vis) +
              '<div class="list">'+vis.map(searchRowHTML).join('')+'</div>'+
              /* 4AE: a zero-row result must say WHICH zero it is — still paging, or honestly
