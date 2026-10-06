@@ -460,7 +460,7 @@ function rowHTML(it){
     <div class="rr"><button class="favh${favs[it.id]?' on':''}" type="button" data-fav="${esc(it.id)}" aria-label="${favs[it.id]?'Remove from Liked music':'Add to Liked music'}"><span class="ic">${ic(favs[it.id]?'i-heart':'i-heart-o')}</span></button>
     <button class="dots" data-menu="${esc(it.id)}"><span class="ic">${ic('i-dots')}</span></button></div></div>`;
 }
-function listHTML(items){return `<div class="list">${(items||[]).map(rowHTML).join('')}</div>`}
+function listHTML(items,extraClass){return `<div class="list${extraClass?' '+extraClass:''}">${(items||[]).map(rowHTML).join('')}</div>`}
 function railCard(it,ctx){
   const cur=nowItem()&&nowItem().id===it.id;
   const ph=thumb(it,THUMB_RAIL)?'':`<div class="ph"><span class="ic">${ic('i-disc')}</span></div>`;
@@ -516,7 +516,7 @@ async function renderHome(){
   quickList=scored;
   if(!none){
     if(recent.length)h+=`<div class="sec"><h2>Listen again</h2>${railHTML(recent,'la')}</div>`;
-    h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button></h2>${listHTML(quickList)}</div>`;
+    h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button></h2>${listHTML(quickList,'qpGrid')}</div>`;
     if(arts.length)h+=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading your albums…</div>'}</div></div>`;
     h+=`<div class="sec"><h2>Surprise me<button class="go" id="diceBig">🎲 Play a radio from your taste</button></h2><div class="empty" style="padding:6px 2px">Your radio never jumps between languages — it seeds from what you listen to most.</div></div>`;
   }else{
@@ -7453,5 +7453,251 @@ void main() {
 #setPanel .setHint{font-size:12.5px}
 #setPanel .setVal{font-size:12.5px}
 </style>
+<style id="v4glasscss">
+/* ================= Wave 4BO — glass buttons + Wave 4BP — Quick picks grid =================
+   ONE block, appended after every existing v4* layer. Behaviour: #v4glassjs.
+   Ported from the React glass-button component, DARK variant. The React markup (a wrap div +
+   an inner button + a .glass-button-shadow div) is NOT reproduced: per the wave DOM rule the
+   glass class goes on the EXISTING button and both decorative layers are ::before/::after —
+   pointer-events:none, negative z-index, isolation:isolate — so they always paint BEHIND the
+   icon and the label, nothing is wrapped and no innerHTML / child is ever touched. The outer
+   drop shadow lives in the button's own box-shadow instead of an appended .glass-button-shadow
+   element, for the same reason.
+   Colour maths: color-mix() (Chromium 111+) with rgba() fallbacks — NOT oklch(from …).
+   Tokens: --gf* = light text (--glass-fg #f4f4f7) at N% ; --gb* = dark surface (--glass-bg
+   #0f0f15) at N%.  The selector actually used is .glb (full glass) / .glb-l (light glass) —
+   i.e. everywhere the component said .glass-button. */
+
+@property --angle-1{ syntax:"<angle>"; inherits:false; initial-value:-75deg; }
+@property --angle-2{ syntax:"<angle>"; inherits:false; initial-value:-45deg; }
+
+:root{
+  --glass-fg:#f4f4f7;                 /* app light text (--tx) */
+  --glass-bg:#0f0f15;                 /* app dark surface (--panel) */
+  --glass-shine:var(--gb50);          /* DARK-THEME SHEEN — flip to var(--gf15) for a brighter sweep */
+  --glb-bw:clamp(1px,.0625em,4px);    /* the component's --border-width */
+  --glb-time:.4s;                     /* the component's --anim-time */
+  --glb-ease:cubic-bezier(.25,1,.5,1);/* the component's --anim-ease */
+  /* rgba() fallbacks — replaced by color-mix() in the @supports block directly below */
+  --gf5:rgba(244,244,247,.05);
+  --gf10:rgba(244,244,247,.1);
+  --gf12:rgba(244,244,247,.12);
+  --gf15:rgba(244,244,247,.15);
+  --gf20:rgba(244,244,247,.2);
+  --gf25:rgba(244,244,247,.25);
+  --gf50:rgba(244,244,247,.5);
+  --gb5:rgba(15,15,21,.05);
+  --gb20:rgba(15,15,21,.2);
+  --gb50:rgba(15,15,21,.5);
+  --gb75:rgba(15,15,21,.75);
+}
+@supports (color:color-mix(in srgb,red 50%,transparent)){
+  :root{
+    --gf5:color-mix(in srgb,var(--glass-fg) 5%,transparent);
+    --gf10:color-mix(in srgb,var(--glass-fg) 10%,transparent);
+    --gf12:color-mix(in srgb,var(--glass-fg) 12%,transparent);
+    --gf15:color-mix(in srgb,var(--glass-fg) 15%,transparent);
+    --gf20:color-mix(in srgb,var(--glass-fg) 20%,transparent);
+    --gf25:color-mix(in srgb,var(--glass-fg) 25%,transparent);
+    --gf50:color-mix(in srgb,var(--glass-fg) 50%,transparent);
+    --gb5:color-mix(in srgb,var(--glass-bg) 5%,transparent);
+    --gb20:color-mix(in srgb,var(--glass-bg) 20%,transparent);
+    --gb50:color-mix(in srgb,var(--glass-bg) 50%,transparent);
+    --gb75:color-mix(in srgb,var(--glass-bg) 75%,transparent);
+  }
+}
+
+/* ---------------- FULL GLASS (.glb) — the component's .glass-button ---------------- */
+.glb{
+  position:relative;
+  z-index:0;
+  isolation:isolate;
+  -webkit-tap-highlight-color:transparent;
+  border-color:transparent;
+  -webkit-backdrop-filter:blur(clamp(1px,.125em,4px));
+  backdrop-filter:blur(clamp(1px,.125em,4px));
+  background:linear-gradient(-75deg,var(--gb5),var(--gb20),var(--gb5));
+  box-shadow:inset 0 .125em .125em var(--gf5),inset 0 -.125em .125em var(--gb50),0 .25em .125em -.125em var(--gf20),0 0 .1em .25em inset var(--gb20);
+  transition:background var(--glb-time) var(--glb-ease),box-shadow var(--glb-time) var(--glb-ease),transform var(--glb-time) var(--glb-ease),border-color var(--glb-time) var(--glb-ease);
+}
+.glb:hover,.glb.is-hover{
+  -webkit-backdrop-filter:blur(.01em);
+  backdrop-filter:blur(.01em);
+  box-shadow:inset 0 .125em .125em var(--gf5),inset 0 -.125em .125em var(--gb50),0 .15em .05em -.1em var(--gf25),0 0 .05em .1em inset var(--gb50);
+  transform:scale(.975);
+}
+.glb:active,.glb.is-active{
+  box-shadow:inset 0 .125em .125em var(--gf5),inset 0 -.125em .125em var(--gb50),0 .125em .125em -.125em var(--gf20),0 0 .1em .25em inset var(--gb20),0 .225em .05em var(--gf5),inset 0 .25em .05em var(--gf15);
+}
+/* the sheen (component .glass-button-text:after) — ::before, so it paints UNDER the ring */
+.glb::before{
+  content:"";position:absolute;inset:calc(var(--glb-bw)/2);border-radius:inherit;pointer-events:none;z-index:-1;
+  background:linear-gradient(var(--angle-2),transparent 0%,var(--glass-shine) 40% 50%,transparent 55%);
+  background-size:200% 200%;background-position:0%;mix-blend-mode:screen;overflow:clip;
+  transition:background-position calc(var(--glb-time)*1.25) var(--glb-ease),--angle-2 calc(var(--glb-time)*1.25) var(--glb-ease);
+}
+.glb:hover::before,.glb.is-hover::before{background-position:25%}
+.glb:active::before,.glb.is-active::before{--angle-2:-15deg;background-position:50% 15%}
+/* the chrome ring (component .glass-button:after) — ::after, so it paints OVER the sheen */
+.glb::after{
+  content:"";position:absolute;inset:0;box-sizing:border-box;padding:var(--glb-bw);border-radius:inherit;pointer-events:none;z-index:-1;
+  background:conic-gradient(from var(--angle-1) at 50% 50%,var(--gf50) 0%,transparent 5% 40%,var(--gf50) 50%,transparent 60% 95%,var(--gf50) 100%),linear-gradient(180deg,var(--gb50),var(--gb50));
+  box-shadow:inset 0 0 0 calc(var(--glb-bw)/2) var(--gb50);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  transition:background var(--glb-time) var(--glb-ease),--angle-1 .5s ease;
+}
+.glb:hover::after,.glb.is-hover::after{--angle-1:-125deg}
+.glb:active::after,.glb.is-active::after{--angle-1:-75deg}
+
+/* ---------------- LIGHT GLASS (.glb-l) — tiny icon controls + dense sidebar rows ----------------
+   No backdrop-filter (the wave perf rule: blur is for buttons, and these are many), no hover
+   scale — a soft ring that brightens on hover plus a hover/active wash. */
+.glb-l{
+  position:relative;z-index:0;isolation:isolate;-webkit-tap-highlight-color:transparent;
+  transition:background .2s ease,box-shadow .2s ease;
+}
+.glb-l::after{
+  content:"";position:absolute;inset:0;box-sizing:border-box;padding:var(--glb-bw);border-radius:inherit;pointer-events:none;z-index:-1;
+  background:conic-gradient(from var(--angle-1) at 50% 50%,var(--gf25) 0%,transparent 8% 42%,var(--gf25) 50%,transparent 58% 92%,var(--gf25) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  opacity:.55;
+  transition:opacity .2s ease,--angle-1 .5s ease;
+}
+.glb-l:hover,.glb-l.is-hover{background:var(--gf10)}
+.glb-l:hover::after,.glb-l.is-hover::after{opacity:1;--angle-1:-125deg}
+.glb-l:active,.glb-l.is-active{background:var(--gf20)}
+
+/* ---------------- per-target shape + state preservation ---------------- */
+/* search row: the ring replaces the row border; focus keeps the accent border underneath */
+.srch.glb:focus-within{border-color:var(--acc2)}
+/* SELECTED filter chip stays clearly distinct: a held, brighter glow (only one is ever .on) */
+#searchFilters .fchip.glb.on{
+  background:linear-gradient(180deg,var(--gf20),var(--gf10));
+  border-color:transparent;
+  box-shadow:inset 0 0 0 1px var(--gf25),0 0 14px var(--gf12),inset 0 -.125em .125em var(--gb50);
+}
+#searchFilters .fchip.glb.on::after{--angle-1:-125deg;opacity:1}
+/* sidebar / library rows keep their rectangle radius and their existing .on fill */
+.navit.glb-l{border-radius:10px}
+.navit.glb-l.on,.plrow.glb-l.on{background:var(--panel2)}
+/* every round icon control keeps its circle */
+.dots.glb-l,.favh.glb-l,.tic.glb-l,.mbtn.glb-l,.pbtn.glb-l,.lyrbtn.glb-l,.pact.glb-l,#pvFab.glb-l,#setPanel .setX.glb-l,#aboutCard .abX.glb-l,.pvmin.glb-l{border-radius:999px}
+/* the About-card link buttons are 10px rectangles, not pills */
+#aboutCard .abBtn.glb{border-radius:10px}
+
+/* ---------------- graphics level (window.svaraGfx / html[data-gfx]) ---------------- */
+html[data-gfx="medium"] .glb{-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+html[data-gfx="low"] .glb,html[data-gfx="reduced"] .glb{
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  background:var(--gf5);border-color:var(--gf20);box-shadow:none;
+  transition:background .15s ease,border-color .15s ease;
+}
+html[data-gfx="low"] .glb::before,html[data-gfx="low"] .glb::after,
+html[data-gfx="reduced"] .glb::before,html[data-gfx="reduced"] .glb::after,
+html[data-gfx="low"] .glb-l::after,html[data-gfx="reduced"] .glb-l::after{display:none}
+html[data-gfx="low"] .glb:hover,html[data-gfx="reduced"] .glb:hover,
+html[data-gfx="low"] .glb.is-hover,html[data-gfx="reduced"] .glb.is-hover{background:var(--gf10);transform:none}
+html[data-gfx="low"] .glb:active,html[data-gfx="reduced"] .glb:active,
+html[data-gfx="low"] .glb.is-active,html[data-gfx="reduced"] .glb.is-active{transform:none}
+html[data-gfx="low"] .glb-l:hover,html[data-gfx="low"] .glb-l.is-hover,
+html[data-gfx="reduced"] .glb-l:hover,html[data-gfx="reduced"] .glb-l.is-hover{background:var(--gf10)}
+
+/* ---------------- prefers-reduced-motion -> static glass, no motion ---------------- */
+@media (prefers-reduced-motion:reduce){
+  .glb,.glb::before,.glb::after,.glb-l,.glb-l::after{transition:none !important;animation:none !important}
+  .glb:hover,.glb.is-hover,.glb:active,.glb.is-active{transform:none}
+  .glb:hover::after,.glb.is-hover::after,.glb:active::after,.glb.is-active::after{--angle-1:-75deg}
+  .glb:hover::before,.glb.is-hover::before,.glb:active::before,.glb.is-active::before{--angle-2:-45deg;background-position:0%}
+}
+
+/* ---------------- (hover:none) and (pointer:coarse) — touch: pin both angles, no sweep ---------------- */
+@media (hover:none) and (pointer:coarse){
+  .glb::after,.glb:hover::after,.glb:active::after,.glb.is-hover::after,.glb.is-active::after{--angle-1:-75deg}
+  .glb::before,.glb:active::before,.glb.is-active::before{--angle-2:-45deg}
+  .glb-l::after,.glb-l:hover::after{--angle-1:-75deg}
+}
+
+/* ---------------- WAVE 4BP — Home Quick picks: 3-column translucent grid (HOME ONLY) ----------------
+   Scoped to .list.qpGrid, i.e. the extra class listHTML() only adds on the Home Quick picks line.
+   Search results, album, artist, library, playlist and the queue stay full-width .list. */
+.list.qpGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.list.qpGrid .row{
+  min-width:0;
+  padding:8px;
+  border-radius:14px;
+  background:linear-gradient(180deg,var(--gf5),var(--gb50));
+  border:1px solid var(--gf12);
+  box-shadow:inset 0 1px 0 var(--gf5);
+  transition:background .18s ease,border-color .18s ease;
+}
+.list.qpGrid .row:hover{background:linear-gradient(180deg,var(--gf10),var(--gb75));border-color:var(--gf20)}
+.list.qpGrid .row.cur{background:linear-gradient(180deg,var(--gf15),var(--gf5));border-color:var(--gf20)}
+.list.qpGrid .row .rm{min-width:0}
+.list.qpGrid .row .rtitle,.list.qpGrid .row .rsub{overflow:hidden;text-overflow:ellipsis}
+@media(max-width:1000px){.list.qpGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:660px){.list.qpGrid{grid-template-columns:minmax(0,1fr)}}
+</style>
+<script id="v4glassjs">
+/* ================= Wave 4BO — glass button enhancer =================
+   Marks the EXISTING buttons with .glb (full glass) or .glb-l (light glass). It NEVER wraps an
+   element, NEVER replaces innerHTML and NEVER moves/creates a child — every decoration is a
+   ::before/::after from #v4glasscss. Click handlers are untouched (no capture/stopPropagation/
+   preventDefault), so no handler is delayed by an animation.
+   FULL  = pill / standalone buttons that can carry the full chrome.
+   LITE  = tiny icon-only controls and dense sidebar rows (no backdrop-filter).
+   SKIP  = anything that would lose a LIVE colour: #go keeps its solid --grad button (the stated
+           default), #playBtn / #pvPlay / .mbtn.main / .art-acts .pact (Play all) / .topres .trbtn
+           keep their album-coloured fill, and the two liquid-metal buttons (#newPl and
+           #setPanel .setAbout) keep their chrome ring. */
+(function(){
+'use strict';
+var FULL='.chip[data-chip],#searchFilters .fchip,.srch,.art-back,.sec h2 .go,.pvhead .go,#aboutCard .abBtn,#setPanel .setAct,.lyrseg button,.lyrchip button,.art-acts .pact.ghost,.topres .trbtn.ghost';
+var LITE='.navit,.plrow,.tic,.dots,.favh,.pact,.mbtn,.pbtn,.lyrbtn,.rail .ov .pb,#pvFab,#setPanel .setX,#aboutCard .abX,.pvmin';
+var SKIP='#go,.gobtn,#newPl,#setPanel .setAbout,.lm,#playBtn,#pvPlay,.mbtn.main,.art-acts .pact:not(.ghost),.topres .trbtn:not(.ghost),.np button,#npGo';
+function mark(){
+  var els=document.querySelectorAll(FULL+','+LITE);
+  for(var i=0;i<els.length;i++){
+    var el=els[i];
+    if(el.__glb)continue;
+    if(el.matches(SKIP))continue;
+    el.__glb=1;
+    try{ el.classList.add(el.matches(FULL)?'glb':'glb-l') }catch(e){}
+  }
+}
+var raf=0;
+function schedule(){ if(raf)return; raf=requestAnimationFrame(function(){ raf=0; try{mark()}catch(e){} }) }
+try{ new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true}) }catch(e){}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule); else schedule();
+
+/* :has() fallback — ONLY used when the engine has no :has(). Native :hover/:active already drive
+   every state; this just mirrors them onto .is-hover / .is-active (which the CSS also listens for). */
+var hasHas=false;
+try{ hasHas=CSS.supports('selector(:has(*))') }catch(e){}
+if(!hasHas){
+  var near=function(e){ return (e.target&&e.target.closest)?e.target.closest('.glb,.glb-l'):null };
+  var over=function(e){ var b=near(e); if(b&&!b.__hv){ b.__hv=1; b.classList.add('is-hover') } };
+  var out =function(e){ var b=near(e); if(b&&b.__hv){ b.__hv=0; b.classList.remove('is-hover') } };
+  var dn  =function(e){ var b=near(e); if(b)b.classList.add('is-active') };
+  var up  =function(e){ var b=near(e); if(b)b.classList.remove('is-active') };
+  document.addEventListener('pointerover',over,true);
+  document.addEventListener('pointerout',out,true);
+  document.addEventListener('pointerdown',dn,true);
+  document.addEventListener('pointerup',up,true);
+  document.addEventListener('pointercancel',up,true);
+}
+
+/* one line of engine facts for the wave log — no dependency, no side effect */
+try{
+  var ua=navigator.userAgent, ch=(ua.split('Chrome/')[1]||'').split(' ')[0];
+  console.log('[v4glass] Chromium '+ch+' · color-mix '+CSS.supports('color','color-mix(in srgb,red 50%,transparent)')+' · :has '+hasHas+' · oklch-from '+CSS.supports('color','oklch(from #fff l c h)')+' · backdrop-filter '+(CSS.supports('backdrop-filter','blur(2px)')||CSS.supports('-webkit-backdrop-filter','blur(2px)'))+' · @property '+(typeof CSS.registerProperty==='function'));
+}catch(e){}
+})();
+</script>
 </body>
 </html>
