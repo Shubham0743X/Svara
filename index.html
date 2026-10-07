@@ -43,7 +43,7 @@ img{display:block}
 #q{flex:1;background:none;border:none;outline:none;color:var(--tx);padding:8px 2px;font-size:14px}
 .gobtn{background:var(--grad);border-radius:999px;padding:8px 16px;font-size:13px;font-weight:700;color:rgb(var(--on-acc))}
 .gobtn:hover{filter:brightness(1.12)}
-.topr{display:flex;align-items:center;gap:2px;margin-left:auto}
+.topr{display:flex;align-items:center;gap:8px;margin-left:auto}
 .tic{padding:8px;border-radius:50%}
 .tic:hover{background:var(--panel2)}
 .tic .ic{width:18px;height:18px}
@@ -507,7 +507,7 @@ var homeGen=0;
 async function renderHome(){
   var gen=++homeGen;
   const sec=$('#homeSec');
-  const recent=topRecent(12),scored=topScored(10),arts=topArtists(3);
+  const recent=topRecent(12),scored=topScored(18),arts=topArtists(3);
   /* 4AX: ADDENDUM order — Relax, Romance, Feel Good, Party, Energize, Focus first, then the
      remaining existing chips (Sad, Workout). Same markup/behaviour; clicking still runs
      doSearch(label+' songs') as before. */
@@ -834,7 +834,7 @@ document.addEventListener('click',e=>{
   const chip=e.target.closest('[data-chip]');
   if(chip){doSearch(chip.dataset.chip+' songs')}
   const qp=e.target.closest('[data-qp]');
-  if(qp){const s=topScored(10);if(s.length)playList(s,0,true)}
+  if(qp){const s=topScored(18);if(s.length)playList(s,0,true)}
   if(e.target.closest('#diceBig')){diceRadio()}
 });
 /* rail data-i fix: cards in same wrap with same id possible; fine */
@@ -7583,11 +7583,9 @@ void main() {
   box-shadow:inset 0 0 0 1px var(--gf25),0 0 14px var(--gf12),inset 0 -.125em .125em var(--gb50);
 }
 #searchFilters .fchip.glb.on::after{--angle-1:-125deg;opacity:1}
-/* sidebar / library rows keep their rectangle radius and their existing .on fill */
-.navit.glb-l{border-radius:10px}
-.navit.glb-l.on,.plrow.glb-l.on{background:var(--panel2)}
+/* 4BS: sidebar nav (.navit) and library rows (.plrow) no longer carry glass; their base rules in the head CSS are untouched. */
 /* every round icon control keeps its circle */
-.dots.glb-l,.favh.glb-l,.tic.glb-l,.mbtn.glb-l,.pbtn.glb-l,.lyrbtn.glb-l,.pact.glb-l,#pvFab.glb-l,#setPanel .setX.glb-l,#aboutCard .abX.glb-l,.pvmin.glb-l{border-radius:999px}
+.dots.glb-l,.tic.glb-l,.mbtn.glb-l,.pbtn.glb-l,.lyrbtn.glb-l,.pact.glb-l,#setPanel .setX.glb-l,#aboutCard .abX.glb-l{border-radius:999px}
 /* the About-card link buttons are 10px rectangles, not pills */
 #aboutCard .abBtn.glb{border-radius:10px}
 
@@ -7657,8 +7655,8 @@ html[data-gfx="reduced"] .glb-l:hover,html[data-gfx="reduced"] .glb-l.is-hover{b
            #setPanel .setAbout) keep their chrome ring. */
 (function(){
 'use strict';
-var FULL='.chip[data-chip],#searchFilters .fchip,.srch,.art-back,.sec h2 .go,.pvhead .go,#aboutCard .abBtn,#setPanel .setAct,.lyrseg button,.lyrchip button,.art-acts .pact.ghost,.topres .trbtn.ghost';
-var LITE='.navit,.plrow,.tic,.dots,.favh,.pact,.mbtn,.pbtn,.lyrbtn,.rail .ov .pb,#pvFab,#setPanel .setX,#aboutCard .abX,.pvmin';
+var FULL='.chip[data-chip],#searchFilters .fchip,.srch,.art-back,.sec h2 .go,#aboutCard .abBtn,#setPanel .setAct,.lyrseg button,.lyrchip button,.art-acts .pact.ghost,.topres .trbtn.ghost';
+var LITE='.tic,.dots,.pact:not(#pvFav):not(#pvMenu),.mbtn:not(#mFav),.pbtn,.lyrbtn,.rail .ov .pb,#setPanel .setX,#aboutCard .abX';
 var SKIP='#go,.gobtn,#newPl,#setPanel .setAbout,.lm,#playBtn,#pvPlay,.mbtn.main,.art-acts .pact:not(.ghost),.topres .trbtn:not(.ghost),.np button,#npGo';
 function mark(){
   var els=document.querySelectorAll(FULL+','+LITE);
