@@ -7697,5 +7697,191 @@ try{
 }catch(e){}
 })();
 </script>
+
+<style id="v4sbcss">
+/* Wave 4BT — left-sidebar ghost click-ripple buttons.
+   Ported from the 21st.dev RippleButton (variant ghost) spec into vanilla CSS + JS.
+   Scope: #sb .navit, #sb #plList .plrow, #sb #plList .plmenu only.
+   Explicitly NOT applied to #newPl (.newpl, keeps its 4LM liquid-metal ring) or #sbWord. */
+#sb{
+  --button-ripple-color: rgba(255, 255, 255, 0.20);
+  --ripple-duration: 600ms;
+}
+@keyframes js-ripple-animation{
+  0%  { transform: scale(0); opacity: 1; }
+  100%{ transform: scale(1); opacity: 0; }
+}
+.sb-ripple-host{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 0;
+}
+.sb-ripple{
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  background-color: var(--button-ripple-color);
+  transform: scale(0);
+  animation: js-ripple-animation var(--ripple-duration, 600ms) ease-out forwards;
+}
+/* every sidebar row button becomes a clipping, self-contained ripple host
+   (border-radius is inherited by .sb-ripple-host: 10px / 9px on rows, 50% on .plmenu) */
+#sb .navit,
+#sb #plList .plrow,
+#sb #plList .plmenu{
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* keep the icon / label / count / pin above the ripple, and never block the click path:
+   the host is a <span> with pointer-events:none, the raised children stay click-through */
+#sb .navit > *:not(.sb-ripple-host),
+#sb #plList .plrow > *:not(.sb-ripple-host),
+#sb #plList .plmenu > *:not(.sb-ripple-host){
+  position: relative;
+  z-index: 1;
+}
+</style>
+<script id="v4sbjs">
+/* Wave 4BT — ghost click-ripple for the left sidebar (#sb .navit / #plList .plrow / #plList .plmenu).
+   One delegated listener on #sb, createJsRipple geometry from the 21st.dev RippleButton (variant ghost).
+
+   THE updatePlRows() RE-RENDER TRAP:
+   the document-level [data-nav] / [data-lib] handlers (registered earlier) synchronously call
+   goHome() / openLiked() / openLikedAlbums() / openPl(), and each of those rebuilds
+   #plList.innerHTML = h on the very same click. A ripple appended here would be destroyed before
+   it ever paints on "Liked music", "Liked albums" or a playlist row. So this listener only records
+   the click geometry + the target data-attribute identity; the ripple is spawned on the next
+   animation frame against the LIVE button currently in #sb, resolved by that selector. If a repaint
+   lands while a ripple is still animating, window.updatePlRows / window.svUpdatePlRows (wrapped
+   below) and a MutationObserver on #plList re-attach the in-flight .sb-ripple-host onto the
+   matching new button instead of cutting it short. */
+(function(){
+  var sb = document.getElementById('sb');
+  if(!sb) return;
+
+  var RIPPLE_MS = 600;
+  var active = [];
+
+  function reducedMotion(){
+    try{ if(localStorage.getItem('sv_set_reduceMotion')==='true') return true }catch(e){}
+    try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true }catch(e){}
+    return false;
+  }
+  /* escape a data-attribute value for use inside a quoted attribute selector */
+  function escSel(v){
+    v = String(v);
+    try{ if(window.CSS && CSS.escape) return CSS.escape(v) }catch(e){}
+    /* last-resort fallback only: CSS.escape exists in every Chromium build Svara runs on */
+    return v.replace(/["\\]/g, function(c){ return '\\' + c });
+  }
+  /* identity of the clicked row, as a selector that survives the updatePlRows() innerHTML rewrite */
+  function identity(el){
+    if(!el || typeof el.getAttribute !== 'function') return null;
+    var v;
+    v = el.getAttribute('data-nav');    if(v) return '[data-nav="'    + escSel(v) + '"]';
+    v = el.getAttribute('data-lib');    if(v) return '[data-lib="'    + escSel(v) + '"]';
+    v = el.getAttribute('data-plmenu'); if(v) return '[data-plmenu="' + escSel(v) + '"]';
+    return null;
+  }
+  function live(sel){ try{ return sb.querySelector(sel) }catch(e){ return null } }
+
+  function dispose(rec){
+    if(rec.timer){ clearTimeout(rec.timer); rec.timer = null; }
+    if(rec.host && rec.host.parentNode) rec.host.parentNode.removeChild(rec.host);
+    var i = active.indexOf(rec); if(i >= 0) active.splice(i,1);
+  }
+  function arm(rec){ rec.timer = setTimeout(function(){ dispose(rec) }, RIPPLE_MS); }
+
+  function paint(btn, sel, clientX, clientY, detail){
+    var rect = btn.getBoundingClientRect();
+    var size = Math.max(rect.width, rect.height) * 2;
+    var x, y;
+    if(detail === 0 || (clientX === 0 && clientY === 0)){
+      x = rect.width  / 2 - size / 2;   /* keyboard activation: centred */
+      y = rect.height / 2 - size / 2;
+    } else {
+      x = clientX - rect.left - size / 2;
+      y = clientY - rect.top  - size / 2;
+    }
+    var host = document.createElement('span');
+    host.className = 'sb-ripple-host';
+    var dot = document.createElement('span');
+    dot.className = 'sb-ripple';
+    dot.style.width  = size + 'px';
+    dot.style.height = size + 'px';
+    dot.style.left   = x + 'px';
+    dot.style.top    = y + 'px';
+    host.appendChild(dot);
+    btn.appendChild(host);
+    var rec = { sel: sel, host: host, dot: dot, timer: null };
+    active.push(rec);
+    arm(rec);
+    return rec;
+  }
+
+  function spawn(sel, clientX, clientY, detail, tries){
+    tries = tries || 0;
+    var btn = live(sel);
+    if(btn){ paint(btn, sel, clientX, clientY, detail); return; }
+    if(tries < 3) requestAnimationFrame(function(){ spawn(sel, clientX, clientY, detail, tries + 1) });
+  }
+
+  /* re-attach any still-animating ripple whose host was detached by an innerHTML rewrite */
+  function reattach(){
+    for(var i = active.length - 1; i >= 0; i--){
+      var rec = active[i];
+      if(!rec.host || rec.host.isConnected) continue;
+      var btn = live(rec.sel);
+      if(!btn) continue;
+      btn.appendChild(rec.host);
+      if(rec.timer) clearTimeout(rec.timer);
+      arm(rec);
+      try{                                  /* restart the css animation on the re-inserted span */
+        rec.dot.style.animation = 'none';
+        void rec.dot.offsetWidth;
+        rec.dot.style.animation = '';
+      }catch(e){}
+    }
+  }
+
+  sb.addEventListener('click', function(e){
+    var t = e.target;
+    var btn = (t && typeof t.closest === 'function')
+      ? t.closest('.navit, #plList .plrow, #plList .plmenu')
+      : null;
+    if(!btn || !sb.contains(btn)) return;
+    var sel = identity(btn);
+    if(!sel) return;
+    if(reducedMotion()) return;          /* no ripple spans when reduced motion is active */
+    var cx = e.clientX, cy = e.clientY, d = e.detail;
+    /* defer past the synchronous navigation + updatePlRows() repaint triggered by this click */
+    requestAnimationFrame(function(){ spawn(sel, cx, cy, d, 0) });
+  }, false);
+
+  /* guard a later repaint that lands mid-animation */
+  var mo = null;
+  try{
+    mo = new MutationObserver(function(){ reattach() });
+    var list = document.getElementById('plList');
+    if(list) mo.observe(list, { childList: true });
+  }catch(e){}
+
+  ['updatePlRows','svUpdatePlRows'].forEach(function(name){
+    var orig = window[name];
+    if(typeof orig !== 'function' || orig.__sb4btWrapped) return;
+    var wrapped = function(){
+      var r = orig.apply(this, arguments);
+      try{ reattach() }catch(e){}
+      return r;
+    };
+    wrapped.__sb4btWrapped = true;
+    try{ window[name] = wrapped }catch(e){}
+  });
+})();
+</script>
 </body>
 </html>
