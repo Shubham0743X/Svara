@@ -1279,8 +1279,16 @@ if(sp)sp.innerHTML='<path class="f" d="M6 6h2v12H6z"/><path class="f" d="M18 6l-
     s.setAttribute('id',id); s.setAttribute('viewBox','0 0 24 24'); s.innerHTML=inner; d.appendChild(s);
   };
   add('i-pin','<path d="M9 3.5h6"/><path d="M10.5 3.5v5.2L9 12h6l-1.5-3.3V3.5"/><path d="M12 12v8.5"/>');
-  add('i-expand','<path d="M4 9V4h5"/><path d="M20 15v5h-5"/><path d="M15 4h5v5"/><path d="M9 20H4v-5"/>');
-  add('i-collapse','<path d="M9 4v5H4"/><path d="M15 20v-5h5"/><path d="M20 9h-5V4"/><path d="M4 15h5v5"/>');
+  /* Wave 5 (UI-3) — the two supplied window-control outlines, verbatim, on the PLAYER page's own
+     fullscreen-lyrics button (#lyrFull in the lyrics tab header): expanded when the fullscreen
+     lyrics view is closed, contracted while it is open. These two ids were the button's private
+     pair (nothing else in the app uses i-expand / i-collapse), so only the geometry changed —
+     `ic()` in ensureLyricsUI() and `lfIcon(open)` in the toggle keep working untouched, and the
+     button stays a real .lyrbtn in its existing position. The outlines are drawn at the app's
+     standard 1.8px icon stroke (.ic svg) rather than the file's 2px, so they match every other
+     icon in the UI. */
+  add('i-expand','<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/>');
+  add('i-collapse','<path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>');
 })();
 
 /* 2) rebuild the scrubber row: controls first, times flanking the bar (#17) */
