@@ -228,25 +228,44 @@ body.pv #pvFab{display:none}
 /* ================= WAVE 5 (UI-1) — effects mode, decided BEFORE first paint =================
    The wave background must never flash the wrong look, so the mode lands on <html> here, at the
    very top of <body> — setBoot() (in v3js) runs far too late for that.
-   Two EXISTING keys only, no new localStorage key (sv_set_shaderIntensity / sv_set_lowPower).
-     classic : shaderIntensity 'off' OR lowPower true  → NO canvas is created, app looks like today
-     bal     : 'low' | 'medium'                        → scale 3 / 30 fps
-     full    : 'high'                                  → scale 2 / 60 fps
+   Resolution order (Wave 5 graphics toggle):
+     1. sv_set_gfxLevel, when it holds 'low' | 'medium' | 'high' — authoritative, and the SAME
+        precedence gfxLevel() uses for the glass layer:
+          low → classic,  medium → bal,  high → full
+     2. otherwise the ORIGINAL two keys, unchanged, so a user who never touches the toggle sees no
+        difference: classic : shaderIntensity 'off' OR lowPower true  → NO canvas is created
+                    bal     : 'low' | 'medium'                        → scale 3 / 30 fps
+                    full    : 'high'                                  → scale 2 / 60 fps
+   LIMITATION (documented on purpose, not hidden): the mode and WAVE.scale / WAVE.fps are chosen
+   ONCE here and frozen for the session, so a LIVE level change is picked up on the NEXT LAUNCH.
+   The wave pixel engine either owns a transferred OffscreenCanvas + worker (scale/fps baked in at
+   init, and a canvas can be transferred only once) or a main-thread 2D context; re-scaling it live
+   would mean tearing all of that down and rebuilding it mid-session. The Settings hint says so.
+   The glass / liquid-metal layer is unaffected by this limitation — it re-applies live.
    Also seeds the canvas-opacity custom property (and any future glass var) from one place. */
 (function(){
-  var intensity = 'medium', lowPower = false;
+  var gfx = null, intensity = 'medium', lowPower = false;
   try{
+    var rawG = localStorage.getItem('sv_set_gfxLevel');
+    if(rawG !== null){ try{ gfx = JSON.parse(rawG) }catch(e){ gfx = rawG } }
     var rawI = localStorage.getItem('sv_set_shaderIntensity');
     if(rawI !== null){ try{ intensity = JSON.parse(rawI) }catch(e){ intensity = rawI } }
     var rawL = localStorage.getItem('sv_set_lowPower');
     if(rawL !== null){ try{ lowPower = (JSON.parse(rawL) === true) }catch(e){ lowPower = (rawL === 'true') } }
   }catch(e){}
+  if(gfx !== 'low' && gfx !== 'medium' && gfx !== 'high') gfx = null;
   if(intensity !== 'off' && intensity !== 'low' && intensity !== 'medium' && intensity !== 'high') intensity = 'medium';
-  var mode = (intensity === 'off' || lowPower) ? 'classic' : (intensity === 'high' ? 'full' : 'bal');
+  /* gfxLevel wins when set (matching gfxLevel()'s precedence); a valid 'low' is classic. When the
+     key is unset the exact legacy mapping runs, so nobody's current look changes. */
+  var mode = gfx === 'low'    ? 'classic'
+           : gfx === 'medium' ? 'bal'
+           : gfx === 'high'   ? 'full'
+           : (intensity === 'off' || lowPower) ? 'classic'
+           : (intensity === 'high' ? 'full' : 'bal');
   var d = document.documentElement;
   d.dataset.fx = mode;
   d.style.setProperty('--wave-op', '1');     // canvas opacity: inherited, overridden per view by v4wavejs
-  window.__waveCfg = { mode: mode, intensity: intensity, lowPower: lowPower };
+  window.__waveCfg = { mode: mode, intensity: intensity, lowPower: lowPower, gfx: gfx };
 })();
 </script>
 
@@ -3596,7 +3615,7 @@ downloadTrack = async function(it){
 /* Every localStorage key this app owns (WAVE0-NOTES inventory) + the frozen settings
    keys (PLAN §8). Export/import use this list; nothing else is accepted on import. */
 var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto','sv_liked_albums','sv_taste_excluded'];   /* 4AQ + 4AR */
-var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_logo'];
+var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_set_gfxLevel','sv_logo'];
 var SET_KEYS = SET_LIVE.concat(SET_NEW);
 var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null, aboutOpen = false;
 
@@ -3605,6 +3624,14 @@ function setPut(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch(e)
 function setPanelEl(){ return document.getElementById('setPanel') }
 function setQ(sel){ var p = setPanelEl(); return p ? p.querySelector(sel) : null }
 
+/* Wave 5 — the LIVE graphics level, read straight from its single source of truth (window.svaraGfx,
+   defined in the v4lmjs block LATER in the page). If that layer has not run yet, fall back to the
+   documented default so the new segmented control still renders with a checked option. */
+function setGfxLevel(){
+  try{ if(window.svaraGfx && typeof window.svaraGfx.level === 'function') return window.svaraGfx.level() }catch(e){}
+  return 'medium';
+}
+
 /* the panel always shows the LIVE player state — it never keeps its own copy */
 function setLive(key){
   if(key==='volume') return volume;
@@ -3612,6 +3639,7 @@ function setLive(key){
   if(key==='repeat') return repeat;
   if(key==='autoplay') return !!v3autoOn;
   if(key==='provider') return (lyrPref==='ytm'||lyrPref==='lrclib') ? lyrPref : 'auto';
+  if(key==='gfxLevel') return setGfxLevel();
   return '';
 }
 function setSeg(name, opts, cur){
@@ -3644,6 +3672,14 @@ function setRender(){
   '</div>';
   h += '<div class="setGrp"><h3>Lyrics</h3>'+
     setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRClib']], setLive('provider')))+
+  '</div>';
+  /* ===== Wave 5 — Appearance / graphics level =====
+     The ONLY entry point for the graphics level: no top-bar button, no Home card, no shortcut.
+     sv_set_gfxLevel is authoritative when set; unset keeps today's derived look (gfxLevel(), v4lmjs).
+     Reduced motion is a hard ceiling — the hint says so, and the applied look stays 'reduced'. */
+  h += '<div class="setGrp"><h3>Appearance</h3>'+
+    setRow('Graphics level','Glass buttons, motion and the animated wave background. Reduced motion always forces the lowest look. The wave background changes on the next launch.',
+      setSeg('gfxLevel',[['low','Low'],['medium','Medium'],['high','High']], setLive('gfxLevel')))+
   '</div>';
   h += '<div class="setGrp"><h3>Downloads</h3>';
   h += sys
@@ -3690,6 +3726,7 @@ function setSync(){
   var ap = p.querySelector('input[data-setkey="autoplay"]'); if(ap && ap.checked!==!!v3autoOn) ap.checked = !!v3autoOn;
   var rp = p.querySelector('input[data-setkey="repeat"][value="'+repeat+'"]'); if(rp && !rp.checked) rp.checked = true;
   var pr = p.querySelector('input[data-setkey="provider"][value="'+setLive('provider')+'"]'); if(pr && !pr.checked) pr.checked = true;
+  var gx = p.querySelector('input[data-setkey="gfxLevel"][value="'+setGfxLevel()+'"]'); if(gx && !gx.checked) gx.checked = true;
 }
 function setShow(on){
   var p = setPanelEl(), g = document.getElementById('setBtn');
@@ -3967,6 +4004,16 @@ document.addEventListener('input', function(e){
     setVolume(t.value);
   } else if(key==='provider'){
     setProvider(t.value);
+  } else if(key==='gfxLevel'){
+    /* Wave 5 — persist then hand off to the EXISTING live hook: v4lmjs listens for
+       'svara-gfx-change', re-scans and re-applies (mounts/disposes the liquid-metal layer,
+       swaps the static ring, gates ripples) and flips html[data-gfx]. No reload, no duplicated
+       resync logic here. */
+    if(t.value==='low' || t.value==='medium' || t.value==='high'){
+      setPut('sv_set_gfxLevel', t.value);
+      try{ window.dispatchEvent(new Event('svara-gfx-change')) }catch(e){}
+      toast(t.value==='low' ? 'Graphics: Low' : t.value==='medium' ? 'Graphics: Medium' : 'Graphics: High');
+    }
   }
 });
 /* ONE delegated click handler: the gear, every panel action, and click-outside */
@@ -4898,6 +4945,10 @@ html[data-fx="bal"]  body::after{
   if(boot.mode === 'classic') return;
 
   /* ---- ONE config object — every knob is a single edit right here ---- */
+  /* boot.mode was resolved ONCE in #v4fxboot: sv_set_gfxLevel ('low'/'medium'/'high') is
+     authoritative when set (low ⇒ classic, medium ⇒ bal, high ⇒ full), else the legacy
+     shaderIntensity / lowPower mapping. WAVE.scale / WAVE.fps below are consequently FROZEN for
+     the session, so a live graphics-level change applies to the wave on the NEXT LAUNCH. */
   var WAVE = { scale:2, fps:60, gain:1.35, homeOpacity:1, dimOpacity:0.4, artistOpacity:0.55 };
   if(boot.mode === 'bal'){ WAVE.scale = 3; WAVE.fps = 30 }          // 'low' | 'medium'
   /* 'full' keeps the LADDER. The visible-window measurement showed scale 2 / 60 fps could not
