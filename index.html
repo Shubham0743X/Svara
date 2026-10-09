@@ -299,6 +299,14 @@ body.pv #pvFab{display:none}
 <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
 <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
 <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></symbol>
+<!-- Wave 5 (UI-2) — the gooey-toggle filter, the source 21st.dev `GooeyFilter` verbatim:
+     blur → alpha-boosting feColorMatrix (18 / -7) → re-composite the ORIGINAL graphic on top.
+     Declared ONCE here; every #setPanel .setSw svg references it with filter="url(#goo)". -->
+<filter id="goo">
+  <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+  <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo"/>
+  <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+</filter>
 </defs></svg>
 
 <!-- SIDEBAR -->
@@ -522,15 +530,32 @@ function notePlay(it){
    of null". homeGen is a render-generation counter: every call takes a token, and after EVERY
    await it bails if a newer render has started, so an older request can never overwrite newer
    content. Every post-await write is also null-checked. The happy path is unchanged. */
+/* ============ Wave 5 (UI-2) — Home mood pills → a real category browse ============
+   ONE frozen order and ONE builder, shared by Home and by the mood search view (the pills are
+   re-rendered inside the results so the category stays switchable without going Home). The pills
+   used to call doSearch(label+' songs') — which LEFT Home, titled the view 'Results for "Relax
+   songs"' and wrote 'Relax songs' into the recent-searches dropdown (sv_shist). They now open a
+   browsable category through the SAME search machinery, with record=false so history is untouched.
+   4AX order preserved: Relax, Romance, Feel Good, Party, Energize, Focus, then Sad, Workout. */
+var MOODS=['Relax','Romance','Feel Good','Party','Energize','Focus','Sad','Workout'];
+function chipRowHTML(active){
+  return '<div class="chips">'+MOODS.map(function(m){
+    var on = !!active && m === active;
+    return '<button class="chip'+(on?' on':'')+'" data-chip="'+esc(m)+'" aria-pressed="'+(on?'true':'false')+'">'+esc(m)+'</button>';
+  }).join('')+'</div>';
+}
+/* a mood is a CATEGORY browse, not a search: record=false keeps it out of sv_shist and the search
+   box is never filled. The 4th doSearch() argument carries the mood so the live results view can
+   title itself and re-render the pills; the filter argument is left undefined so the mood KEEPS
+   the chip the user last picked, exactly like a search-box submit. */
+function openMood(label){ doSearch(String(label||'')+' songs', false, undefined, label) }
 var homeGen=0;
 async function renderHome(){
   var gen=++homeGen;
   const sec=$('#homeSec');
   const recent=topRecent(12),scored=topScored(18),arts=topArtists(3);
-  /* 4AX: ADDENDUM order — Relax, Romance, Feel Good, Party, Energize, Focus first, then the
-     remaining existing chips (Sad, Workout). Same markup/behaviour; clicking still runs
-     doSearch(label+' songs') as before. */
-  let h=`<div class="chips">${['Relax','Romance','Feel Good','Party','Energize','Focus','Sad','Workout'].map(m=>`<button class="chip" data-chip="${m}">${m}</button>`).join('')}</div>`;
+  /* Home shows the row with NO active pill (the shared builder, no second copy of the markup). */
+  let h=chipRowHTML(null);
   const none=!Object.keys(hist).length;
   quickList=scored;
   if(!none){
@@ -850,8 +875,10 @@ document.addEventListener('click',e=>{
   }
   const qr=e.target.closest('[data-q]');
   if(qr&&!e.target.closest('button')){const i=+qr.dataset.q;const np=seq.indexOf(i);if(np>=0)loadAt(np,true)}
+  /* Wave 5 (UI-2): ONE path serves BOTH the Home pills and the pills re-rendered inside the mood
+     view — same data-chip attribute, same document-level listener. Nothing is written to history. */
   const chip=e.target.closest('[data-chip]');
-  if(chip){doSearch(chip.dataset.chip+' songs')}
+  if(chip){openMood(chip.dataset.chip)}
   const qp=e.target.closest('[data-qp]');
   if(qp){const s=topScored(18);if(s.length)playList(s,0,true)}
   if(e.target.closest('#diceBig')){diceRadio()}
@@ -2251,19 +2278,9 @@ if(!$('#homeSec').hidden)renderHome();
 #setPanel .setPill.no{color:var(--acc);border-color:rgba(var(--amb),.35)}
 #setPanel .setLink{font-size:12px;color:var(--acc2);text-decoration:none;flex-shrink:0}
 #setPanel .setLink:hover{text-decoration:underline}
-#setPanel .setSeg{display:inline-flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px;flex-shrink:0}
-#setPanel .setSeg label{position:relative;display:block}
-#setPanel .setSeg input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
-#setPanel .setSeg span{display:block;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:700;color:var(--dim);cursor:pointer;white-space:nowrap}
-#setPanel .setSeg input:checked+span{background:var(--grad);color:rgb(var(--on-acc))}
-#setPanel .setSeg input:focus-visible+span{outline:2px solid var(--acc2);outline-offset:1px}
-#setPanel .setSw{position:relative;width:42px;height:23px;flex-shrink:0}
-#setPanel .setSw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
-#setPanel .setSw i{position:absolute;inset:0;border-radius:999px;background:var(--panel);border:1px solid var(--line)}
-#setPanel .setSw i::after{content:'';position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:var(--dim);transition:transform .18s ease}
-#setPanel .setSw input:checked+i{background:var(--grad);border-color:transparent}
-#setPanel .setSw input:checked+i::after{background:#fff;transform:translateX(19px)}
-#setPanel .setSw input:focus-visible+i{outline:2px solid var(--acc2);outline-offset:2px}
+/* Wave 5 (UI-2) — the old .setSeg / .setSw rules that used to live here were REPLACED by the two
+   dedicated port blocks at the end of the document (#v5segcss, #v5swcss), so each control has a
+   single source of truth. Same tokens in, same rows out; nothing else in the panel moved. */
 #setPanel .setRangeWrap{display:flex;align-items:center;gap:10px;flex-shrink:0}
 #setPanel input[type=range]{width:140px}
 #setPanel .setAct{font-size:12px;font-weight:600;color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;flex-shrink:0}
@@ -2472,6 +2489,7 @@ showDyn = function(t,s,h){
 };
 goHome = function(){
   sView = false; _sPaint = false;
+  sMood = null;                              // Wave 5 (UI-2): a mood never leaks into Home
   _goHome();
   hideArtist();
   hideAlbum();                                // 4AL: the album page is its own section
@@ -3261,14 +3279,17 @@ function paintSearch(){
      nor open. They are dropped HERE, at render time, so the API stays an honest mirror and no dead
      row or “not playable” pill can appear. 4BF: label 'Video' rows (YouTube video uploads) are dropped too. The header counts only the VISIBLE rows. */
   var vis = S.items.filter(function(it){ if(((it && it.kind) || 'track') === 'other') return false; if(it && it.label === 'Video') return false; /* 4BF: YouTube video uploads are not songs */ return true; });
-  var html = topResultHTML(vis) +
+  /* Wave 5 (UI-2): a mood view leads with the pill row (so the category stays switchable) and
+     suppresses the top-result artist card — a mood is a SONG browse, not an artist lookup, so no
+     channel card and no Shuffle/Mix pills. A normal search is untouched. */
+  var html = (sMood ? chipRowHTML(sMood) : topResultHTML(vis)) +
              '<div class="list">'+vis.map(searchRowHTML).join('')+'</div>'+
              /* 4AE: a zero-row result must say WHICH zero it is — still paging, or honestly
                 empty — instead of leaving a bare gap. The #v3sent sentinel is kept either way. */
              (vis.length ? '' : '<div class="empty">'+(S.next ? 'Loading results…' : 'No results for “'+esc(S.q)+'”.')+'</div>')+
              '<div class="v3sent" id="v3sent"></div>';
   _sPaint = true;                 // handshake: the showDyn wrapper learns this IS the search view
-  showDyn('Results for “'+esc(S.q)+'”', vis.length+' '+sNoun(S.filter), html);
+  showDyn(sMood ? esc(sMood) : 'Results for “'+esc(S.q)+'”', vis.length+' '+sNoun(S.filter), html);
   /* curList feeds playList(): it must hold ONLY playable rows, otherwise clicking a song in a
      mixed type=all result set would queue albums and artists behind it. */
   curList = vis.filter(function(it){ return ((it && it.kind) || 'track') === 'track' }).slice();
@@ -3309,7 +3330,7 @@ async function loadMore(){
   }catch(e){ st.next = false }
   st.loading = false;
 }
-doSearch = async function(q, record, filter){
+doSearch = async function(q, record, filter, mood){
   q = String(q||'').trim(); if(!q) return;
   if(record!==false && typeof pushSHist==='function') pushSHist(q);
   var sh = document.getElementById('shist'); if(sh) sh.hidden = true;
@@ -3317,6 +3338,14 @@ doSearch = async function(q, record, filter){
      whichever chip is selected; a chip tap passes its own value. Unknown values fall back. */
   var f = (filter && SFILTERS.some(function(x){ return x[0]===filter })) ? filter : sFilter;
   sFilter = f;
+  /* Wave 5 (UI-2): the 4th argument is the mood category (a Home pill, or the pills re-rendered
+     inside the view). Omitted/null ⇒ a NORMAL search: the search box, a recent-search row and the
+     artist “show all” all clear the mood here; the filter-chip handler passes sMood back in so
+     switching All/Songs/Albums/Artists keeps the category. `sMood` (module-level, outside S) is
+     read by paintSearch() for the title, the pill row and the top-result suppression. */
+  sMood = mood || null;
+  var sTitle = sMood ? esc(sMood) : 'Results for “'+esc(q)+'”';
+  var sPills = sMood ? chipRowHTML(sMood) : '';
   var gen = ++Sg;      // 4W: bumped BEFORE the fetch — every older doSearch() AND loadMore() is stale now
   S = { q:q, sessionId:null, next:false, loading:false, items:[], filter:f };
   var st = S;          // 4AF: the state object THIS search owns — a stale failure must never paint a newer search
@@ -3326,7 +3355,9 @@ doSearch = async function(q, record, filter){
      a real result set and showDyn() still leaves the artist page. loadMore() is never called
      from here — pagination is untouched. */
   curList = []; register([]); _sPaint = true;
-  showDyn('Results for “'+esc(q)+'”', 'Searching…', (typeof skRows==='function' ? skRows(8) : '<div class="empty">Searching…</div>'));
+  /* the pills are painted in EVERY state — searching, empty and failed — so the user can switch
+     category without going Home first */
+  showDyn(sTitle, 'Searching…', sPills + (typeof skRows==='function' ? skRows(8) : '<div class="empty">Searching…</div>'));
   try{
     var r = await fetch('/api/search?q='+encodeURIComponent(q)+'&type='+encodeURIComponent(f));
     var j = await r.json();
@@ -3338,7 +3369,7 @@ doSearch = async function(q, record, filter){
       if(gen === Sg && S === st){
         st.loading = false;
         _sPaint = true;
-        showDyn('Results for “'+esc(q)+'”', 'Search failed', '<div class="empty">Search failed — check the connection and try again.</div>');
+        showDyn(sTitle, 'Search failed', sPills + '<div class="empty">Search failed — check the connection and try again.</div>');
       }
       toast('Search failed: '+j.error); return
     }
@@ -3352,7 +3383,7 @@ doSearch = async function(q, record, filter){
          "Searching…" on screen forever. Paint the same honest failure state instead. */
       st.loading = false;
       _sPaint = true;
-      showDyn('Results for “'+esc(q)+'”', 'Search failed', '<div class="empty">Search failed — check the connection and try again.</div>');
+      showDyn(sTitle, 'Search failed', sPills + '<div class="empty">Search failed — check the connection and try again.</div>');
     }
     if(gen === Sg) toast('Search failed: '+e.message);
   }
@@ -3373,6 +3404,11 @@ var SFILTERS = [['all','All'],['song','Songs'],['album','Albums'],['artist','Art
    handshake with paintSearch(); the showDyn wrapper consumes it, so every other caller (home,
    liked music, playlists, the artist “show all” list) leaves the chips hidden. */
 var sFilter = 'all', sView = false, _sPaint = false;
+/* Wave 5 (UI-2): the mood CATEGORY the current results view belongs to (null for a normal search).
+   It lives OUTSIDE S for exactly the same reason as sFilter — every doSearch() replaces S wholesale,
+   so a filter-chip re-run must not lose the category. Cleared by every normal search (the search
+   box, a recent-search row, the artist “show all") and by goHome(). */
+var sMood = null;
 function buildFilters(){
   var el = document.getElementById('searchFilters');
   if(!el || el.getAttribute('data-built')) return;
@@ -3408,7 +3444,8 @@ document.addEventListener('click', function(e){
   if(!SFILTERS.some(function(x){ return x[0]===f })) return;
   if(f === sFilter){ syncFilters(); return }          // already active — nothing to reload
   sFilter = f; syncFilters();
-  if(S.q) doSearch(S.q, false, f);
+  /* Wave 5 (UI-2): the mood rides along, so switching All/Songs/Albums/Artists keeps the category */
+  if(S.q) doSearch(S.q, false, f, sMood);
 }, true);
 /* 4W-TR: the top-result card's two pills. Capture phase + stopPropagation so a pill click can
    never bubble into the row/artist handlers; the card's avatar/name keep using the existing
@@ -3642,15 +3679,40 @@ function setLive(key){
   if(key==='gfxLevel') return setGfxLevel();
   return '';
 }
+/* Wave 5 (UI-2) — sliding segmented control (port of the 21st.dev SegmentedControl, see v5segcss).
+   The container is an equal-column grid of `--n` columns (never a hardcoded 3), the thumb slides
+   from the `data-i` index. CSS cannot ask "which radio is checked?" without :has() and the app
+   ships its own :has fallback, so JS writes data-i and the CSS keys `--i` off it.
+   The labels are printed a SECOND time inside the clipped thumb (.segGhost) so the checked text
+   travels with it, exactly like the source; the real label's text is transparented while checked.
+   The radios stay real radios in one `name` group inside their <label for>s, so arrow keys / Home /
+   End / Space and the existing data-setkey persistence path are untouched. */
 function setSeg(name, opts, cur){
-  return '<div class="setSeg">'+opts.map(function(o){
-    var id = 'set_'+name+'_'+o[0];
-    return '<label for="'+id+'"><input type="radio" id="'+id+'" name="set_'+name+'" data-setkey="'+name+'" value="'+o[0]+'"'+(o[0]===cur?' checked':'')+'><span>'+esc(o[1])+'</span></label>';
-  }).join('')+'</div>';
+  var n = opts.length, i = 0;
+  for(var k=0;k<n;k++){ if(opts[k][0]===cur){ i=k; break } }
+  return '<div class="setSeg" data-i="'+i+'" style="--n:'+n+'">'+
+    '<span class="segThumb" aria-hidden="true"><span class="segGhost">'+
+      opts.map(function(o){ return '<span>'+esc(o[1])+'</span>' }).join('')+
+    '</span></span>'+
+    opts.map(function(o){
+      var id = 'set_'+name+'_'+o[0];
+      return '<label for="'+id+'"><input type="radio" id="'+id+'" name="set_'+name+'" data-setkey="'+name+'" value="'+o[0]+'"'+(o[0]===cur?' checked':'')+'><span>'+esc(o[1])+'</span></label>';
+    }).join('')+'</div>';
 }
+/* Wave 5 (UI-2) — the gooey toggle (port of the 21st.dev Toggle + GooeyFilter, see v5swcss).
+   The <i> element is gone: the checkbox ITSELF is the track (appearance:none in v5swcss) and the
+   knobs are the two circles of this svg, merged by the #goo filter declared ONCE in the <defs>
+   block at the top of <body>. No per-state JS and no data-checked attribute: :checked in CSS is
+   the single source of truth, and the delegated `input` handler still persists via data-setkey. */
 function setSw(key, label){
   var id = 'set_sw_'+key;
-  return '<label class="setSw" for="'+id+'" title="'+esc(label)+'"><input type="checkbox" id="'+id+'" data-setkey="'+key+'"'+(setLive(key)?' checked':'')+'><i aria-hidden="true"></i></label>';
+  return '<label class="setSw" for="'+id+'" title="'+esc(label)+'">'+
+    '<input type="checkbox" id="'+id+'" data-setkey="'+key+'"'+(setLive(key)?' checked':'')+'>'+
+    '<svg viewBox="0 0 52 32" aria-hidden="true" focusable="false" filter="url(#goo)">'+
+      '<circle class="sw1" cx="16" cy="16" r="10"/>'+
+      '<circle class="sw2" cx="36" cy="16" r="10"/>'+
+      '<circle class="swd" cx="35" cy="-1" r="2.5"/>'+
+    '</svg></label>';
 }
 function setRow(label, hint, ctrl, stack){
   return '<div class="setRow'+(stack?' stack':'')+'"><div><div class="setLbl">'+esc(label)+'</div>'+(hint?'<div class="setHint">'+hint+'</div>':'')+'</div>'+ctrl+'</div>';
@@ -3670,8 +3732,12 @@ function setRender(){
     setRow('Volume','Mirrors the mini player’s slider',
       '<div class="setRangeWrap"><input type="range" min="0" max="100" step="1" value="'+volume+'" data-setkey="volume" aria-label="Volume" style="--v:'+volume+'%"><span class="setNum" id="setVolNum">'+volume+'%</span></div>')+
   '</div>';
+  /* Wave 5 (UI-2) — Part A: the two rows whose hint is a full sentence are STACKED (4th arg true),
+     so the description sits full-width ABOVE the control instead of being squeezed into a narrow
+     column beside it. setRow's `stack` variant already existed (#setPanel .setRow.stack); the only
+     new CSS is the 10px gap above the control (v5segcss). Playback / Downloads rows are unchanged. */
   h += '<div class="setGrp"><h3>Lyrics</h3>'+
-    setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRClib']], setLive('provider')))+
+    setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRClib']], setLive('provider')), true)+
   '</div>';
   /* ===== Wave 5 — Appearance / graphics level =====
      The ONLY entry point for the graphics level: no top-bar button, no Home card, no shortcut.
@@ -3679,7 +3745,7 @@ function setRender(){
      Reduced motion is a hard ceiling — the hint says so, and the applied look stays 'reduced'. */
   h += '<div class="setGrp"><h3>Appearance</h3>'+
     setRow('Graphics level','Glass buttons, motion and the animated wave background. Reduced motion always forces the lowest look. The wave background changes on the next launch.',
-      setSeg('gfxLevel',[['low','Low'],['medium','Medium'],['high','High']], setLive('gfxLevel')))+
+      setSeg('gfxLevel',[['low','Low'],['medium','Medium'],['high','High']], setLive('gfxLevel')), true)+
   '</div>';
   h += '<div class="setGrp"><h3>Downloads</h3>';
   h += sys
@@ -3727,6 +3793,24 @@ function setSync(){
   var rp = p.querySelector('input[data-setkey="repeat"][value="'+repeat+'"]'); if(rp && !rp.checked) rp.checked = true;
   var pr = p.querySelector('input[data-setkey="provider"][value="'+setLive('provider')+'"]'); if(pr && !pr.checked) pr.checked = true;
   var gx = p.querySelector('input[data-setkey="gfxLevel"][value="'+setGfxLevel()+'"]'); if(gx && !gx.checked) gx.checked = true;
+  /* Wave 5 (UI-2): the sliding thumb reads its index from data-i on the .setSeg container, so
+     every path that can move a radio (this 900 ms resync, an import, a rollback) must re-derive it */
+  syncSeg('repeat'); syncSeg('provider'); syncSeg('gfxLevel');
+}
+/* Wave 5 (UI-2) — ONE helper for the sliding segmented control's thumb index. The radios stay the
+   single source of truth: this reads whichever one is :checked and mirrors its position into
+   data-i (the CSS keys --i off it). Written only when it actually changes, so the panel's open
+   resync does not spam attribute mutations at the liquid-metal scan. */
+function syncSeg(name){
+  var p = setPanelEl(); if(!p) return;
+  var first = p.querySelector('.setSeg input[data-setkey="'+name+'"]');
+  var seg = first ? first.closest('.setSeg') : null; if(!seg) return;
+  var all = seg.querySelectorAll('input[data-setkey="'+name+'"]');
+  var on = seg.querySelector('input[data-setkey="'+name+'"]:checked');
+  var i = 0;
+  for(var k=0;k<all.length;k++){ if(all[k]===on){ i=k; break } }
+  var want = String(i);
+  if(seg.getAttribute('data-i') !== want) seg.setAttribute('data-i', want);
 }
 function setShow(on){
   var p = setPanelEl(), g = document.getElementById('setBtn');
@@ -4015,6 +4099,9 @@ document.addEventListener('input', function(e){
       toast(t.value==='low' ? 'Graphics: Low' : t.value==='medium' ? 'Graphics: Medium' : 'Graphics: High');
     }
   }
+  /* Wave 5 (UI-2): the sliding segmented control keeps its state in the radios; data-i (the thumb
+     index) is mirrored from whichever one the user just picked. Persistence above is untouched. */
+  if(key==='repeat' || key==='provider' || key==='gfxLevel') syncSeg(key);
 });
 /* ONE delegated click handler: the gear, every panel action, and click-outside */
 document.addEventListener('click', function(e){
@@ -7795,6 +7882,136 @@ try{
   position: relative;
   z-index: 1;
 }
+</style>
+<style id="v5segcss">
+/* ================= Wave 5 (UI-2) — sliding segmented control =================
+   Ported from the 21st.dev `SegmentedControl` (spring: stiffness 520 / damping 34 / mass 0.45)
+   into vanilla CSS + ONE data-i hook. No React, no motion/framer, no JS animation loop.
+   Scope: #setPanel .setSeg only — Repeat mode, Default provider, Graphics level.
+   The original `#setPanel .setSeg*` rules in v3css were replaced by this block (same tokens in,
+   same pill container out), so the control has a single source of truth.
+   Spring → CSS: the source's spring is approximated with a snappy cubic-bezier overshoot.
+   Text effect: the source renders each label a SECOND time inside the thumb so the text travels
+   with it and flips colour; that is `.segGhost` below — an N-column copy translated inside the
+   clipped thumb, while the real checked label's own text is made transparent. */
+#setPanel .setSeg{
+  position:relative;
+  display:inline-grid;                       /* inline-grid: equal columns AND natural, un-stretched width */
+  grid-template-columns:repeat(var(--n,3),minmax(0,1fr));
+  gap:0;
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px;
+  flex-shrink:0;
+  overflow:hidden;                           /* keeps the thumb inside the pill radius */
+  isolation:isolate;
+}
+/* the thumb slides between columns. `--i` comes from data-i (below) — no :has() anywhere.
+   RADIUS: the source component uses a 6px corner, but its container is the same 999px pill as
+   this one, and a 6px corner cannot cover the container's round CAP — at the first/last column
+   the pill's curve pushed past the thumb's corner and left a dark crescent, so the green read as
+   "a box with its corners cut". A 999px radius makes the thumb the same stadium shape as the
+   container, inset a uniform 2px, so the cap is filled and the corner follows the pill. */
+#setPanel .setSeg .segThumb{
+  position:absolute;top:2px;bottom:2px;left:2px;z-index:0;
+  width:calc((100% - 4px)/var(--n,3));
+  border-radius:999px;
+  background:var(--grad);
+  overflow:hidden;                           /* clips the travelling text copy to one column */
+  transform:translateX(calc(var(--i,0) * 100%));
+  transition:transform .42s cubic-bezier(.34,1.56,.64,1);
+}
+/* the travelling copy of the labels: N columns wide, shifted left by i columns */
+#setPanel .setSeg .segGhost{
+  position:absolute;top:0;left:0;height:100%;
+  width:calc(var(--n,3) * 100%);
+  display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));
+  transform:translateX(calc(var(--i,0) * -100% / var(--n,3)));
+  transition:transform .42s cubic-bezier(.34,1.56,.64,1);
+  pointer-events:none;
+}
+/* the index → --i map. 0..5 covers every group the panel builds today (max 3); an option list
+   longer than 6 would need another line here — setSeg() emits the index, this block names it. */
+#setPanel .setSeg[data-i="0"]{--i:0}
+#setPanel .setSeg[data-i="1"]{--i:1}
+#setPanel .setSeg[data-i="2"]{--i:2}
+#setPanel .setSeg[data-i="3"]{--i:3}
+#setPanel .setSeg[data-i="4"]{--i:4}
+#setPanel .setSeg[data-i="5"]{--i:5}
+#setPanel .setSeg > label{position:relative;z-index:1;display:block;min-width:0}
+#setPanel .setSeg input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+/* label typography from the source: 13px/18px, 500, tighter tracking. The radius matches the
+   thumb (a pill) rather than the source's 6px: the labels paint no background, but the focus ring
+   is an INSET outline on this span, so its radius IS visible and must follow the thumb's shape. */
+#setPanel .setSeg > label > span{
+  display:block;padding:6px 12px;border-radius:999px;
+  font-size:13px;line-height:18px;font-weight:500;letter-spacing:-.01em;
+  color:var(--dim);cursor:pointer;white-space:nowrap;text-align:center;
+}
+#setPanel .setSeg > label:hover > span{color:var(--tx)}   /* source: an inactive label lightens on hover */
+/* the thumb paints the checked background now, and the ghost prints the text — so the real
+   checked label prints NOTHING (otherwise the text would be doubled). */
+#setPanel .setSeg input:checked+span{background:none;color:transparent}
+#setPanel .setSeg .segGhost > span{
+  display:block;padding:6px 12px;border-radius:999px;
+  font-size:13px;line-height:18px;font-weight:500;letter-spacing:-.01em;
+  color:rgb(var(--on-acc));white-space:nowrap;text-align:center;
+}
+/* inset ring: the container clips overflow, so the focus outline is drawn inside the label */
+#setPanel .setSeg input:focus-visible+span{outline:2px solid var(--acc2);outline-offset:-2px}
+/* Part A: a stacked row drops its control onto its own line, left aligned, natural width */
+#setPanel .setRow.stack .setSeg{margin-top:10px}
+/* accessibility ceiling — reduced motion snaps the thumb, never slides it */
+html[data-gfx="reduced"] #setPanel .setSeg .segThumb,
+html[data-gfx="reduced"] #setPanel .setSeg .segGhost{transition:none}
+</style>
+<style id="v5swcss">
+/* ================= Wave 5 (UI-2) — gooey toggle =================
+   Ported from the 21st.dev `Toggle` + `GooeyFilter` into vanilla CSS + the ONE #goo filter in the
+   <defs> block at the top of <body>. No React, no per-state JS: :checked in CSS is the single
+   source of truth and the existing delegated `input` handler keeps persisting data-setkey.
+   Scope: #setPanel .setSw only — Autoplay similar, Default shuffle.
+   The `<i>` element and its rules were REPLACED by this block: the checkbox IS the track now. */
+#setPanel .setSw{position:relative;display:block;width:52px;height:32px;flex-shrink:0;perspective:1000px}
+#setPanel .setSw input{
+  position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;z-index:2;cursor:pointer;
+  -webkit-appearance:none;appearance:none;
+  border-radius:999px;background:var(--panel);border:1px solid var(--line);
+  transition:background-color .5s ease,border-color .5s ease;
+}
+#setPanel .setSw input:hover{background:var(--panel2)}
+#setPanel .setSw input:checked{background:var(--grad);border-color:transparent}
+#setPanel .setSw input:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+/* the knobs sit ON TOP of the track and never eat a click */
+#setPanel .setSw svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;fill:#fff;z-index:3}
+#setPanel .setSw svg circle{
+  transform:translate3d(0,0,0);
+  -webkit-transform:translate3d(0,0,0);
+  -webkit-backface-visibility:hidden;backface-visibility:hidden;
+  transition:transform .5s ease,opacity .7s ease;
+}
+#setPanel .setSw .sw1{transform-origin:16px 16px;-webkit-transform-origin:16px 16px}
+/* knob 2 RESTS at cx=36 — that is already the checked position (source behaviour) */
+#setPanel .setSw .sw2{
+  transform-origin:36px 16px;-webkit-transform-origin:36px 16px;
+  transform:translateX(-12px) scale(0);-webkit-transform:translateX(-12px) scale(0);
+}
+#setPanel .setSw .swd{opacity:0}                                 /* the drip exists only when checked */
+#setPanel .setSw input:checked ~ svg .sw1{
+  transform:translateX(12px) scale(0);-webkit-transform:translateX(12px) scale(0);
+}
+#setPanel .setSw input:checked ~ svg .sw2{
+  transform:translateX(0) scale(1);-webkit-transform:translateX(0) scale(1);
+}
+#setPanel .setSw input:checked ~ svg .swd{opacity:1}
+/* accessibility ceiling — reduced motion snaps instead of merging */
+html[data-gfx="reduced"] #setPanel .setSw input,
+html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
+</style>
+<style id="v5moodcss">
+/* ================= Wave 5 (UI-2) — Home mood pills =================
+   The pill row is built by chipRowHTML() (base script) and rendered both on Home and inside the
+   mood search view, so the active pill mirrors the existing `#searchFilters .fchip.on` state.
+   No transition is added: the base .chip has none, so there is nothing for reduced motion to kill. */
+.chip.on{color:var(--tx);background:var(--panel2);border-color:var(--acc2)}
 </style>
 <script id="v4sbjs">
 /* Wave 4BT — ghost click-ripple for the left sidebar (#sb .navit / #plList .plrow / #plList .plmenu).
