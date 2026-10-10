@@ -669,6 +669,11 @@ function playList(list,idx,openPv){
   loadAt(0,true);
   if(openPv)openPV();
 }
+/* Wave 5 (UI-4): the radio block (v3js) REPLACES this function. It plays a row out of the SEARCH
+   RESULTS view and lets a similar-vibe mix fill the queue, returning true when it took playback
+   over. The stub keeps this core block self-sufficient if that block is ever absent — a played row
+   then simply queues its own list. */
+var seedMixPlay=function(row,list,i){return false};
 function syncSeq(keepId){
   if(!queue.length){seq=[];cur=-1;return}
   let c=-1;
@@ -863,7 +868,12 @@ document.addEventListener('click',e=>{
     const id=row.dataset.id;
     let i=id?list.findIndex(x=>x.id===id):-1;
     if(i<0)i=Array.from(row.parentElement.children).indexOf(row);
-    if(list[i])playList(list,i,true);
+    /* Wave 5 (UI-4): a row played out of the SEARCH RESULTS view seeds a similar-vibe mix instead of
+       queueing the search list (see seedMixPlay). Everything else — Home, a mood, an album tracklist,
+       an artist page, liked music, a playlist, history — still plays its own list, exactly as before. */
+    if(list[i]){
+      if(!seedMixPlay(row,list,i))playList(list,i,true);
+    }
   }
   const rail=e.target.closest('[data-rail]');
   if(rail){
@@ -3559,6 +3569,45 @@ diceRadio = async function(){
     toast('🎲 Radio: '+picked.length+' similar songs');
   }catch(e){ toast('Radio failed: '+e.message) }
   finally{ diceBusy = false; if(btn) btn.classList.remove('busy') }
+};
+
+/* ---------- Wave 5 (UI-4): a search result seeds a similar-vibe mix ----------
+   YouTube Music never makes the search list the up-next queue: picking a row starts that song and
+   the queue fills with similar-vibe songs (its “… mix”); end-of-track keeps appending. The seed
+   starts IMMEDIATELY — playList() of the one row, no waiting on the network — and /api/radio (the
+   same endpoint and ranking maybeContinue() already uses) replaces the tail about a second later.
+   Every guard makes a stale or unwanted answer a no-op, so the queue is never clobbered: a newer
+   seed, a user who skipped on or edited the queue by hand, a non-track row. Autoplay similar = off
+   (Settings → Autoplay, or #v3auto) is then a ONE-song queue — never the search list. */
+var seedGen = 0;
+seedMixPlay = function(row, list, i){
+  var seed = list && list[i];
+  if(!seed || !seed.id) return false;
+  if(!row || !row.closest('#dynSec')) return false;   // the results section only (not album/artist)
+  if(!sView || sMood) return false;                   // a plain search-results view only
+  var gen = ++seedGen;
+  playList([seed], 0, true);
+  if(!v3autoOn) return true;                          // autoplay off: nothing to mix in
+  fetch('/api/radio?id='+encodeURIComponent(seed.id)+'&title='+encodeURIComponent(seed.title||'')+
+        '&artist='+encodeURIComponent(seed.artist||'')+'&n=25')
+    .then(function(r){ return r.json() })
+    .then(function(j){
+      if(gen !== seedGen) return;                                    // a newer seed owns the queue
+      var live = nowItem(); if(!live || live.id !== seed.id) return;  // the user moved on
+      if(queue.length !== 1 || queue[0].id !== seed.id) return;       // the queue was edited by hand
+      var add = (j && j.items ? j.items : []).filter(function(x){
+        return x && x.id && x.id !== seed.id && ((x.kind || 'track') === 'track') &&
+               !(typeof tasteExcluded === 'function' && tasteExcluded(x.id));
+      });
+      if(!add.length) return;
+      register(add);
+      add.forEach(function(x){ if(!queue.some(function(q){ return q.id === x.id })) queue.push(x) });
+      syncSeq(seed.id);     // the seed stays current and first; shuffle only reorders what follows
+      renderQueue();
+      toast('Added '+add.length+' similar songs');
+    })
+    .catch(function(){});
+  return true;
 };
 
 /* ---------- BUG #9: autoplay into similar-vibe radio ---------- */
