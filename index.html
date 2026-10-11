@@ -4090,15 +4090,15 @@ function setSysLoad(){
 }
 /* ================== Wave 4F: the About overlay ================== */
 /* ONE config object. Every empty string renders as a disabled, non-focusable control with
-   title="Not published yet" — never href="" and never a dead link. These three strings are the
-   only values left to fill in. */
+   title="Not published yet" — never href="" and never a dead link. Wave 5: `repo` is filled in
+   (the repository is public), so the only value still empty is the optional avatar hook. */
 var ABOUT = {
   name: 'Shubham Nag',
   role: 'Creator & Maintainer · Product Architect & Designer',
   // avatar: '',    // future photo hook — no placeholder is rendered today (Wave 4N-b)
   github: 'https://github.com/Shubham0743X',                    // GitHub profile URL
   instagram: 'https://www.instagram.com/notso_shubhamm?mdxt=MWV1YzcxNmNhcXRhZA==',   // Instagram profile URL (verbatim as supplied)
-  repo: ''          // repository URL
+  repo: 'https://github.com/Shubham0743X/Svara',   // repository URL — the About card's "View Repository" button
 };
 var ABOUT_TIP = 'Not published yet';
 function aboutEl(){ return document.getElementById('aboutCard') }
