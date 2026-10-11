@@ -5,3 +5,12 @@ dist/
 *.working-2.*
 index.backup*.html
 server.backup.js
+
+# internal working notes and scratch — kept on disk, never published
+PLAN.md
+WAVE0-NOTES.md
+PROMPT-*.md
+.freebuff/
+*.log
+
+yt-dlp.exe

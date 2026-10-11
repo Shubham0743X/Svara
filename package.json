@@ -23,6 +23,15 @@
   "build": {
     "appId": "com.shubham0743x.svara",
     "productName": "Svara",
+    "files": [
+      "**/*",
+      "!.freebuff/**",
+      "!dist/**",
+      "!PLAN.md",
+      "!WAVE0-NOTES.md",
+      "!*.backup.*",
+      "!yt-dlp.exe"
+    ],
     "extraResources": [
       { "from": "yt-dlp.exe", "to": "yt-dlp.exe" }
     ],
