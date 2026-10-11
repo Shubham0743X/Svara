@@ -78,6 +78,18 @@ img{display:block}
 .paget .back:hover{background:var(--panel2)}
 .paget .back .ic{width:18px;height:18px}
 .sub{font-size:13px;color:var(--dim);margin:0 2px 14px}
+/* Wave 5 (UI-11) — the Home "Now playing" row: dot + label + “title · artist”.
+   It stands between the search bar and the mood pills and KEEPS ITS BOX in every state (see #v3js
+   homeLine), so its metrics belong HERE, with the other shared title rules: the head is parsed
+   before the row can be painted, so the reserved box is already the right height on the FIRST
+   paint. (These three rules used to live in the late #v3css layer while the row itself booted
+   `hidden` — the pills below sat ~67px too high for the 600ms until #v3js's homeLine() first ran.)
+   Values are unchanged (13px/600, dim, margin 12px 2px 2px, 8px dot); starting a track only reveals
+   the dot and the text — the box height, and therefore the pills' y, stay identical. */
+#pgTitle.pgNP{font-size:13px;font-weight:600;color:var(--dim);letter-spacing:0;margin:12px 2px 2px;
+  display:flex;align-items:center;gap:8px}
+.npdot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.8)}
+#pgTitle.pgIdle .npdot{visibility:hidden}   /* UI-9: idle — no dot at all; `visibility` (not display) keeps its 8px slot in the flex row */
 /* home sections */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0 2px}
 .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 15px;font-size:13px;white-space:nowrap;color:var(--dim)}
@@ -439,8 +451,12 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
   <div id="searchFilters" hidden></div>
 
   <div id="scroll">
-    <div class="paget" id="pgTitle" hidden></div>
-    <div class="sub" id="pgSub" hidden></div>
+    <!-- Wave 5 (UI-11): the title row boots in its IDLE state, with the box already reserved in the
+         markup, so the mood pills sit at their final y on the very first paint (before homeLine()
+         has ever run). The zero-width space renders no glyph but lays out a full line, and the dot
+         keeps its 8px slot, invisible — exactly the idle state homeLine() writes. -->
+    <div class="paget pgNP pgIdle" id="pgTitle"><span class="npdot"></span>&#8203;</div>
+    <div class="sub" id="pgSub">&#8203;</div>
     <div id="homeSec"></div>
     <div id="dynSec" hidden></div>
   </div>
@@ -567,7 +583,12 @@ const pgTitle=$('#pgTitle'),pgSub=$('#pgSub');
 function setNav(on){
   document.querySelectorAll('.navit').forEach(b=>b.classList.toggle('on',b.dataset.nav===on));
 }
-function goHome(){curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;pgTitle.hidden=true;pgSub.hidden=true;renderHome();updatePlRows();}
+/* Wave 5 (UI-11): Home no longer HIDES this row. Since UI-9 the row keeps its BOX in every state,
+   so blanking it here collapsed ~67px of rhythm between the search bar and the mood pills — on the
+   boot path that lasted until #v3js's homeLine() first ran, 600ms in. The markup now boots the row
+   in its idle state and every later visit is repainted by the showDyn/goHome wrapper (which calls
+   homeLine() in the same tick as this function), so nothing has to blank it any more. */
+function goHome(){curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
 function showDyn(title,sub,html){curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
 
 /* ============ sidebar playlists ============ */
@@ -2341,10 +2362,8 @@ if(!$('#homeSec').hidden)renderHome();
 #pvHead{gap:8px}
 #v3auto.on{color:var(--acc)}
 #miniShuf.on{color:var(--acc)}
-#pgTitle.pgNP{font-size:13px;font-weight:600;color:var(--dim);letter-spacing:0;margin:12px 2px 2px;
-  display:flex;align-items:center;gap:8px}
-.npdot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.8)}
-#pgTitle.pgIdle .npdot{visibility:hidden}   /* UI-9: idle — no dot at all; `visibility` (not display) keeps its 8px slot in the flex row */
+/* Wave 5 (UI-11): #pgTitle.pgNP + .npdot + #pgTitle.pgIdle .npdot moved UP to the HEAD (see .sub) so
+   the row's reserved idle box is styled from the first paint. Nothing in this layer referenced them. */
 /* ===== Wave 1 — artist links + artist page ===== */
 .alink{cursor:pointer}
 .alink:hover{color:var(--tx);text-decoration:underline;text-underline-offset:2px}
@@ -8039,7 +8058,10 @@ html[data-gfx="reduced"] .glb-l:hover,html[data-gfx="reduced"] .glb-l.is-hover{b
            #setPanel .setAbout) keep their chrome ring. */
 (function(){
 'use strict';
-var FULL='.chip[data-chip],#searchFilters .fchip,.srch,.art-back,.sec h2 .go,#aboutCard .abBtn,#setPanel .setAct,.art-acts .pact.ghost,.topres .trbtn.ghost';   /* UI-10: .lyrseg/.lyrchip buttons left this list — the lyrics-provider pills carry a FIXED dark-translucent style (#v5provcss) at every graphics level, so the gated .glb chrome must not touch them */
+var FULL='.chip[data-chip],#searchFilters .fchip,.chip[data-libtab],.chip[data-libsort],.srch,.art-back,.sec h2 .go,#aboutCard .abBtn,#setPanel .setAct,.art-acts .pact.ghost,.topres .trbtn.ghost';   /* UI-10: .lyrseg/.lyrchip buttons left this list — the lyrics-provider pills carry a FIXED dark-translucent style (#v5provcss) at every graphics level, so the gated .glb chrome must not touch them. UI-11: the Library page's filter + sort chips joined (.chip[data-libtab] / .chip[data-libsort]) — they are the SAME .chip pill the mood row renders, so they now take the same glass as the pills in the search list instead of staying flat. */
+/* UI-11: the Library head is rebuilt on every chip click (#v5libjs), so the MutationObserver — not
+   a one-shot pass — is what marks the fresh buttons. Nothing else is needed: same classes, same
+   gated chrome, so the mood row, the search pills and the Library chips can never drift apart. */
 var LITE='.tic,.dots,.pact:not(#pvFav):not(#pvMenu),.mbtn:not(#mFav),.pbtn,.lyrbtn,.rail .ov .pb,#setPanel .setX,#aboutCard .abX';
 var SKIP='#go,.gobtn,#newPl,#setPanel .setAbout,.lm,#playBtn,#pvPlay,.mbtn.main,.art-acts .pact:not(.ghost),.topres .trbtn:not(.ghost),.np button,#npGo';
 function mark(){
