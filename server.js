@@ -15,6 +15,67 @@ const app = express();
 let yt;
 async function getYt(){ if (!yt) yt = await Innertube.create(); return yt; }
 
+/* ================= Wave 4AK — response caching (headers only) =================
+   Measured live against this server, warm process, identical params, hit 1 -> hit 2:
+     suggest 506->164ms · search 690->714ms · radio 1085->1708ms · lyrics 459->490ms ·
+     artist 660->468ms · artist/songs 1401->1348ms · album 309->281ms · thumb 727->262ms
+   Every one of those calls hits youtubei.js again: nothing but /api/thumb sent a Cache-Control
+   header. This wave adds ONLY that header. No server-side response store, no JS/IndexedDB/
+   localStorage layer, no body, no status code and no route signature changes.
+
+   /api/search is DELIBERATELY NEVER CACHED, and that is a measured decision, not caution. Its
+   pagination handle reaches the client INSIDE the body — `{ items, sessionId, next:true }` — and
+   `sessionId` is a key into the in-memory `searchSessions` Map. A replayed body after a restart
+   therefore advertises `next:true` with a handle that can never be resumed: /api/search/next
+   answers `{ items:[], next:false, error:'session expired' }` (verified live with a stale id), the
+   client ends paging and prints "End of results" — page 2+ is silently lost. Freezing that body
+   in a browser cache (or letting its Express ETag answer a 304) would ship exactly that bug, so
+   this route is sent `no-store` until the handle is provable across a restart.
+
+   Failures are NEVER cached: a non-200, a body carrying `error`, or an empty result is sent with
+   `no-store`, so 4AF's "Search failed" state can never become sticky. */
+const CACHE_TTL = {
+  '/api/lyrics': 86400,        // lyrics do not change
+  '/api/album': 1800,
+  '/api/artist': 1800,
+  '/api/artist/songs': 1800,
+  '/api/suggest': 600,
+  '/api/radio': 600
+};
+/* A body may be cached only when it is a successful, non-empty payload. `error` is a plain string
+   on every route that has one ('' when there is none), so truthiness is the test. */
+function cacheableBody(body){
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  if (body.error) return false;                                     // explicit failure
+  if ('id' in body && body.id === null) return false;               // artist not found
+  if (Array.isArray(body.items) && !body.items.length) return false;
+  if (Array.isArray(body.tracks) && !body.tracks.length) return false;
+  if (Array.isArray(body.songs) && !body.songs.length) return false;
+  if ('plain' in body && !body.plain && !body.synced) return false; // lyrics: nothing found
+  return true;
+}
+/* Wrap res.json for ONE request so every response of that route decides its own header — no call
+   site inside the handler has to be rewritten. res.setHeader before the body is written is always
+   legal (res.json has not sent headers yet). */
+function cacheHeaders(res, route){
+  const ttl = CACHE_TTL[route] || 0;
+  const json = res.json.bind(res);
+  res.json = function(body){
+    try {
+      if (ttl && res.statusCode === 200 && cacheableBody(body)) res.setHeader('Cache-Control', 'private, max-age=' + ttl);
+      else res.setHeader('Cache-Control', 'no-store');
+    } catch (e) {}
+    return json(body);
+  };
+}
+/* Routes that must never be cached claim it up front, so the header is set whatever the handler
+   ends up doing (stream pipe, file download, error JSON, or a 206). */
+function noStore(res){
+  try { res.setHeader('Cache-Control', 'no-store') } catch (e) {}
+  const json = res.json.bind(res);
+  res.json = function(body){ try { res.setHeader('Cache-Control', 'no-store') } catch (e) {} return json(body); };
+}
+
 /* ================= helpers ================= */
 function txt(v, seen = new WeakSet()) {
   if (v == null) return '';
@@ -62,6 +123,28 @@ function extractArtist(item){
   const parts = sub.split('•');
   if (parts.length > 1) return parts.slice(1).join('•').trim();
   return '';
+}
+/* 4AP: a TITLE-ONLY "credit" — the resolved artist string is just the track's own title. This is
+   what a producer writes when NO structured credit exists and it falls back to a text field that
+   happens to hold the title. The measured case is the up-next panel: PlaylistPanelVideo carries
+   short_byline/long_byline/subtitle/author ALL empty, `album.name` equal to the title on singles
+   (verified live: title "Self Aware", album "Self Aware", artists [Temper City]) and byline()
+   fell through to that album name. Such a string is not an identity — it must never be shown,
+   dialled as an artist, stored in history, or fed to lyrics matching. */
+function normCredit(s){
+  return String(s == null ? '' : s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function isTitleOnlyCredit(artist, title){
+  const a = normCredit(artist), t = normCredit(title);
+  return !!a && a === t;
+}
+// was there ANY structured credit on the row? (this is the gate: a real credit is never touched)
+function hasStructuredCredit(i){
+  return (Array.isArray(i.artists) && i.artists.length) ||
+         (Array.isArray(i.authors) && i.authors.length) ||
+         !!i.author;
 }
 // artist objects WITH channel ids, alongside the flat `artist` string (never replaces it).
 // youtubei.js 18 shapes: song rows -> `artists[]`, video rows -> `authors[]`,
@@ -173,13 +256,23 @@ function mapTrack(i, fallbackThumb, isAlbum, withLabel){
     const kind = rowKind(i, isAlbum);
     const isArtistRow = kind === 'artist';
     const artName = isArtistRow ? (txt(i.name) || flexText(i, 0)) : '';
+    const title = isArtistRow ? (artName || txt(i.title)) : txt(i.title);
+    let artist = isArtistRow ? artName : extractArtist(i);
+    let artists = isArtistRow ? (i.id ? [{ name: artName, id: i.id }] : []) : artistList(i);
+    /* 4AP: no structured credit AND the resolved string equals the title -> drop the poison
+       (artist:'', artists:[]). A row carrying real artists[]/authors[]/author credits is NEVER
+       touched, and artist rows keep their name. */
+    if (!isArtistRow && !hasStructuredCredit(i) && isTitleOnlyCredit(artist, title)){
+      artist = '';
+      artists = [];
+    }
     return {
       id: i.id,
       kind,
       label: withLabel ? rowLabel(i) : '',   // 4W-D2: the All list's own per-row type label
-      title: isArtistRow ? (artName || txt(i.title)) : txt(i.title),
-      artist: isArtistRow ? artName : extractArtist(i),
-      artists: isArtistRow ? (i.id ? [{ name: artName, id: i.id }] : []) : artistList(i),
+      title,
+      artist,
+      artists,
       sub: txt(i.subtitle) || txt(i.album) || '',
       thumb: bestUrl(th) || fallbackThumb || '',
       duration: i.duration?.text ? String(i.duration.text) : ''
@@ -376,7 +469,18 @@ function backfillRow(dst, src){
 // ROUND-ROBIN (one row from each group per pass) so no single category floods the list and albums
 // AND artists both stay in the mix. Id-bearing duplicates are backfilled; id-less rows use the
 // cautious key and are only skipped when it already exists (never merged across a title).
-function mergeAllRows(base, groups){
+// 4Z-b-1 — THE ONE EXCEPTION to "base order is preserved": the guarded song promotion below.
+// Measured on "aasa kooda": the unfiltered batch floats three kind:'track' label:'Video' covers
+// ("…Live Singing…", "…Slap Remix…") above the canonical kind:'track' label:'Song' row
+// rVqcPUQ2YXI, which the type=song page 1 puts at index 0. The covers' titles are NOT equal to
+// the song's, so no exact-title (or dedupe) rule could ever reach this — only the song category
+// search knows which row is the canonical song. So: if that category's OWN top row looks like the
+// query AND the All list already carries the same id as a Song row with at least one Video row in
+// front of it, that Song row is lifted to just before the first such Video row. Nothing is added
+// or dropped, every other row keeps its relative order, and the length never exceeds ALL_MERGE_CAP.
+// EVERY guard is mandatory; if any one fails this is a plain no-op, and the heuristic is never
+// widened to a fuzzier title match (a wrong promotion is worse than a wrong order).
+function mergeAllRows(base, groups, query){
   const out = base.slice();
   const at = new Map();
   out.forEach((it, i) => at.set(mergeKey(it), i));
@@ -402,10 +506,27 @@ function mergeAllRows(base, groups){
     }
     if (!advanced) break;
   }
+  // 4Z-b-1: the guarded song promotion — see the header comment above for the full rationale.
+  const qKey = artistNameKey(query);              // same normaliser as the artist filter: lowercase,
+  const topSong = groups[0] && groups[0][0];      // diacritics stripped, punctuation -> space,
+  if (topSong && topSong.id                     // spaces collapsed, a leading "the" dropped
+      && topSong.label === 'Song'               // (a) the song search's top row is a real Song row
+      && qKey && artistNameKey(topSong.title).indexOf(qKey) === 0) {   // (b) title starts with the query
+    const songAt = out.findIndex(it => it && it.id === topSong.id && it.label === 'Song');  // (c)
+    if (songAt > 0) {
+      let firstVideo = -1;                      // (d) the first label:'Video' row in front of it
+      for (let i = 0; i < songAt; i++) if (out[i] && out[i].label === 'Video') { firstVideo = i; break; }
+      if (firstVideo > -1) {
+        const moved = out.splice(songAt, 1)[0];   // splice-out first: songAt > firstVideo, so the
+        out.splice(firstVideo, 0, moved);         // earlier index is still valid for the insert.
+      }
+    }
+  }
   return out;
 }
 
 app.get('/api/search', async (req, res) => {
+  noStore(res);                     // 4AK: the sessionId in this body dies with the process (see above)
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ items: [], next: false });
   const type = searchTypeOf(req.query.type);
@@ -439,7 +560,7 @@ app.get('/api/search', async (req, res) => {
     if (type === 'all' && catP) {
       try {
         const cats = await catP;   // [song, album, artist]
-        items = mergeAllRows(items, [mapSearchRows(cats[0], 'song'), mapSearchRows(cats[1], 'album'), mapSearchRows(cats[2], 'artist')]);
+        items = mergeAllRows(items, [mapSearchRows(cats[0], 'song'), mapSearchRows(cats[1], 'album'), mapSearchRows(cats[2], 'artist')], q);
       } catch (e) {
         // soft-fail: keep YouTube's honest unfiltered batch rather than 500 the whole search
         console.error('all merge error (soft-fail):', e.message);
@@ -466,6 +587,7 @@ app.get('/api/search', async (req, res) => {
 });
 
 app.get('/api/search/next', async (req, res) => {
+  noStore(res);                     // 4AK: pagination pages are never cached
   const sessionId = String(req.query.sessionId || '');
   const s = searchSessions.get(sessionId);
   if (!s) return res.json({ items: [], next: false, error: 'session expired' });
@@ -546,6 +668,7 @@ function byline(it){
 function ytStill(id){ return 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg'; }
 
 app.get('/api/radio', async (req, res) => {
+  cacheHeaders(res, '/api/radio');
   const id = String(req.query.id || '');
   const title = String(req.query.title || '');
   const artist = String(req.query.artist || '');
@@ -564,11 +687,18 @@ app.get('/api/radio', async (req, res) => {
           const vid = it?.video_id || it?.id;
           if (!vid || vid === id) continue;
           const art = bestUrl(thumbsOf(it));
+          /* 4AP: the panel node has NO byline fields on singles — byline() then fell through to
+             `it.album.name`, which equals the track title, so the artist WAS the title. Use the
+             structured credit first (artists[] → authors[] → author, via extractArtist) and only
+             fall back to byline() when there is none; then never let a title-only string out. */
+          const rTitle = txt(it.title);
+          let rArtist = extractArtist(it) || byline(it);
+          if (isTitleOnlyCredit(rArtist, rTitle)) rArtist = '';
           items.push({
             id: vid,
             kind: 'track',
-            title: txt(it.title),
-            artist: byline(it),
+            title: rTitle,
+            artist: rArtist,
             artists: artistList(it),
             sub: '',
             thumb: art || ytStill(vid),
@@ -602,6 +732,7 @@ app.get('/api/radio', async (req, res) => {
 
 /* ================= album ================= */
 app.get('/api/album', async (req, res) => {
+  cacheHeaders(res, '/api/album');
   const id = String(req.query.id || '');
   if (!id) return res.json({ tracks: [], error: 'missing id' });
   try {
@@ -653,6 +784,7 @@ function mapRelatedArtist(i){
   } catch (e) { return null; }
 }
 app.get('/api/artist', async (req, res) => {
+  cacheHeaders(res, '/api/artist');
   const wantId = String(req.query.id || '').trim();
   const wantName = String(req.query.name || '').trim();
   if (!wantId && !wantName) return res.json({ id: null, error: 'missing id or name' });
@@ -783,6 +915,7 @@ async function artistSongRows(youtube, artist){
   return out;
 }
 app.get('/api/artist/songs', async (req, res) => {
+  cacheHeaders(res, '/api/artist/songs');
   const id = String(req.query.id || '').trim();
   const wantName = String(req.query.name || '').trim();
   if (!id) return res.json({ id: null, name: wantName, total: 0, songs: [], error: 'missing id' });
@@ -810,6 +943,7 @@ app.get('/api/artist/songs', async (req, res) => {
 
 /* ================= search suggestions ================= */
 app.get('/api/suggest', async (req, res) => {
+  cacheHeaders(res, '/api/suggest');
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ items: [] });
   try {
@@ -899,6 +1033,11 @@ async function lrclibBest({ title, artist, album, duration }){
   if (!title) return null;
   const titles = titleVariants(title);
   const artists = artistVariants(artist);
+  /* 4AP: a missing / title-only artist cannot corroborate a match on its own. `artists` is EMPTY
+     when artistVariants('') runs — Math.max of an empty list is -Infinity, which silently sank
+     every empty-artist request to "no lyrics". Treat it as UNTRUSTED instead and gate the
+     candidate on the title AND the duration (see the loop). */
+  const untrusted = !artist || isTitleOnlyCredit(artist, title);
   const pool = [];
   const push = (row, how) => { if (row && (row.syncedLyrics || row.plainLyrics)) pool.push({ ...row, _how: how }); };
 
@@ -937,7 +1076,16 @@ async function lrclibBest({ title, artist, album, duration }){
     if (seen.has(key)) continue;
     seen.add(key);
     const tScore = Math.max(...titles.map(t => jaccard(t, row.trackName || '')));
-    const aScore = Math.max(...artists.map(a => jaccard(a, row.artistName || '')));
+    const aScore = artists.length ? Math.max(...artists.map(a => jaccard(a, row.artistName || ''))) : 0;
+    /* 4AP-b GUARD: with no trustworthy artist term, accept ONLY a SYNCED candidate — never a
+       plain one (a plain same-title match is exactly the wrong-recording risk 4AP closed). The
+       synced entry must also be a near-exact title match (jaccard >= 0.9) AND agree on duration
+       within 5s. Verified: the untrusted title-only lookup for "Self Aware" returns only plain
+       Temper City rows, so this honestly answers "no timed lyrics" instead of guessing. */
+    if (untrusted){
+      const durOk = duration > 0 && row.duration && Math.abs(row.duration - duration) <= 5;
+      if (!row.syncedLyrics || tScore < 0.9 || !durOk) continue;
+    }
     const dScore = duration > 0 && row.duration
       ? Math.max(0, 1 - Math.abs(row.duration - duration) / 12) : 0.5;
     let score = 0.5 * tScore + 0.3 * aScore + 0.2 * dScore;
@@ -958,6 +1106,7 @@ async function lrclibBest({ title, artist, album, duration }){
 
 // provider=auto (default) | ytm | lrclib   → auto prefers SYNCED lyrics
 app.get('/api/lyrics', async (req, res) => {
+  cacheHeaders(res, '/api/lyrics');
   const want = ['ytm', 'lrclib'].includes(req.query.provider) ? req.query.provider : 'auto';
   const id = String(req.query.id || '');
   const title = String(req.query.title || '');
@@ -1031,6 +1180,7 @@ function pickAudioFile(dir){
   return path.join(dir, files.sort((a, b) => fs.statSync(path.join(dir, b)).size - fs.statSync(path.join(dir, a)).size)[0]);
 }
 app.get('/api/download', async (req, res) => {
+  noStore(res);                     // 4AK: a downloaded file is never cached by the proxy
   const id = String(req.query.id || '');
   if (!id || !/^[\w-]{6,}$/.test(id)) return res.status(400).json({ error: 'bad id' });
   const wantTitle = String(req.query.title || '');
@@ -1117,16 +1267,101 @@ app.get('/api/thumb', async (req, res) => {
 
 /* ================= stream ================= */
 const streamCache = new Map();
-async function getStreamUrl(videoId){
-  const hit = streamCache.get(videoId);
-  if (hit && hit.expires > Date.now()) return hit.url;
+const STREAM_TTL = 3 * 60 * 60 * 1000;   // a signed googlevideo URL lives ~6h; 3h is a safe window
+const STREAM_CACHE_MAX = 80;             // bounded: the oldest entry is dropped, not the whole map
+const streamResolving = new Map();       // videoId → the in-flight resolve, shared by every caller
+/* Wave 5 (UI-5) — MEASURED cold vs warm: resolving a stream URL costs 3.6-4.5 s (yt-dlp process +
+   YouTube extraction) while the SAME id answers in 0.07-0.15 s out of this cache. That resolution
+   was the entire "a song takes ages to start" delay — the audio itself was already streamed
+   progressively (Range/206, piped straight through). So the URL is now resolved AHEAD of playback
+   by /api/prefetch, and this function deduplicates: a prefetch that overlaps real playback must
+   never spawn a second yt-dlp process for the same video. */
+async function resolveStreamUrl(videoId){
   const { stdout } = await execFileP(YTDLP, ['-f', 'ba', '-g', 'https://www.youtube.com/watch?v=' + videoId], { timeout: 60000, windowsHide: true });
   const url = (stdout || '').trim().split('\n').pop();
   if (!url) throw new Error('yt-dlp returned no URL for ' + videoId);
-  streamCache.set(videoId, { url, expires: Date.now() + 3 * 60 * 60 * 1000 });
+  if (streamCache.size >= STREAM_CACHE_MAX) {
+    const oldest = streamCache.keys().next().value;
+    if (oldest !== undefined && oldest !== videoId) streamCache.delete(oldest);
+  }
+  streamCache.set(videoId, { url, expires: Date.now() + STREAM_TTL });
   return url;
 }
+function getStreamUrl(videoId){
+  const hit = streamCache.get(videoId);
+  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.url);
+  const inflight = streamResolving.get(videoId);
+  if (inflight) return inflight;
+  const guarded = resolveStreamUrl(videoId).then(
+    url => { streamResolving.delete(videoId); return url },
+    err => { streamResolving.delete(videoId); throw err }
+  );
+  streamResolving.set(videoId, guarded);
+  return guarded;
+}
+
+/* ---------- Wave 5 (UI-5): warm the URL before playback needs it ----------
+   The player asks for the tracks that are NEXT in the play order the moment a track starts, so by
+   the time the song ends its URL is signed and cached and playback starts in ~0.1 s instead of
+   ~4 s. Deliberately SERIAL and bounded — sliding the cursor across a list must never spawn one
+   yt-dlp per row. Duplicates collapse (a cache hit is not queued, the same id is queued once). */
+const warmQueue = [];
+const warmPending = new Set();
+let warmBusy = false;
+const WARM_MAX = 8;                      // at most this many un-started warm-ups at any moment
+/* MEASURED: a cold /api/stream hit `upstream 403` for a freshly resolved URL and the route's own
+   retry (refresh the URL, fetch again) cost a SECOND ~4 s yt-dlp run, i.e. an 8.5 s start. YouTube
+   is simply not deterministic here — the next resolve works. So the prefetch VERIFIES the URL it
+   just resolved with the same 2-byte Range request the player would send, and if that answers
+   403/410 it re-resolves immediately. The recovery then happens while the previous song is still
+   playing instead of in front of the listener. The stream route keeps its own retry as the net. */
+async function verifyWarmUrl(id){
+  const url = await getStreamUrl(id);
+  let up;
+  try {
+    up = await fetch(url, { headers: { Range: 'bytes=0-1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+  } catch (e) {
+    console.error(`prefetch: ${id} probe failed (${e.message}) — re-resolving`);
+    streamCache.delete(id);
+    return getStreamUrl(id);
+  }
+  if (up.ok) { try { if (up.body) up.body.cancel(); } catch (e) { /* nothing to drain */ } return url };
+  console.error(`prefetch: warmed URL for ${id} answered ${up.status} — re-resolving once`);
+  try { if (up.body) up.body.cancel(); } catch (e) { /* nothing to drain */ }
+  streamCache.delete(id);
+  return getStreamUrl(id);
+}
+function pumpWarm(){
+  if (warmBusy) return;
+  const id = warmQueue.shift();
+  if (!id) return;
+  warmBusy = true;
+  const t0 = Date.now();
+  verifyWarmUrl(id).then(
+    () => console.log(`prefetch: ${id} warmed+verified in ${Date.now() - t0}ms`),
+    e => console.error('prefetch failed for', id, '-', e.message)
+  ).then(() => { warmBusy = false; warmPending.delete(id); pumpWarm(); });
+}
+function warmStream(id){
+  id = String(id || '').trim();
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) return false;      // only something that looks like a video id
+  if (warmPending.has(id) || warmQueue.length >= WARM_MAX) return false;
+  const hit = streamCache.get(id);
+  if (hit && hit.expires > Date.now()) return false;        // already warm — nothing to do
+  warmPending.add(id);
+  warmQueue.push(id);
+  pumpWarm();
+  return true;
+}
+app.get('/api/prefetch', (req, res) => {
+  noStore(res);
+  const ids = String(req.query.ids || req.query.id || '').split(',').slice(0, 4);
+  let queued = 0;
+  ids.forEach(id => { if (warmStream(id)) queued++ });
+  res.json({ queued });     // fire-and-forget: the client never waits on this answer
+});
 app.get('/api/stream', async (req, res) => {
+  noStore(res);                     // 4AK: never cache audio; Range/seek is unaffected
   try {
     const id = String(req.query.id || '');
     if (!id) return res.status(400).end();
@@ -1167,6 +1402,22 @@ app.get('/api/system', (req, res) => {
   let version = '';
   try { version = require('./package.json').version || ''; } catch (e) { version = ''; }
   res.json({ version, ytdlp: YTDLP, ytdlpFound: fs.existsSync(YTDLP) });
+});
+
+/* ================= fonts (Wave 4BG — read-only, files live in ./fonts) ================= */
+const FONT_DIR = path.join(__dirname, 'fonts');
+const FONT_MIME = { '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2' };
+app.get('/fonts/:file', (req, res) => {
+  const name = String(req.params.file || '');
+  const ext = path.extname(name).toLowerCase();
+  if (!FONT_MIME[ext] || !/^[A-Za-z0-9._-]+$/.test(name) || name.includes('..')) return res.status(404).end();
+  const full = path.join(FONT_DIR, name);
+  if (!full.startsWith(FONT_DIR + path.sep)) return res.status(404).end();
+  let st; try { st = fs.statSync(full); } catch (e) { return res.status(404).end(); }
+  if (!st.isFile()) return res.status(404).end();
+  res.setHeader('Content-Type', FONT_MIME[ext]);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(full);
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
