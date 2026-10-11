@@ -8906,5 +8906,641 @@ if(typeof pc === 'function') window.paintControls = function(){ var r = pc.apply
 sync();
 })();
 </script>
+<style id="v6onccss">
+/* ===== Wave 6 — first-run personalisation (the port of the Stitch onboarding) =====
+   WHAT: three screens that run once, on a profile with nothing in it — languages + vibes, then
+   artists, then a short "Great picks!" build. What they collect is a PROFILE, and the profile does
+   two separate jobs on Home: it seeds the EXISTING taste engine (hist entries, so Listen again /
+   Quick picks / Albums for you / the dice radio fill themselves with no change to how those rows
+   work) and it renders its own shelves from the same picks.
+
+   PORT NOTES — what the Stitch export was, and what had to change to live in this app:
+     • Tailwind CDN + a generated config → none of it. Every rule below is plain CSS against the
+       tokens this file already has. The design's mint (#1FCF9B / #4DECB5) IS --acc / --acc2 and its
+       near-black on-accent (#050505) is --on-acc, so no new colour is introduced.
+     • Google Fonts (Plus Jakarta Sans) → the app's own stack. Nothing here fetches a font at
+       runtime; the display sizes/weights/tracking from the design are kept.
+     • Material Symbols → the two glyphs already in the sprite (i-search, i-disc) plus a few small
+       inline SVGs in this block. No icon font, no network.
+     • The export's artist photos are Stitch's generated aida-public URLs (they rot, and they are
+       not the artists) → REAL rows: names, browse ids and thumbnails come from
+       /api/search?type=artist and /api/artist/songs, which is also what makes the "Great picks!"
+       avatars the actual picks.
+     • The export's ⌘K hint was dropped: this app has no such shortcut, and a fake key badge is
+       worse than no key badge.
+   The design's own states are honoured as written: selected pills are SOLID mint with near-black
+   text (DESIGN.md "Selected State"), avatars take a 3px mint ring + halo + check badge, and the
+   footer is a hairline-topped dock with a ghost action left and the primary CTA right.
+
+   LAYERS: the shell is z 100, above Settings (96) and About (98), and it is fully opaque, so the
+   app behind it is never half-visible. Blur and the dot pulse drop at graphics level low/reduced and
+   under prefers-reduced-motion, exactly like the rest of the app. All type is calc(Npx * var(--fss))
+   so Settings → Text size grows this screen with everything else. */
+#onc{position:fixed;inset:0;z-index:100;display:none;background:var(--bg);color:var(--tx);overscroll-behavior:none}
+#onc.on{display:flex;flex-direction:column;align-items:center}
+#onc::before{content:"";position:absolute;inset:0;pointer-events:none;background:
+  radial-gradient(42% 38% at 22% 16%, rgba(var(--amb),.16), transparent 70%),
+  radial-gradient(38% 34% at 78% 24%, rgba(84,72,190,.13), transparent 72%),
+  radial-gradient(46% 40% at 60% 90%, rgba(150,80,160,.10), transparent 75%)}
+.oncStage{position:relative;z-index:1;display:flex;flex-direction:column;width:100%;max-width:900px;height:100%;padding:24px 22px 20px;margin:0 auto}
+.oncTop{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto}
+.oncStep{font-size:calc(11.5px * var(--fss));font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.oncBars{display:flex;align-items:center;gap:6px}
+.oncBars i{display:block;height:6px;border-radius:9999px;background:var(--panel2);transition:width .3s ease}
+.oncBars i.on{width:32px;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.45)}
+.oncBars i:not(.on){width:12px}
+.oncHead{flex:0 0 auto;margin:min(4vh,30px) auto 0;text-align:center;max-width:660px}
+.oncHead h1{margin:0;font-size:calc(38px * var(--fss));line-height:1.14;font-weight:800;letter-spacing:-.03em;color:#fff}
+.oncHead p{margin:10px auto 0;max-width:540px;font-size:calc(15.5px * var(--fss));line-height:1.5;color:var(--dim)}
+/* the stage never scrolls as a whole: step 1's panel and step 2's grid each scroll INSIDE
+   themselves, so the header tier, the search field and the dock are always where the design puts
+   them. (Measured before this: entering step 2 restored a scroll offset and the search bar was
+   gone above the fold.) */
+.oncBody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:20px 2px;overflow:hidden}
+.oncGlass{max-height:100%;overflow-y:auto;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:24px;padding:24px 26px 28px;display:flex;flex-direction:column;gap:26px}
+.oncGridScroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:6px;padding-right:2px}
+html[data-gfx="full"] .oncGlass,html[data-gfx="medium"] .oncGlass{-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.oncGrp{display:flex;flex-direction:column;gap:12px;min-width:0}
+.oncGrpH{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.oncGrpH .t{display:flex;align-items:center;gap:9px;font-size:calc(17px * var(--fss));font-weight:700;color:#fff}
+.oncGrpH .t svg{width:20px;height:20px;color:var(--acc)}
+.oncGrpH .h{font-size:calc(12px * var(--fss));color:var(--dim)}
+.oncPills{display:flex;flex-wrap:wrap;gap:10px}
+.oncPill{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:8px 18px;border-radius:9999px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);color:var(--dim);
+  font-family:inherit;font-size:calc(13.5px * var(--fss));font-weight:600;cursor:pointer;
+  transition:background .18s,border-color .18s,color .18s,box-shadow .18s}
+.oncPill:hover{border-color:rgba(255,255,255,.25);color:#fff}
+.oncPill[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:rgb(var(--on-acc));font-weight:700;box-shadow:0 0 14px rgba(var(--amb),.30)}
+.oncPill .ck{display:none}
+.oncPill[aria-pressed="true"] .ck{display:block}
+.oncPill .ck svg{display:block;width:15px;height:15px}
+.oncSearch{display:flex;align-items:center;gap:10px;height:48px;padding:0 20px;border-radius:9999px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10)}
+.oncSearch:focus-within{border-color:rgba(255,255,255,.35);box-shadow:0 0 0 3px rgba(var(--amb),.10)}
+/* the app's .ic class styles the WRAPPER only — the sprite <svg> inside carries no intrinsic size,
+   so every use of it in this overlay states its own box (measured: an unsized magnifier painted at
+   ~100px and pushed the field's placeholder off centre). */
+.oncSearch .ic{color:var(--dim);flex:0 0 auto;width:18px;height:18px}
+.oncSearch .ic svg{width:18px;height:18px;display:block}
+.oncSearch input{flex:1 1 auto;min-width:0;background:none;border:0;outline:0;color:var(--tx);font-family:inherit;font-size:calc(14px * var(--fss))}
+.oncSearch input::placeholder{color:var(--dim)}
+.oncGridNote{min-height:18px;margin-top:14px;font-size:calc(12.5px * var(--fss));color:var(--dim)}
+.oncGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:20px;margin-top:6px}
+.oncTile{display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:0;padding:4px 2px;cursor:pointer;font-family:inherit;text-align:center;min-width:0}
+.oncAv{position:relative;width:104px;height:104px;border-radius:50%;overflow:visible;background:linear-gradient(145deg,#232330,#101016);
+  border:3px solid transparent;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.oncAv .im{position:absolute;inset:-1px;border-radius:50%;overflow:hidden;background:linear-gradient(145deg,#232330,#101016)}
+.oncTile:hover .oncAv{transform:scale(1.03);box-shadow:0 8px 24px rgba(var(--amb),.20)}
+.oncTile[aria-pressed="true"] .oncAv{border-color:var(--acc);box-shadow:0 0 24px rgba(var(--amb),.35)}
+.oncAv .im img{width:100%;height:100%;object-fit:cover;display:block}
+.oncAv .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim)}
+.oncAv .ph .ic{width:34px;height:34px;color:var(--dim)}
+.oncAv .ph .ic svg{width:34px;height:34px;display:block}
+.oncFace .ph .ic{width:32px;height:32px}
+.oncFace .ph .ic svg{width:32px;height:32px;display:block}
+.oncBdg{position:absolute;right:-3px;bottom:-3px;width:22px;height:22px;border-radius:50%;background:var(--acc);color:rgb(var(--on-acc));
+  display:none;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.55)}
+.oncBdg svg{display:block;width:13px;height:13px}
+.oncTile[aria-pressed="true"] .oncBdg{display:flex}
+.oncNm{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(14px * var(--fss));font-weight:600;color:var(--dim)}
+.oncTile[aria-pressed="true"] .oncNm{color:#fff}
+.oncCap{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(11.5px * var(--fss));color:var(--dim);opacity:.75}
+.oncFoot{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:16px;border-top:1px solid rgba(255,255,255,.10)}
+.oncGh{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:9999px;background:none;border:0;
+  color:var(--dim);font-family:inherit;font-size:calc(13.5px * var(--fss));font-weight:600;cursor:pointer;transition:color .18s}
+.oncGh:hover{color:#fff}
+.oncCnt{font-size:calc(12.5px * var(--fss));color:var(--dim)}
+.oncRight{display:flex;align-items:center;gap:12px;min-width:0}
+.oncCta{display:inline-flex;align-items:center;gap:9px;height:46px;padding:0 30px;border:0;border-radius:9999px;
+  background:var(--acc);color:rgb(var(--on-acc));font-family:inherit;font-size:calc(13.5px * var(--fss));font-weight:700;
+  cursor:pointer;box-shadow:0 8px 22px rgba(var(--amb),.28);transition:background .18s,transform .12s}
+.oncCta:hover{background:var(--acc2)}
+.oncCta:active{transform:scale(.98)}
+.oncCta[disabled]{opacity:.35;pointer-events:none;box-shadow:none}
+.oncGh .ic,.oncCta .ic{width:17px;height:17px}
+/* my own inline SVGs are NOT the app's sprite ones, so they carry no size of their own: without
+   these two rules the arrow fills the flex row (measured: a 40px arrow that wrapped the CTA onto
+   three lines). Sized here, and the labels are never allowed to wrap. */
+.oncGh>svg,.oncCta>svg{width:17px;height:17px;flex:0 0 auto}
+.oncGh span,.oncCta span{white-space:nowrap}
+.oncPicks{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;text-align:center;min-height:min(56vh,420px)}
+.oncFaces{display:flex;align-items:center;justify-content:center}
+.oncFace{position:relative;width:80px;height:80px;border-radius:50%;padding:2.5px;margin-left:-14px;
+  background:linear-gradient(140deg,var(--acc),var(--acc2));transition:transform .3s ease}
+.oncFace:first-child{margin-left:0}
+.oncFace:hover{transform:scale(1.05)}
+.oncFace>span{display:block;width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b0b0f}
+.oncFace img{width:100%;height:100%;object-fit:cover;display:block}
+.oncFace .ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--dim)}
+.oncPicks h2{margin:0;font-size:calc(30px * var(--fss));font-weight:700;letter-spacing:-.02em;color:#fff}
+.oncDots{display:flex;align-items:center;gap:14px;height:22px}
+.oncDots i{width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.5);opacity:.35}
+.oncDots i.beat{animation:oncbeat 1.3s cubic-bezier(.4,0,.6,1) infinite}
+.oncDots i.beat:nth-child(2){animation-delay:.22s}
+.oncDots i.beat:nth-child(3){animation-delay:.44s}
+@keyframes oncbeat{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.35);opacity:1}}
+.oncNote{font-size:calc(12.5px * var(--fss));color:var(--dim)}
+/* Home: the one-time offer for a profile that already has history */
+.oncBan{display:flex;align-items:center;gap:14px;margin:2px 2px 16px;padding:14px 16px;border-radius:16px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10)}
+.oncBan .g{flex:1 1 auto;min-width:0}
+.oncBan b{display:block;font-size:14.5px;font-weight:700;color:#fff}
+.oncBan span{display:block;margin-top:3px;font-size:12.5px;color:var(--dim)}
+.oncBan .go{flex:0 0 auto;height:34px;padding:0 16px;border:0;border-radius:9999px;background:var(--acc);color:rgb(var(--on-acc));
+  font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.oncBan .no{flex:0 0 auto;padding:8px 10px;background:none;border:0;color:var(--dim);font-family:inherit;font-size:12.5px;cursor:pointer}
+.oncBan .no:hover{color:#fff}
+@media (prefers-reduced-motion:reduce){
+  .oncDots i.beat{animation:none;opacity:.85}
+  .oncAv,.oncTile:hover .oncAv,.oncFace{transition:none;transform:none}
+}
+html[data-gfx="low"] .oncGlass,html[data-gfx="reduced"] .oncGlass{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(255,255,255,.03)}
+html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
+</style>
+
+<script id="v6oncjs">
+/* ===== Wave 6 — first-run personalisation: the flow, the profile, and what it seeds =====
+   STORAGE (three keys, all JSON through the app's own LSget/LSset):
+     sv_profile          {v:1, langs:[], genres:[], artists:[{id,name,thumb}], at}
+     sv_onboard_seen     1 once the flow was completed OR skipped — "skippable, once only"
+     sv_onboard_banner   1 once the one-time Home offer was dismissed
+   WHEN IT RUNS: nothing in hist and no profile and not seen ⇒ it opens by itself (a fresh install).
+   History but no profile ⇒ Home shows the one-time offer instead, and dismissing it is remembered.
+   Settings → "Personalise my taste" reopens it forever, prefilled. A real data reset clears all
+   three keys, which is what brings the first-run path back.
+
+   THE SEED, AND WHY IT IS TAGGED: the picks are written into `ml_history` — the store Listen again,
+   Quick picks, Albums for you and the dice radio already read — because that is the only way Home
+   fills without teaching those rows a second source of truth. Each seeded entry carries `seed:1`,
+   and that tag is DROPPED the moment the track is really played (notePlay is wrapped below), so:
+     • seeded picks feed taste scoring and the rails immediately;
+     • the History page never claims you played something you did not (_4asHistItems is wrapped);
+     • a re-run replaces only still-unplayed seeds, and a track you have genuinely played is never
+       touched by the seeder (it skips any id already in hist).
+   FOUR WRAPPERS, all in this block: renderHome (append the shelves / the offer), notePlay (drop a
+   seed tag on a real play), _4asHistItems (hide only still-tagged seeds), setRender (add the
+   Settings row). Nothing outside this block is edited.
+
+   NOTE: the rails this wave adds carry `data-oncq`, NOT `data-rail`. The app's rail handler only
+   understands ctx 'al' / 'la' / 'start' and returns silently for anything else, so an unknown ctx
+   would be a dead click; these cards are played by this block's own listener. */
+(function(){
+  var LANGS = ['English','Hindi','Punjabi','Tamil','Spanish','Korean','Japanese','French','German'];
+  var VIBES = ['Lo-Fi Chill','Indie Pop','Hip Hop','Synthwave','Deep House','Acoustic','R&B','Techno',
+               'Classical','Jazz','Metal','Neo-Soul','Ambient','Bollywood','EDM'];
+  var KP='sv_profile', KS='sv_onboard_seen', KB='sv_onboard_banner';
+  var MIN_ARTISTS=3, MAX_SEED_ARTISTS=6, SONGS_PER_ARTIST=5;
+
+  var ICON = {
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.6l5.4 5.4L20 6.6"/></svg>',
+    arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5"/></svg>',
+    back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 5.5L4.5 12l6.5 6.5"/></svg>',
+    langs:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M8 3v2c0 4.6-2.3 7.7-5 9.2"/><path d="M6 8.2c0 3.2 2.8 5.6 7 6.5"/><path d="M12.6 21l4-10 4 10M14.3 17.6h4.6"/></svg>',
+    eq:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 21V9.5M5 5.5v1M12 21v-8M12 9.5V3M19 21v-4M19 13.5V3"/></svg>'
+  };
+
+  /* live selection for the run in progress (prefilled when reopened from Settings) */
+  var sel = { langs:[], genres:[], artists:[] };
+  var tilesById = {};              // id -> {id,name,thumb,cap} for everything currently painted
+  var rails = {};                  // shelf key -> items, for this block's own rail playback
+  var railSeq = 0;
+  var step = 1, open = false, busy = false, gridGen = 0, homeGen6 = 0, searchTimer = null;
+  var root = null;
+
+  var profile = LSget(KP, null) || null;
+  function seen(){ return !!LSget(KS, 0) }
+  function setSeen(v){ LSset(KS, v?1:0) }
+  function histEmpty(){ try{ return !Object.keys(hist||{}).length }catch(e){ return true } }
+
+  /* ---------- shell ---------- */
+  function mount(){
+    if(root) return root;
+    root = document.createElement('aside');
+    root.id = 'onc';
+    root.setAttribute('role','dialog');
+    root.setAttribute('aria-modal','true');
+    root.setAttribute('aria-labelledby','oncTitle');
+    root.setAttribute('aria-hidden','true');
+    root.innerHTML = '<div class="oncStage">'+
+      '<div class="oncTop"><span class="oncStep" id="oncStepLbl"></span><div class="oncBars"><i></i><i></i></div></div>'+
+      '<div class="oncHead"><h1 id="oncTitle"></h1><p id="oncSub"></p></div>'+
+      '<div class="oncBody" id="oncBody"></div>'+
+      '<div class="oncFoot" id="oncFoot"></div>'+
+    '</div>';
+    document.body.appendChild(root);
+    return root;
+  }
+  function el(id){ return root ? root.querySelector('#'+id) : null }
+
+  function pill(label, kind){
+    var on = (kind==='lang' ? sel.langs : sel.genres).indexOf(label) >= 0;
+    return '<button class="oncPill" type="button" data-oncpill="'+kind+'" data-v="'+esc(label)+'" aria-pressed="'+(on?'true':'false')+'">'+
+      '<span>'+esc(label)+'</span><span class="ck">'+ICON.check+'</span></button>';
+  }
+  function tileHTML(t){
+    var on = sel.artists.some(function(a){ return a.id===t.id });
+    var ph = t.thumb ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+    var img = t.thumb ? '<img loading="lazy" src="'+esc(t.thumb)+'" alt="" onerror="this.style.display=\'none\'">' : '';
+    return '<button class="oncTile" type="button" data-oncart="1" data-v="'+esc(t.id)+'" data-name="'+esc(t.name)+'" aria-pressed="'+(on?'true':'false')+'" title="'+esc(t.name)+'">'+
+      '<span class="oncAv"><span class="im">'+ph+img+'</span>'+
+      '<span class="oncBdg">'+ICON.check+'</span></span>'+
+      '<span class="oncNm">'+esc(t.name)+'</span><span class="oncCap">'+esc(t.cap||'')+'</span></button>';
+  }
+  function faceHTML(a){
+    var inner = a.thumb ? '<img src="'+esc(a.thumb)+'" alt="">'
+                        : '<span class="ph"><span class="ic">'+ic('i-disc')+'</span></span>';
+    return '<span class="oncFace" title="'+esc(a.name)+'"><span>'+inner+'</span></span>';
+  }
+  function gridNote(msg){ var n=el('oncGridNote'); if(n) n.textContent = msg || '' }
+
+  function paint(){
+    var stepLbl=el('oncStepLbl'), title=el('oncTitle'), sub=el('oncSub'), body=el('oncBody'), foot=el('oncFoot');
+    if(!body) return;
+    var bars = root.querySelectorAll('.oncBars i');
+    bars[0].className = step===1 ? 'on' : '';
+    bars[1].className = step===2 ? 'on' : '';
+    /* every state is REBUILT below, so any scroll offset dies with the old nodes: step 1's panel
+       scrolls inside .oncGlass, step 2's grid inside .oncGridScroll (both fresh on every paint) */
+    stepLbl.textContent = 'Step '+(step===1?1:2)+' of 2';
+    if(busy){
+      /* Screen 3 — the build. The avatars are the REAL picks (their thumbnails came from the grid),
+         which is why this screen needs no fetch of its own. The header tier is left EMPTY on
+         purpose: the design's processing screen is one centred block whose own heading is
+         "Great picks!", and filling the tier too printed that headline twice (measured). */
+      title.textContent = '';
+      sub.textContent = '';
+      body.innerHTML = '<div class="oncPicks"><div class="oncFaces">'+sel.artists.slice(0,5).map(faceHTML).join('')+'</div>'+
+        '<h2>Great picks!</h2><div class="oncDots"><i class="beat"></i><i class="beat"></i><i class="beat"></i></div>'+
+        '<div class="oncNote" id="oncBuildNote">Reading top songs and tuning your taste…</div></div>';
+      foot.innerHTML = '';
+      return;
+    }
+    if(step===1){
+      title.textContent = "Let's tune your Svara.";
+      sub.textContent = "Pick the languages and vibes you listen to. We'll synthesize your personalized daily flow.";
+      body.innerHTML = '<div class="oncGlass">'+
+        '<div class="oncGrp"><div class="oncGrpH"><span class="t">'+ICON.langs+'Languages</span>'+
+          '<span class="h">Select 1 or more</span></div><div class="oncPills" id="oncLangs">'+LANGS.map(function(l){return pill(l,'lang')}).join('')+'</div></div>'+
+        '<div class="oncGrp"><div class="oncGrpH"><span class="t">'+ICON.eq+'Vibes &amp; Genres</span>'+
+          '<span class="h" id="oncVibeCount">'+sel.genres.length+' selected</span></div><div class="oncPills" id="oncVibes">'+VIBES.map(function(v){return pill(v,'vibe')}).join('')+'</div></div>'+
+      '</div>';
+      foot.innerHTML = '<button class="oncGh" type="button" data-oncskip="1"><span>Skip for now</span>'+ICON.arrow+'</button>'+
+        '<div class="oncRight"><span class="oncCnt" id="oncCount1"></span>'+
+        '<button class="oncCta" type="button" data-oncnext="1"><span>Continue to Artists</span>'+ICON.arrow+'</button></div>';
+      syncCounts();
+      return;
+    }
+    title.textContent = 'Who are your favorites?';
+    sub.textContent = 'Pick 3 or more artists to calibrate your personal frequency and home feed.';
+    body.innerHTML = '<div class="oncSearch"><span class="ic">'+ic('i-search')+'</span>'+
+      '<input id="oncQ" type="text" autocomplete="off" placeholder="Search artists or musical creators..." aria-label="Search artists"></div>'+
+      '<div class="oncGridNote" id="oncGridNote"></div><div class="oncGridScroll"><div class="oncGrid" id="oncGrid"></div></div>';
+    foot.innerHTML = '<button class="oncGh" type="button" data-oncback="1">'+ICON.back+'<span>Back</span></button>'+
+      '<div class="oncRight"><span class="oncCnt" id="oncCount2"></span>'+
+      '<button class="oncCta" type="button" data-oncfinish="1" id="oncFinish"><span>Finish Setup</span>'+ICON.arrow+'</button></div>';
+    syncCounts();
+    var grid=el('oncGrid');
+    /* already-known picks paint immediately (a reopen from Settings shows what you chose) */
+    var known = sel.artists.map(function(a){ return {id:a.id,name:a.name,thumb:a.thumb,cap:'Your pick'} });
+    known.forEach(function(t){ tilesById[t.id]=t });
+    grid.innerHTML = known.map(tileHTML).join('');
+    seedGrid();
+  }
+
+  function syncCounts(){
+    var c1=el('oncCount1');
+    if(c1) c1.textContent = (sel.langs.length+sel.genres.length) ? (sel.langs.length+sel.genres.length)+' selected' : '';
+    var vc=el('oncVibeCount'); if(vc) vc.textContent = sel.genres.length+' selected';
+    var c2=el('oncCount2'); if(c2) c2.textContent = sel.artists.length+' '+(sel.artists.length===1?'artist':'artists')+' selected';
+    var fin=el('oncFinish'); if(fin) fin.disabled = sel.artists.length < MIN_ARTISTS;
+  }
+
+  /* ---------- step 2 data: real artists only ---------- */
+  function normArtists(items, cap){
+    var out=[];
+    (items||[]).forEach(function(it){
+      if(!it || !it.id || !/^UC/.test(it.id)) return;          // real artist channels only
+      var nm = it.title || it.artist || '';
+      if(!nm) return;
+      out.push({id:it.id, name:nm, thumb:it.thumb||'', cap:cap});
+    });
+    return out;
+  }
+  function searchArtists(q, cap){
+    return fetch('/api/search?q='+encodeURIComponent(q)+'&type=artist')
+      .then(function(r){ return r.json() })
+      .then(function(j){ return normArtists(j.items, cap) });
+  }
+  async function seedGrid(){
+    var mine = ++gridGen;
+    var queries = [];
+    sel.genres.slice(0,3).forEach(function(g){ queries.push({q:g+' artists', cap:g}) });
+    sel.langs.slice(0,2).forEach(function(L){ queries.push({q:L+' music artists', cap:L}) });
+    if(!queries.length) queries.push({q:'popular artists', cap:'Popular'});
+    gridNote('Finding artists for your picks…');
+    var out = [], seenIds = {};
+    for(var i=0;i<queries.length && out.length<24;i++){
+      try{
+        var found = await searchArtists(queries[i].q, queries[i].cap);
+        if(mine!==gridGen) return;
+        found.forEach(function(t){ if(out.length<24 && !seenIds[t.id]){ seenIds[t.id]=1; out.push(t) } });
+      }catch(e){}
+    }
+    if(mine!==gridGen) return;
+    paintGrid(out, out.length ? '' : 'No artists came back for those picks — search for one by name.');
+  }
+  function paintGrid(list, note){
+    var grid=el('oncGrid'); if(!grid) return;
+    var keep = [];
+    sel.artists.forEach(function(a){ if(tilesById[a.id]) keep.push(tilesById[a.id]) });
+    var merged = [], seenIds = {};
+    list.forEach(function(t){ if(!seenIds[t.id]){ seenIds[t.id]=1; merged.push(t) } });
+    keep.forEach(function(t){ if(!seenIds[t.id]){ seenIds[t.id]=1; merged.push(t) } });
+    merged.forEach(function(t){ tilesById[t.id]=t });
+    grid.innerHTML = merged.map(tileHTML).join('');
+    if(note !== undefined) gridNote(note);
+  }
+
+  /* ---------- the seed ---------- */
+  function clearSeeds(){
+    var n=0;
+    try{
+      Object.keys(hist||{}).forEach(function(k){ if(hist[k] && hist[k].seed){ delete hist[k]; n++ } });
+      if(n) LSset('ml_history',hist);
+    }catch(e){}
+    return n;
+  }
+  async function seed(p){
+    clearSeeds();                                   // a re-run replaces the previous picks, never stacks
+    var now=Date.now(), added=0, i=0;
+    for(; i<(p.artists||[]).length && i<MAX_SEED_ARTISTS; i++){
+      var a=p.artists[i];
+      try{
+        var r=await fetch('/api/artist/songs?id='+encodeURIComponent(a.id));
+        var j=await r.json();
+        var songs=(j.songs||[]).slice(0,SONGS_PER_ARTIST);
+        songs.forEach(function(s,k){
+          if(!s || !s.id) return;
+          if(hist[s.id]) return;                    // a real play always outranks a seed — never touched
+          hist[s.id] = {id:s.id, title:s.title||'', artist:s.artist||a.name, thumb:s.thumb||a.thumb||'',
+                        count:Math.max(2, 7-i), last:now - (i*36e5) - (k*6e4), seed:1};
+          added++;
+        });
+      }catch(e){}
+    }
+    if(added) try{ LSset('ml_history',hist) }catch(e){}
+    return added;
+  }
+
+  /* ---------- close / open ---------- */
+  function show(on){
+    mount();
+    open = !!on;
+    root.classList.toggle('on', open);
+    if(open) root.removeAttribute('aria-hidden'); else root.setAttribute('aria-hidden','true');
+  }
+  function openFlow(prefill){
+    mount();
+    sel = {langs:[], genres:[], artists:[]};
+    tilesById = {};
+    if(prefill && profile){
+      sel.langs = (profile.langs||[]).slice();
+      sel.genres = (profile.genres||[]).slice();
+      sel.artists = (profile.artists||[]).slice();
+    }
+    busy=false; step=1; show(true); paint();
+    try{ var f=root.querySelector('.oncCta'); if(f) f.focus() }catch(e){}
+  }
+  function closeFlow(){ busy=false; show(false) }
+
+  function saveAndSeed(){
+    if(busy) return;
+    busy = true; step = 2; paint();
+    profile = {v:1, langs:sel.langs.slice(), genres:sel.genres.slice(), artists:sel.artists.slice(), at:Date.now()};
+    try{ LSset(KP, profile) }catch(e){}
+    setSeen(1);
+    var note=el('oncBuildNote');
+    if(note && !sel.artists.length) note.textContent = 'Saving your languages and vibes…';
+    var minShow = new Promise(function(res){ setTimeout(res, 1500) });   // the screen is the point; never flash past it
+    Promise.all([seed(profile).catch(function(){ return 0 }), minShow]).then(function(res){
+      var added = res[0]|0;
+      closeFlow();
+      if(typeof renderHome==='function' && typeof curPage!=='undefined' && curPage==='home'){ try{ renderHome() }catch(e){} }
+      else if(typeof goHome==='function'){ try{ goHome() }catch(e){} }
+      try{ toast(added ? 'Home is tuned to your picks' : 'Your picks are saved') }catch(e){}
+    });
+  }
+  function skipFlow(){
+    if(busy) return;
+    setSeen(1);                                   // "skippable, once only" — it never returns on its own
+    closeFlow();
+    if(typeof renderHome==='function' && typeof curPage!=='undefined' && curPage==='home'){ try{ renderHome() }catch(e){} }
+  }
+
+  /* ---------- Home: the one-time offer + the picked shelves ---------- */
+  function offerDismissed(){ return !!LSget(KB,0) }
+  function shouldOffer(){ return !profile && !histEmpty() && !seen() && !offerDismissed() }
+  function bannerHTML(){
+    return '<div class="oncBan" id="oncBan"><div class="g"><b>Want better picks?</b>'+
+      '<span>Tell Svara the languages, vibes and artists you like and Home fills with them.</span></div>'+
+      '<button class="go" type="button" data-oncbanner="1">Personalise</button>'+
+      '<button class="no" type="button" data-oncbanner="0">Not now</button></div>';
+  }
+  async function fillShelves(host, p){
+    var mine = ++homeGen6;
+    var qs = [];
+    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, q:g+' songs'}) });
+    (p.langs||[]).slice(0,1).forEach(function(L){ qs.push({t:L+' music', q:L+' songs'}) });
+    if((p.artists||[]).length) qs.push({t:'More like '+p.artists[0].name, q:p.artists[0].name+' songs'});
+    for(var i=0;i<qs.length;i++){
+      try{
+        var r = await fetch('/api/search?q='+encodeURIComponent(qs[i].q)+'&type=song');
+        var j = await r.json();
+        if(mine!==homeGen6) return;
+        var items = (j.items||[]).filter(function(x){ return x && x.id }).slice(0,12);
+        if(!items.length) continue;
+        var key = 'r'+(++railSeq);
+        rails[key] = items;
+        host.insertAdjacentHTML('beforeend', '<div class="sec"><h2>'+esc(qs[i].t)+'</h2>'+
+          '<div class="railwrap" data-oncq="'+key+'">'+items.map(function(it){
+            /* the same .rail card markup the app renders, minus data-rail (see the header note) */
+            var ph = it.thumb ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+            return '<div class="rail" data-id="'+esc(it.id)+'">'+
+              '<div class="art">'+ph+'<img loading="lazy" src="'+esc(it.thumb||'')+'" onerror="this.style.display=\'none\'">'+
+                '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
+              '<div class="rname">'+esc(it.title||'')+'</div><div class="rsub2">'+esc(it.artist||'')+'</div></div>';
+          }).join('')+'</div></div>');
+        if(typeof skReveal==='function'){ try{ skReveal(host.lastElementChild) }catch(e){} }
+      }catch(e){}
+    }
+  }
+  function decorateHome(){
+    if(typeof curPage==='undefined' || curPage!=='home') return;
+    var sec = document.getElementById('homeSec'); if(!sec) return;
+    if(profile){
+      if(sec.querySelector('#oncShelves')) return;   // one set of shelves per Home render, never two
+      var host = document.createElement('div');
+      host.id = 'oncShelves';
+      var first = sec.querySelector('.sec');
+      sec.insertBefore(host, first || null);      // right under the mood pills, above Listen again
+      fillShelves(host, profile);
+      return;
+    }
+    if(shouldOffer() && !sec.querySelector('#oncBan')) sec.insertAdjacentHTML('afterbegin', bannerHTML());
+  }
+
+  /* ---------- the four wrappers ---------- */
+  var _renderHome = renderHome;
+  renderHome = function(){
+    var r = _renderHome.apply(this, arguments);
+    try{ decorateHome() }catch(e){}
+    return r;
+  };
+  var _notePlay = notePlay;
+  notePlay = function(it){
+    var r = _notePlay.apply(this, arguments);
+    try{ if(it && it.id && hist[it.id] && hist[it.id].seed){ delete hist[it.id].seed; LSset('ml_history', hist) } }catch(e){}
+    return r;
+  };
+  var _histItems = _4asHistItems;
+  _4asHistItems = function(){
+    try{ return _histItems.apply(this, arguments).filter(function(e){ return !(e && e.seed) }) }
+    catch(e){ return _histItems.apply(this, arguments) }
+  };
+  /* The Settings row. setRender()/setRow() are NOT globals in this file — they live inside another
+     block's own scope — so this row cannot be injected by wrapping a function the way the other
+     three are (wrapping a name that is not visible throws and would take the whole wave down with
+     it). #setBody is rebuilt wholesale on every Settings render, so the row is added by observing
+     that node: the observer is inert while the panel is closed (the node is empty) and only fires
+     on a real repaint. The row markup below is setRow()'s, copied, because setRow() is out of reach
+     from here. */
+  function setRowHTML(label, hint, ctrl){
+    return '<div class="setRow"><div><div class="setLbl">'+esc(label)+'</div>'+
+      (hint ? '<div class="setHint">'+esc(hint)+'</div>' : '')+'</div>'+ctrl+'</div>';
+  }
+  function injectSettingsRow(){
+    var b = document.getElementById('setBody'); if(!b) return;
+    var about = b.querySelector('.setAbout'); if(!about) return;
+    if(b.querySelector('[data-oncsetting]')) return;
+    var g = document.createElement('div'); g.className = 'setGrp';
+    var hint = profile
+      ? 'Your picks: '+(profile.genres||[]).slice(0,2).join(', ')+((profile.artists||[]).length?' · '+(profile.artists||[]).length+' artists':'')
+      : 'Languages, vibes and artists — fills Home from your taste in one pass';
+    g.innerHTML = setRowHTML('Personalise my taste', hint, '<button class="setAct" type="button" data-oncsetting="1">'+(profile?'Redo':'Set up')+'</button>');
+    /* insert into the BODY of the panel, before the About group — not `about.parentNode.insertBefore(g,
+       about.parentNode)`, which asks a node to insert itself before itself and throws NotFoundError
+       (measured; the throw was swallowed by this function's caller's try/catch, so the row silently
+       never appeared). The group is found with closest() so a wrapper around the About button cannot
+       break this. */
+    var aboutGrp = about.closest('.setGrp') || about.parentNode;
+    if(aboutGrp && aboutGrp.parentNode) aboutGrp.parentNode.insertBefore(g, aboutGrp);
+  }
+  var injectQueued = false;
+  function scheduleInject(){
+    if(injectQueued) return;                      // coalesce: at most one inject per 60ms of repaints
+    injectQueued = true;
+    setTimeout(function(){ injectQueued = false; try{ injectSettingsRow() }catch(e){} }, 60);
+  }
+  function watchSettings(){
+    /* #setBody is NOT a stable target to observe: watching that node directly never fired (measured
+       — the row stayed absent across a close/reopen), so the panel's node identity cannot be
+       assumed to survive. document.body with subtree:true is the pattern several other blocks in
+       this file already use (e.g. the runtime-icon and library scanners), and the work per mutation
+       is one early-returning call, so a paint can never snowball — injecting adds a node, which
+       re-fires this, which finds the row already present and stops. */
+    try{ new MutationObserver(scheduleInject).observe(document.body, { childList:true, subtree:true }) }catch(e){}
+    try{ injectSettingsRow() }catch(e){}
+  }
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function(e){
+    var t=e.target; if(!t||!t.closest) return;
+    var pillEl=t.closest('[data-oncpill]');
+    if(pillEl){
+      var kind=pillEl.getAttribute('data-oncpill'), v=pillEl.getAttribute('data-v');
+      var arr = kind==='lang' ? sel.langs : sel.genres;
+      var i = arr.indexOf(v);
+      if(i>=0) arr.splice(i,1); else arr.push(v);
+      pillEl.setAttribute('aria-pressed', i>=0 ? 'false' : 'true');
+      syncCounts();
+      return;
+    }
+    var tile=t.closest('[data-oncart]');
+    if(tile){
+      var id=tile.getAttribute('data-v');
+      var k = sel.artists.map(function(a){ return a.id }).indexOf(id);
+      if(k>=0) sel.artists.splice(k,1);
+      else{
+        var t2=tilesById[id]||{id:id,name:tile.getAttribute('data-name')||'',thumb:''};
+        sel.artists.push({id:t2.id, name:t2.name, thumb:t2.thumb||''});
+      }
+      tile.setAttribute('aria-pressed', k>=0 ? 'false' : 'true');
+      syncCounts();
+      return;
+    }
+    if(t.closest('[data-oncnext]')){ step=2; paint(); return }
+    if(t.closest('[data-oncback]')){ step=1; paint(); return }
+    if(t.closest('[data-oncfinish]')){ saveAndSeed(); return }
+    if(t.closest('[data-oncskip]')){ skipFlow(); return }
+    var ban=t.closest('[data-oncbanner]');
+    if(ban){
+      if(ban.getAttribute('data-oncbanner')==='1'){ openFlow(true) }
+      else{ LSset(KB,1); var b=document.getElementById('oncBan'); if(b&&b.parentNode) b.parentNode.removeChild(b) }
+      return;
+    }
+    if(t.closest('[data-oncsetting]')){
+      /* close the Settings panel first: setShow() is scoped to its own block, so the panel's own
+         close button is clicked instead — otherwise the panel sits open behind this overlay and is
+         what the user sees the moment the flow closes. Guarded: if the button is ever renamed this
+         simply does nothing. */
+      try{ var x=document.querySelector('#setPanel .setX'); if(x) x.click() }catch(e){}
+      openFlow(true);
+      return;
+    }
+    var wrap=t.closest('[data-oncq]');
+    if(wrap){
+      var arr2=rails[wrap.getAttribute('data-oncq')]; if(!arr2||!arr2.length) return;
+      var card=t.closest('.rail'); var cid=card?card.getAttribute('data-id'):'';
+      var idx=arr2.map(function(x){ return x.id }).indexOf(cid);
+      try{ playList(arr2, idx>=0?idx:0, true) }catch(e){}
+      return;
+    }
+  });
+  document.addEventListener('input', function(e){
+    if(!e.target || e.target.id!=='oncQ') return;
+    var q=e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(function(){
+      var mine=++gridGen, v=q.trim();
+      if(v.length<2){ seedGrid(); return }
+      gridNote('Searching…');
+      searchArtists(v, 'Search').then(function(list){
+        if(mine!==gridGen) return;
+        paintGrid(list, list.length ? list.length+' artists' : 'Nothing found for "'+v+'"');
+      }).catch(function(){ if(mine===gridGen) gridNote('Search failed — try again') });
+    }, 320);
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape' && open && !busy){ e.preventDefault(); skipFlow() }
+  });
+
+  /* ---------- boot ---------- */
+  function boot(){
+    if(!histEmpty() || profile || seen()) return;      // a fresh install only
+    openFlow(false);
+  }
+  setTimeout(function(){ try{ boot() }catch(e){} }, 900);
+  setTimeout(function(){ try{ watchSettings() }catch(e){} }, 1200);
+
+  /* exposed for the console (and for this block's own checks) */
+  window.svaraPersonalise = {
+    open: openFlow,
+    seed: function(){ return seed(profile || {artists:[]}) },
+    profile: function(){ return profile },
+    clear: function(){ clearSeeds(); LSset(KP,null); setSeen(0); LSset(KB,0) }
+  };
+})();
+</script>
 </body>
 </html>
