@@ -1267,15 +1267,99 @@ app.get('/api/thumb', async (req, res) => {
 
 /* ================= stream ================= */
 const streamCache = new Map();
-async function getStreamUrl(videoId){
-  const hit = streamCache.get(videoId);
-  if (hit && hit.expires > Date.now()) return hit.url;
+const STREAM_TTL = 3 * 60 * 60 * 1000;   // a signed googlevideo URL lives ~6h; 3h is a safe window
+const STREAM_CACHE_MAX = 80;             // bounded: the oldest entry is dropped, not the whole map
+const streamResolving = new Map();       // videoId → the in-flight resolve, shared by every caller
+/* Wave 5 (UI-5) — MEASURED cold vs warm: resolving a stream URL costs 3.6-4.5 s (yt-dlp process +
+   YouTube extraction) while the SAME id answers in 0.07-0.15 s out of this cache. That resolution
+   was the entire "a song takes ages to start" delay — the audio itself was already streamed
+   progressively (Range/206, piped straight through). So the URL is now resolved AHEAD of playback
+   by /api/prefetch, and this function deduplicates: a prefetch that overlaps real playback must
+   never spawn a second yt-dlp process for the same video. */
+async function resolveStreamUrl(videoId){
   const { stdout } = await execFileP(YTDLP, ['-f', 'ba', '-g', 'https://www.youtube.com/watch?v=' + videoId], { timeout: 60000, windowsHide: true });
   const url = (stdout || '').trim().split('\n').pop();
   if (!url) throw new Error('yt-dlp returned no URL for ' + videoId);
-  streamCache.set(videoId, { url, expires: Date.now() + 3 * 60 * 60 * 1000 });
+  if (streamCache.size >= STREAM_CACHE_MAX) {
+    const oldest = streamCache.keys().next().value;
+    if (oldest !== undefined && oldest !== videoId) streamCache.delete(oldest);
+  }
+  streamCache.set(videoId, { url, expires: Date.now() + STREAM_TTL });
   return url;
 }
+function getStreamUrl(videoId){
+  const hit = streamCache.get(videoId);
+  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.url);
+  const inflight = streamResolving.get(videoId);
+  if (inflight) return inflight;
+  const guarded = resolveStreamUrl(videoId).then(
+    url => { streamResolving.delete(videoId); return url },
+    err => { streamResolving.delete(videoId); throw err }
+  );
+  streamResolving.set(videoId, guarded);
+  return guarded;
+}
+
+/* ---------- Wave 5 (UI-5): warm the URL before playback needs it ----------
+   The player asks for the tracks that are NEXT in the play order the moment a track starts, so by
+   the time the song ends its URL is signed and cached and playback starts in ~0.1 s instead of
+   ~4 s. Deliberately SERIAL and bounded — sliding the cursor across a list must never spawn one
+   yt-dlp per row. Duplicates collapse (a cache hit is not queued, the same id is queued once). */
+const warmQueue = [];
+const warmPending = new Set();
+let warmBusy = false;
+const WARM_MAX = 8;                      // at most this many un-started warm-ups at any moment
+/* MEASURED: a cold /api/stream hit `upstream 403` for a freshly resolved URL and the route's own
+   retry (refresh the URL, fetch again) cost a SECOND ~4 s yt-dlp run, i.e. an 8.5 s start. YouTube
+   is simply not deterministic here — the next resolve works. So the prefetch VERIFIES the URL it
+   just resolved with the same 2-byte Range request the player would send, and if that answers
+   403/410 it re-resolves immediately. The recovery then happens while the previous song is still
+   playing instead of in front of the listener. The stream route keeps its own retry as the net. */
+async function verifyWarmUrl(id){
+  const url = await getStreamUrl(id);
+  let up;
+  try {
+    up = await fetch(url, { headers: { Range: 'bytes=0-1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+  } catch (e) {
+    console.error(`prefetch: ${id} probe failed (${e.message}) — re-resolving`);
+    streamCache.delete(id);
+    return getStreamUrl(id);
+  }
+  if (up.ok) { try { if (up.body) up.body.cancel(); } catch (e) { /* nothing to drain */ } return url };
+  console.error(`prefetch: warmed URL for ${id} answered ${up.status} — re-resolving once`);
+  try { if (up.body) up.body.cancel(); } catch (e) { /* nothing to drain */ }
+  streamCache.delete(id);
+  return getStreamUrl(id);
+}
+function pumpWarm(){
+  if (warmBusy) return;
+  const id = warmQueue.shift();
+  if (!id) return;
+  warmBusy = true;
+  const t0 = Date.now();
+  verifyWarmUrl(id).then(
+    () => console.log(`prefetch: ${id} warmed+verified in ${Date.now() - t0}ms`),
+    e => console.error('prefetch failed for', id, '-', e.message)
+  ).then(() => { warmBusy = false; warmPending.delete(id); pumpWarm(); });
+}
+function warmStream(id){
+  id = String(id || '').trim();
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) return false;      // only something that looks like a video id
+  if (warmPending.has(id) || warmQueue.length >= WARM_MAX) return false;
+  const hit = streamCache.get(id);
+  if (hit && hit.expires > Date.now()) return false;        // already warm — nothing to do
+  warmPending.add(id);
+  warmQueue.push(id);
+  pumpWarm();
+  return true;
+}
+app.get('/api/prefetch', (req, res) => {
+  noStore(res);
+  const ids = String(req.query.ids || req.query.id || '').split(',').slice(0, 4);
+  let queued = 0;
+  ids.forEach(id => { if (warmStream(id)) queued++ });
+  res.json({ queued });     // fire-and-forget: the client never waits on this answer
+});
 app.get('/api/stream', async (req, res) => {
   noStore(res);                     // 4AK: never cache audio; Range/seek is unaffected
   try {

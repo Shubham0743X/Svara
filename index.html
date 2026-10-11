@@ -36,14 +36,25 @@ img{display:block}
 .plrow.on{color:var(--tx);background:var(--panel2)}
 .plrow .cnt{margin-left:auto;font-size:11px;opacity:.6}
 #app{flex:1;display:flex;flex-direction:column;min-width:0}
-#top{display:flex;align-items:center;gap:10px;padding:14px 22px 8px;position:relative;z-index:4}
-.srch{flex:1;max-width:560px;margin:0 auto;position:relative;display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 5px 3px 14px;gap:8px;transition:border-color .2s}
+/* Wave 5 (UI-7): the header spans the WHOLE WINDOW, not just the content column, so the search
+   field is centred from one edge of the app to the other (UI-6 had it centred on the content
+   column, which sits 118px right of the window's centre because of the 236px sidebar).
+   How: #app is offset by the sidebar, so the header is pulled left with margin-left:-236px and
+   widened by the same amount; the sidebar (z-index 5, above the header's 4) covers the empty
+   left track, exactly as before.
+   The field is centred because the two outer tracks are equal 1fr — the middle track is NOT a
+   fixed 560 but `min(560px, 100vw - 504px)`, so when the window is narrow the FIELD gets narrower
+   instead of the tracks losing their equality, and it keeps its ideal width on any normal window
+   (504 = the 236px sidebar plus 16px of clearance on both sides, so the field can never slide
+   under the sidebar: measured at the 900px minimum window it is 396px wide, 16px clear). */
+#top{display:grid;grid-template-columns:minmax(96px,1fr) minmax(0,min(560px,calc(100vw - 504px))) minmax(96px,1fr);align-items:center;gap:10px;padding:14px 22px 8px;position:relative;z-index:4;margin-left:-236px;width:calc(100% + 236px)}
+.srch{grid-column:2;width:100%;position:relative;display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 5px 3px 14px;gap:8px;transition:border-color .2s}
 .srch:focus-within{border-color:var(--acc2)}
 .srch .ic{width:16px;height:16px;color:var(--dim)}
 #q{flex:1;background:none;border:none;outline:none;color:var(--tx);padding:8px 2px;font-size:14px}
 .gobtn{background:var(--grad);border-radius:999px;padding:8px 16px;font-size:13px;font-weight:700;color:rgb(var(--on-acc))}
 .gobtn:hover{filter:brightness(1.12)}
-.topr{display:flex;align-items:center;gap:8px;margin-left:auto}
+.topr{grid-column:3;justify-self:end;display:flex;align-items:center;gap:8px}
 .tic{padding:8px;border-radius:50%}
 .tic:hover{background:var(--panel2)}
 .tic .ic{width:18px;height:18px}
@@ -131,7 +142,13 @@ img{display:block}
 input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:4px;background:linear-gradient(90deg,var(--acc) var(--v,50%),#3a3a48 var(--v,50%));outline:none;width:90px}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.15)}
 /* player page */
-#pv{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column}
+/* Wave 5 (UI-8): the rail's width is the one number the user pinned down by hand — on their own
+   marked-up screenshot (a 1784px-wide window, 1:1 CSS px) the Up next / lyrics panel's left edge
+   sits at ~1263px and the window's right edge is 1784 - 30 (body padding), i.e. a 483px rail.
+   27.5vw lands on 491px there, 352px at 1280, 528px at 1920, and the 560px ceiling keeps an
+   ultra-wide window sane; the 290px floor IS the old narrow-window step, so the ≤920px media
+   query that used to carry it is gone — the rail has one owner. */
+#pv{--pvgap:clamp(30px,3.4vw,76px);--pvrail:clamp(290px,27.5vw,560px);position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column}
 body.pv #pv{display:flex}
 body.pv #mini{display:none}
 #pvArtBg{position:absolute;inset:0;filter:blur(90px) saturate(1.25);opacity:.3;background-size:cover;background-position:center;transform:scale(1.2);pointer-events:none}
@@ -141,8 +158,20 @@ body.pv #mini{display:none}
 .pvtitle{font-size:14px;font-weight:700;letter-spacing:.2px}
 .pvmin{width:34px;height:34px;border-radius:50%;color:var(--dim);display:flex;align-items:center;justify-content:center}
 .pvmin:hover{background:var(--panel2);color:var(--tx)}
-.pvbody{flex:1;display:flex;gap:26px;padding:4px 30px 34px;min-height:0;position:relative;z-index:2}
+/* Wave 5 (UI-8): REVERTED to the arrangement that was approved — the body's padding is symmetric
+   again (30px each side) and the cover is back to min(46vh,420px), so nothing about the page but
+   the rail's WIDTH differs from the pre-UI-6 page. The rail is still pinned to the window's right
+   edge by the 30px body padding, and the left division (cover, title block, seek bar, transport —
+   everything above and below the cover) is centred in what is left over, i.e. the midpoint of the
+   window's left edge and the rail's left edge. With padding P = 30 on both sides and gap G that
+   centre is (W - rail - G)/2, which sits (P - G)/2 from the exact midpoint — at most 23px on a
+   wide window, i.e. visually dead centre, while G keeps the two divisions from ever touching. */
+.pvbody{flex:1;display:flex;gap:var(--pvgap);padding:4px 30px 34px;min-height:0;position:relative;z-index:2}
 .pvleft{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
+/* (Kept as a record of UI-6/UI-7: the cover was briefly height-sized at min(100vh - 380px,520px,100%)
+   and the body's left padding briefly equalled the gap. UI-8 removed both — the user wanted the
+   ORIGINAL page back, with only the rail wider. 46vh reaches the 420px cap on any window taller
+   than ~913px; a shorter window scales the cover down instead of overflowing its column.) */
 .pvArt{width:min(46vh,420px);aspect-ratio:1;border-radius:20px;overflow:hidden;box-shadow:0 22px 70px rgba(0,0,0,.6);background:linear-gradient(145deg,#232330,#101016)}
 .pvArt img{width:100%;height:100%;object-fit:cover}
 .pvmeta{text-align:center;margin-top:22px;max-width:520px}
@@ -167,7 +196,7 @@ body.pv #mini{display:none}
 .pbtn.on{color:var(--acc)}
 #pvPlay{background:var(--grad);color:rgb(var(--on-acc));box-shadow:0 6px 22px rgba(var(--amb),.35)}
 #pvPlay:hover{filter:brightness(1.1)}
-.pvright{width:340px;flex-shrink:0;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px;display:flex;flex-direction:column;min-height:0}
+.pvright{width:var(--pvrail,420px);flex-shrink:0;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px;display:flex;flex-direction:column;min-height:0}
 .tabrow{display:flex;padding:0 6px;border-bottom:1px solid var(--line)}
 .tab{flex:1;padding:13px 8px 11px;font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent;border-radius:0}
 .tab:hover{color:var(--tx)}
@@ -218,11 +247,83 @@ body.pv #mini{display:none}
 #pvFab .ic{width:20px;height:20px;transition:transform .3s}
 #pvFab.up .ic{transform:rotate(180deg)}
 body.pv #pvFab{display:none}
-@media (max-width:920px){.pvright{width:290px}}
+/* (UI-6/UI-8) the old @media (max-width:920px){.pvright{width:290px}} step is gone: the 290px
+   clamp floor on --pvrail covers narrow windows, so the rail has ONE source of truth, not two. */
 </style>
 </head>
 <body>
 <div id="theme"></div>
+
+<style id="v5typecss">
+/* ===== Wave 5 (UI-7) — the app-wide TYPE SCALE =====
+   Every size in this app is an absolute px value, so there is no root font size to turn up and no
+   way to write "everything +5%" in one rule. This block is therefore the ONLY place the app's type
+   is scaled: one factor (--fss) multiplies the real base size of every text surface through calc(),
+   so the base value stays visible next to it and the whole app grows together — headings and micro
+   labels proportionally, not by a flat pixel delta that would matter only to the small end.
+   WHY NOT zoom/transform: both scale geometry too, so fixed overlays positioned from measured rects
+   (the ⋮ menus, the sidebar ripple, the segmented-control thumb) would drift by (scale-1) × their
+   position, and vw/vh-derived sizes (the player rail, the album cover) would outgrow the shrunk
+   layout viewport. Type-only scaling cannot move a single box: it changes text metrics and nothing
+   else, and the layouts absorb that (verified: no NEW text clipping at any step).
+   Steps are s0..s3 = 100% / 105% / 110% / 115%, set on <html data-fs> by the v5typeboot script
+   (before first paint) and by Settings → Appearance → Text size (live). */
+:root{--fss:1}
+html[data-fs="s1"]{--fss:1.05}
+html[data-fs="s2"]{--fss:1.1}
+html[data-fs="s3"]{--fss:1.15}
+/* UI-8: THE LYRICS PANEL IS EXEMPT — this is the user-reported break, and it is a specificity trap:
+   #lyrBody already carries its own display type (clamp(19px,2.1vw,26px)) from the v2 sheet, but
+   `html[data-fs] #lyrBody` (0,1,2) outranks a plain id selector (0,1,0) wherever it sits in the
+   document, so merely having the type scale ON silently shrank the lyrics to 14.5px × step and
+   stacked them on their 14px line margins — a wrong-rhythm wall of text instead of the tall
+   karaoke lines. NO lyric surface appears in this block any more (#lyrBody, .lyrseg/.lyrchip
+   buttons, .lyrt, .lyrbar .lyra, .lyrmissing, .lyrnote, #lyrJump): the lyrics tab is byte-for-byte
+   the tab it was before the type scale existed, at every step. */
+html[data-fs] .paget{font-size:calc(26px * var(--fss))}
+html[data-fs] .logo,#pv .pvT{font-size:calc(23px * var(--fss))}
+html[data-fs] .sec h2{font-size:calc(20px * var(--fss))}
+html[data-fs] .modal h3{font-size:calc(18px * var(--fss))}
+html[data-fs] .setRowAct .setChev{font-size:calc(16px * var(--fss))}
+html[data-fs] .navit,html[data-fs] #q,html[data-fs] .rtitle,html[data-fs] .list .rtitle,html[data-fs] .hrow .rtitle,html[data-fs] .pvA,html[data-fs] .mrow,html[data-fs] #artSec .art-aud,html[data-fs] #albSec .art-aud,html[data-fs] #setPanel .setTop h2,html[data-fs] #aboutCard .abTop h2{font-size:calc(15px * var(--fss))}
+html[data-fs] .plrow,html[data-fs] .mt,html[data-fs] #menu .mi,html[data-fs] #shist .shr{font-size:calc(14.5px * var(--fss))}
+html[data-fs] .pvtitle,html[data-fs] .gobtn,html[data-fs] .chip,html[data-fs] #searchFilters .fchip,html[data-fs] .rname,html[data-fs] .libgrid .rname,html[data-fs] #setPanel .setLbl,html[data-fs] .hbar .setAct,html[data-fs] #scroll:has(#dynSec:not([hidden]) .hbar) #pgSub{font-size:calc(14px * var(--fss))}
+html[data-fs] .empty,html[data-fs] #artSec .art-desc,html[data-fs] .sec h2 .go{font-size:calc(13.5px * var(--fss))}
+html[data-fs] .hgrp,html[data-fs] .newpl,html[data-fs] .sub,html[data-fs] .np button,html[data-fs] #toast,html[data-fs] #pvTransport .mtT,html[data-fs] #pgTitle.pgNP,html[data-fs] .art-back,html[data-fs] #artSec .art-count,html[data-fs] #albSec .art-count,html[data-fs] .art-acts .pact,html[data-fs] .art-relcard .nm,html[data-fs] #setPanel .setAbout,html[data-fs] .topres .traud,html[data-fs] .topres .trbtn,html[data-fs] .libfoot,html[data-fs] #setPanel .setSeg > label > span,html[data-fs] #setPanel .setSeg .segGhost > span{font-size:calc(13px * var(--fss))}
+html[data-fs] .hdate,html[data-fs] #artSec .art-showall,html[data-fs] #artSec .artdur,html[data-fs] #setPanel .setCfmTx,html[data-fs] #setPanel .setHint,html[data-fs] #setPanel .setVal{font-size:calc(12.5px * var(--fss))}
+html[data-fs] #shist .clear,html[data-fs] .rsub,html[data-fs] .pvctx,html[data-fs] .pvhead .go,html[data-fs] .ptime,html[data-fs] .v3sent,html[data-fs] #artSec .artalb,html[data-fs] #setPanel .setLink,html[data-fs] #setPanel .setAct,html[data-fs] #aboutCard .abBtn,html[data-fs] .libsorts .lbl,html[data-fs] .libgrid .rsub2{font-size:calc(12px * var(--fss))}
+html[data-fs] .rsub2,html[data-fs] .ms,html[data-fs] .tab,html[data-fs] #pvTransport .mtS,html[data-fs] #shist .shr .subx,html[data-fs] #artSec .art-more,html[data-fs] .art-relcard .ad,html[data-fs] #setPanel .setNum,html[data-fs] #aboutCard .abRole,html[data-fs] #plList .sbt{font-size:calc(11.5px * var(--fss))}
+html[data-fs] .plrow .cnt,html[data-fs] .ptimes,html[data-fs] .psTip{font-size:calc(11px * var(--fss))}
+html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp h3,html[data-fs] #setPanel .setPill,html[data-fs] #aboutCard .abPill,html[data-fs] #aboutCard .abGrpH{font-size:calc(10.5px * var(--fss))}
+</style>
+
+<script id="v5typeboot">
+/* ===== Wave 5 (UI-7) — the text-size step, applied BEFORE the first paint =====
+   Same reason v4fxboot lives up here: a reload must never flash one type size and then jump to
+   another. The stored value is read straight from localStorage (setPut's JSON form, so both a
+   string and a legacy raw value are accepted), and window.svaraType is the live hook the Settings
+   segmented control writes through — one owner, no second copy of the state. */
+(function(){
+  var STEPS = ['s0','s1','s2','s3'], DEFAULT = 's2';   /* UI-7: +10% out of the box — the step chosen on review */
+  function read(){
+    var v = null;
+    try{ v = localStorage.getItem('sv_set_typeScale') }catch(e){}
+    if(v !== null){ try{ v = JSON.parse(v) }catch(e){} }
+    return STEPS.indexOf(String(v)) >= 0 ? String(v) : DEFAULT;
+  }
+  function apply(v){ try{ document.documentElement.setAttribute('data-fs', v) }catch(e){} }
+  var cur = read();
+  apply(cur);
+  window.svaraType = {
+    get: function(){ return cur },
+    set: function(v){
+      cur = STEPS.indexOf(String(v)) >= 0 ? String(v) : DEFAULT;
+      apply(cur);
+      return cur;
+    }
+  };
+})();
+</script>
 
 <script id="v4fxboot">
 /* ================= WAVE 5 (UI-1) — effects mode, decided BEFORE first paint =================
@@ -436,7 +537,26 @@ function saveAll(){LSset('sv_favs',favs);LSset('sv_pls',pls);LSset('sv_shist',sh
 function register(arr){(arr||[]).forEach(it=>{if(it&&it.id)idItem[it.id]=it})}
 
 /* ============ state ============ */
-const audio=$('#audio');
+/* ============ Wave 5 (UI-5) — two media elements, one ACTIVE one ============
+   A real crossfade needs two elements: the outgoing song has to keep playing while the incoming
+   one starts, so their volumes can trade places. `audio` is therefore the ACTIVE element — it is
+   no longer a const — and `audioAlt` is the idle one it swaps roles with. NOTHING else about
+   playback changes: every existing consumer keeps reading the global `audio`, and onAudio()
+   guarantees the idle element can never drive the UI (its own events are dropped), so the track
+   that is fading out can never double-run paintControls, the ended→next advance, markPlayed,
+   maybeContinue, the progress bar or the lyrics sync. Crossfade OFF (the default) never touches
+   audioAlt at all — playback stays exactly the single-element path it has always been. */
+let audio=$('#audio');
+const audioAlt=document.createElement('audio');
+audioAlt.preload='auto';                     // mirrors the main element; the app never sets 'none'
+document.body.appendChild(audioAlt);
+const MEDIA=[audio,audioAlt];
+/* Register a listener on BOTH elements; only the ACTIVE element's events get through. Every event
+   listener that used to be attached with audio.addEventListener() goes through this — the same
+   handler body, unchanged, because the handlers all read the global `audio`. */
+function onAudio(ev,fn){
+  MEDIA.forEach(function(el){ el.addEventListener(ev,function(e){ if(el!==audio)return; fn.call(el,e) }) });
+}
 let queue=[],seq=[],cur=-1;           // seq = play order as queue indexes
 let repeat='off',shuffle=false,volume=80,wasVol=80;
 let curList=[],quickList=[],curPage='home';        // curList = list rows in main area; quickList = Home Quick picks
@@ -630,7 +750,7 @@ var paintStarting=function(){
    stopped pointing at the pending stream — so a failed stream can never leave
    "Starting…" stuck, and a new load can never clear the state it just armed. */
 ['playing','error','emptied','abort'].forEach(function(ev){
-  audio.addEventListener(ev,function(){
+  onAudio(ev,function(){
     if(!pendStart)return;
     if((ev==='emptied'||ev==='abort')&&!pendStreamGone())return;
     pendStart=null;
@@ -719,7 +839,15 @@ function paintFavs(){
   $('#mFav').innerHTML=`<span class="ic">${ic(h)}</span>`;$('#pvFav').innerHTML=`<span class="ic">${ic(h)}</span>`;
   $('#mFav').classList.toggle('on',on);$('#pvFav').classList.toggle('on',on);
 }
-function paintRowCursor(){document.querySelectorAll('.row.cur').forEach(r=>r.classList.remove('cur'))}
+/* Wave 5 (UI-6) BUG FIX: this clears the CURSOR of the list views (search results, liked music,
+   artist rows). The queue's now-playing row reuses the same `.row.cur` class for its stronger
+   highlight, and the queue is repainted by renderQueue() on every load — but loadAt() and both
+   hand-off paths call this straight AFTER that repaint (renderQueue();paintRowCursor()), so the
+   fresh highlight was stripped again immediately. Only the later "Starting…" repaint (audio's
+   `playing` event) or an autoplay append brought it back, which is why the highlight appeared one
+   song late / right at the end of a track. The queue row is now out of scope here; it owns its own
+   highlight. */
+function paintRowCursor(){document.querySelectorAll('.row.cur').forEach(r=>{if(!r.closest('#pvQueue'))r.classList.remove('cur')})}
 
 /* queue ui */
 function renderQueue(){
@@ -1060,9 +1188,9 @@ async function diceRadio(){
 
 /* ============ audio events ============ */
 let lastPlayed='';
-audio.addEventListener('play',()=>{paintControls();const it=nowItem();if(it&&it.id!==lastPlayed){lastPlayed=it.id;notePlay(it)}});
-audio.addEventListener('pause',()=>paintControls());
-audio.addEventListener('timeupdate',()=>{
+onAudio('play',()=>{paintControls();const it=nowItem();if(it&&it.id!==lastPlayed){lastPlayed=it.id;notePlay(it)}});
+onAudio('pause',()=>paintControls());
+onAudio('timeupdate',()=>{
   const d=audio.duration||0,ct=audio.currentTime||0;
   const pct=d?ct/d*100:0;
   $('#progFill').style.width=pct+'%';
@@ -1070,13 +1198,21 @@ audio.addEventListener('timeupdate',()=>{
   $('#pseek').style.setProperty('--v',pct+'%');$('#pseek').value=pct*10;
   $('#tCur').textContent=fmt(ct);$('#tDur').textContent=fmt(d);
 });
-audio.addEventListener('ended',()=>{
+onAudio('ended',()=>{
+  /* UI-5: while a crossfade owns this advance the swap (and the cursor move with it) happens on
+     the fade's own clock — a hair BEFORE the outgoing element ends — so this must not advance a
+     second time. The guard is false the instant no fade is running, so a normal end is untouched. */
+  if(typeof xfOwnsAdvance==='function'&&xfOwnsAdvance())return;
   if(repeat==='one'){audio.currentTime=0;audio.play();return}
-  if(cur+1<seq.length){loadAt(cur+1);return}
+  if(cur+1<seq.length){
+    /* UI-5: if the next track is already buffered in the idle element, this is a cut, not a load */
+    if(typeof xfHandoff==='function'&&xfHandoff())return;
+    loadAt(cur+1);return
+  }
   if(repeat==='all'){loadAt(0);return}
   audio.currentTime=0;paintControls();
 });
-audio.addEventListener('error',()=>{toast('Stream error — try the next track')});
+onAudio('error',()=>{toast('Stream error — try the next track')});
 
 /* buttons */
 $('#playBtn').onclick=togglePlay;$('#pvPlay').onclick=togglePlay;
@@ -1096,7 +1232,7 @@ $('#pvFab').onclick=()=>{
   if(queue.length)openPV();else toast('Play something first');
 };
 $('#pvMin').onclick=()=>closePV();
-$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;if(typeof AUTO_QUEUE_IDS!=='undefined')AUTO_QUEUE_IDS=[];audio.pause();audio.removeAttribute('src');$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue()};
+$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;if(typeof AUTO_QUEUE_IDS!=='undefined')AUTO_QUEUE_IDS=[];audio.pause();audio.removeAttribute('src');if(typeof xfStopPreload==='function')xfStopPreload();$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue()};
 $('#mFav').onclick=()=>toggleFav(nowItem());
 $('#pvFav').onclick=()=>toggleFav(nowItem());
 $('#pvMenu').onclick=e=>{const it=nowItem();if(it){idItem[it.id]=it;openMenu(e,it.id)}};
@@ -1108,7 +1244,10 @@ $('#volBtn').onclick=()=>{if(volume>0){wasVol=volume;volume=0}else volume=wasVol
 $('#prog').onclick=e=>{if(audio.duration){const r=e.currentTarget.getBoundingClientRect();audio.currentTime=((e.clientX-r.left)/r.width)*audio.duration}};
 $('#pseek').oninput=e=>{const v=+e.target.value/10;if(audio.duration)audio.currentTime=v/100*audio.duration;e.target.style.setProperty('--v',v+'%')};
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
-document.addEventListener('click',e=>{const nav=e.target.closest('[data-nav]');if(nav){nav.dataset.nav==='home'?goHome():openLiked()}});
+/* UI-7: 'lib' opens the Library PAGE (window.openLibrary is published by the v5libjs layer far
+   below, so it is looked up at click time); openLiked() stays as the fallback if that layer ever
+   fails to load, and the Library page's own "Liked music" card still leads to openLiked(). */
+document.addEventListener('click',e=>{const nav=e.target.closest('[data-nav]');if(nav){nav.dataset.nav==='home'?goHome():(nav.dataset.nav==='lib'&&typeof openLibrary==='function')?openLibrary():openLiked()}});
 document.addEventListener('click',e=>{const pl=e.target.closest('[data-lib]');if(pl){const v=pl.dataset.lib;if(v==='liked'){curPage='lib';openLiked()}else if(v==='albums'){openLikedAlbums()}else openPl(v.slice(3))}});   /* 4AQ: 'albums' must not fall into openPl(v.slice(3)) */
 /* tabs */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
@@ -1192,7 +1331,7 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
    The header lives OUTSIDE the scroller, so it can never scroll away. */
 #pvLyrics:not([hidden]){position:relative;display:flex;flex-direction:column;overflow:hidden}
 .lyrbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t f" "a a" "s s";align-items:center;gap:8px 12px;padding:12px 2px;border-bottom:1px solid var(--line)}
-.lyrbar .lyrt{grid-area:t;min-width:0;margin:0;font-size:14px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lyrbar .lyrt{grid-area:t;min-width:0;margin:0;font-size:17px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* UI-10: 14px -> 17px — the rail (490px at 1784) had room; still nowrap + ellipsis */
 .lyrbar .lyra{grid-area:a;min-width:0;font-size:11.5px;font-weight:500;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lyrbar .lyrchip{grid-area:s}
 .lyrbar #lyrFull{grid-area:f;align-self:center;justify-self:end}
@@ -1209,7 +1348,10 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
 #lyrJump:not([hidden]){display:inline-flex}
 #lyrJump .ic{width:14px;height:14px}
 .lyrnote{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin:4px 0 14px;background:rgba(0,0,0,.25)}
-#lyrBody{font-size:clamp(19px,2.1vw,26px);line-height:1.5;letter-spacing:-.2px;padding:var(--lpad,36vh) 6px var(--lpad,44vh);white-space:normal}
+/* UI-9: the rail is much wider now (491px at 1784px), so the reading size is raised with it:
+   26px → 29px at the cap, 19px → 21px at the floor, +~11.5%. Size comes from the RAIL, not from the
+   window, so the ratio is kept in the same units (vw) and the type scale never sees this rule. */
+#lyrBody{font-size:clamp(21px,2.35vw,29px);line-height:1.5;letter-spacing:-.2px;padding:var(--lpad,36vh) 6px var(--lpad,44vh);white-space:normal}
 #lyrBody .l{margin:14px 0;color:var(--dim);opacity:.35;transition:opacity .25s,color .25s,transform .25s;transform-origin:left center}
 /* 4AO-e: the anchored target holds line 0 at the top; its 14px top margin would push it past the
    16px acceptance, so the FIRST line loses that margin (gap = the 10px top padding). */
@@ -1240,10 +1382,9 @@ body.lyrfull #pvTransport{display:flex}
    value below is the BASE rule's own value (re-read, not invented). Added after the block so it
    wins by specificity AND order. Removed the instant the close finishes. */
 body.lyrfull.lyrreveal .pvleft{display:flex}
-body.lyrfull.lyrreveal .pvbody{padding:4px 30px 34px}
-body.lyrfull.lyrreveal .pvright{width:340px;flex:0 0 auto;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px}
+body.lyrfull.lyrreveal .pvbody{padding:4px 30px 34px}   /* UI-8: the base padding, re-read */
+body.lyrfull.lyrreveal .pvright{width:var(--pvrail,420px);flex:0 0 auto;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px}
 body.lyrfull.lyrreveal .tabrow{display:flex!important}
-@media (max-width:920px){body.lyrfull.lyrreveal .pvright{width:290px}}
 #pvTransport .mtT{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pvTransport .mtS{font-size:11.5px;color:var(--dim)}
 /* search suggestions (#21) */
@@ -1324,9 +1465,9 @@ function paintSeek(){
   var d=audio.duration||0;
   psFill.style.width=(d?((audio.currentTime||0)/d*100):0).toFixed(2)+'%';
 }
-audio.addEventListener('timeupdate',paintSeek);
-audio.addEventListener('loadedmetadata',function(){$('#tDur').textContent=fmt(audio.duration||0);paintSeek();});
-audio.addEventListener('durationchange',function(){$('#tDur').textContent=fmt(audio.duration||0);});
+onAudio('timeupdate',paintSeek);
+onAudio('loadedmetadata',function(){$('#tDur').textContent=fmt(audio.duration||0);paintSeek();});
+onAudio('durationchange',function(){$('#tDur').textContent=fmt(audio.duration||0);});
 if(psWrap&&psTip&&psGhost){
   psWrap.addEventListener('mousemove',function(e){
     var d=audio.duration||0; if(!d)return;
@@ -1573,7 +1714,7 @@ removeFromQueue=function(id){
   if(typeof AUTO_QUEUE_IDS!=='undefined'&&AUTO_QUEUE_IDS.indexOf(id)>=0)AUTO_QUEUE_IDS=AUTO_QUEUE_IDS.filter(function(x){return x!==id});   /* 4AR: dropped entry can no longer be an auto-added one */
   var wasCur=curId===id;
   queue.splice(qi,1);
-  if(!queue.length){seq=[];cur=-1;audio.pause();audio.removeAttribute('src');$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue();return}
+  if(!queue.length){seq=[];cur=-1;audio.pause();audio.removeAttribute('src');if(typeof xfStopPreload==='function')xfStopPreload();$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue();return}
   if(wasCur){seq=[];for(var i=0;i<queue.length;i++)seq.push(i);cur=0;loadAt(0,true);renderQueue();toast('Removed from queue');return}
   seq=seq.filter(function(s){return s!==qi}).map(function(s){return s>qi?s-1:s});
   var ci=queue.findIndex(function(x){return x.id===curId});
@@ -2111,7 +2252,7 @@ if(!$('#homeSec').hidden)renderHome();
   try{paintSeek=function(){paint()}}catch(e){}  // lyrics click-to-seek + startup still work
 
   ['timeupdate','loadedmetadata','durationchange','seeked','playing','emptied','ended','pause']
-    .forEach(function(ev){audio.addEventListener(ev,paint)});
+    .forEach(function(ev){onAudio(ev,paint)});
   input.addEventListener('input',paint);
   input.addEventListener('change',paint);
 
@@ -2128,7 +2269,7 @@ if(!$('#homeSec').hidden)renderHome();
   function frame(){ rafId=0; paint(); if(wants())rafId=requestAnimationFrame(frame) }
   function sync(){ if(wants()){ if(!rafId)rafId=requestAnimationFrame(frame) } else if(rafId){ cancelAnimationFrame(rafId);rafId=0 } }
   ['play','playing','pause','ended','emptied','loadedmetadata','durationchange','seeked']
-    .forEach(function(ev){audio.addEventListener(ev,sync)});
+    .forEach(function(ev){onAudio(ev,sync)});
   input.addEventListener('pointerdown',function(){ draggingSeek=true; sync() });
   ['pointerup','pointercancel'].forEach(function(ev){
     window.addEventListener(ev,function(){ if(!draggingSeek)return; draggingSeek=false; paint(); sync() });
@@ -2203,6 +2344,7 @@ if(!$('#homeSec').hidden)renderHome();
 #pgTitle.pgNP{font-size:13px;font-weight:600;color:var(--dim);letter-spacing:0;margin:12px 2px 2px;
   display:flex;align-items:center;gap:8px}
 .npdot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.8)}
+#pgTitle.pgIdle .npdot{visibility:hidden}   /* UI-9: idle — no dot at all; `visibility` (not display) keeps its 8px slot in the flex row */
 /* ===== Wave 1 — artist links + artist page ===== */
 .alink{cursor:pointer}
 .alink:hover{color:var(--tx);text-decoration:underline;text-underline-offset:2px}
@@ -2460,9 +2602,16 @@ renderQueue = function(){
   var order = [];
   if(curQi>=0) order.push(curQi);
   var ci = seq.indexOf(curQi);
-  var walk = ci>=0 ? seq.slice(ci+1).concat(seq.slice(0,ci)) : seq.slice();
+  /* Wave 5 (UI-5): “Up next” now lists only the tracks that have NOT played yet, in playback
+     order. It used to WRAP the play order around (seq.slice(ci+1).concat(seq.slice(0,ci))), which
+     parked every already-played track at the BOTTOM of the list — i.e. behind the songs autoplay
+     keeps appending at the tail — so with autoplay on they could never be reached again: they just
+     piled up at the end and only played once nothing new was being added. The wrap is kept ONLY
+     for repeat-all, the one mode where playback genuinely does return to them. */
+  var walk = ci>=0 ? seq.slice(ci+1).concat(repeat==='all' ? seq.slice(0,ci) : []) : seq.slice();
   walk.forEach(function(qi){ if(qi>=0 && qi<queue.length && order.indexOf(qi)<0) order.push(qi) });
-  queue.forEach(function(_,i){ if(order.indexOf(i)<0) order.push(i) });   // safety net
+  /* safety net — only entries the play order never mentions at all (never played, never upcoming) */
+  queue.forEach(function(_,i){ if(order.indexOf(i)<0 && seq.indexOf(i)<0) order.push(i) });
   el.innerHTML = order.map(function(qi,pos){
     var x = queue[qi]; if(!x) return '';
     var isCur = (pos===0 && curQi>=0);
@@ -2521,11 +2670,20 @@ function homeLine(){
   if(!pt||!ps) return;
   var it = (typeof nowItem==='function') ? nowItem() : null;
   if(it){
-    pt.hidden=false; ps.hidden=false; pt.classList.add('pgNP');
+    pt.hidden=false; ps.hidden=false; pt.classList.add('pgNP'); pt.classList.remove('pgIdle');
     pt.innerHTML = '<span class="npdot"></span>Now playing';
     ps.textContent = it.title + (it.artist ? ' · '+it.artist : '');
   } else {
-    pt.hidden=true; ps.hidden=true; pt.classList.remove('pgNP'); pt.innerHTML=''; ps.textContent='';
+    /* UI-8 → UI-9: the row keeps its BOX but shows NOTHING when nothing is playing. Hiding the two
+       lines outright collapsed ~64px of rhythm above the mood chips (they crept up under the
+       search bar, and the whole page shifted with playback state), so the box is still reserved —
+       same two lines, same styles, same line metrics: the label and the hint are replaced by a
+       zero-width space, which renders no glyph but still lays out a full strut-height line, so the
+       chips land at the same y whether or not a track is loaded. The dot keeps its 8px slot and is
+       merely invisible (see #pgTitle.pgIdle .npdot). */
+    pt.hidden=false; ps.hidden=false; pt.classList.add('pgNP','pgIdle');
+    pt.innerHTML = '<span class="npdot"></span>\u200B';
+    ps.textContent = '\u200B';
   }
 }
 
@@ -3510,7 +3668,7 @@ function markPlayed(it){
   recentIds = [it.id].concat(recentIds.filter(function(x){ return x!==it.id })).slice(0,50);
   LS.set('sv_tracks', recentTracks); LS.set('sv_recent_ids', recentIds);
 }
-audio.addEventListener('play', function(){ markPlayed(nowItem()) });
+onAudio('play', function(){ markPlayed(nowItem()) });
 
 function seeds(){
   var arts = (typeof topArtists==='function') ? topArtists(14) : [];
@@ -3644,7 +3802,7 @@ function maybeContinue(){
     .catch(function(){});
 }
 var lastProbe = 0;
-audio.addEventListener('timeupdate', function(){
+onAudio('timeupdate', function(){
   var now = Date.now();
   if(now - lastProbe < 2000) return;
   lastProbe = now;
@@ -3709,7 +3867,7 @@ downloadTrack = async function(it){
 /* Every localStorage key this app owns (WAVE0-NOTES inventory) + the frozen settings
    keys (PLAN §8). Export/import use this list; nothing else is accepted on import. */
 var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto','sv_liked_albums','sv_taste_excluded'];   /* 4AQ + 4AR */
-var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_set_gfxLevel','sv_logo'];
+var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_crossfade','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_set_gfxLevel','sv_set_typeScale','sv_logo'];   /* UI-5: crossfade · UI-7: text size */
 var SET_KEYS = SET_LIVE.concat(SET_NEW);
 var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null, aboutOpen = false;
 
@@ -3732,8 +3890,17 @@ function setLive(key){
   if(key==='shuffle') return !!shuffle;
   if(key==='repeat') return repeat;
   if(key==='autoplay') return !!v3autoOn;
+  if(key==='crossfade'){                       // UI-5: the live engine is the single source of truth
+    try{ if(window.svaraXfade) return window.svaraXfade.get() }catch(e){}
+    var xf = LS.get('sv_set_crossfade','off');
+    return (xf==='off'||xf==='4'||xf==='8') ? xf : 'off';
+  }
   if(key==='provider') return (lyrPref==='ytm'||lyrPref==='lrclib') ? lyrPref : 'auto';
   if(key==='gfxLevel') return setGfxLevel();
+  if(key==='typeScale'){                      // UI-7: the live boot layer is the single source of truth
+    try{ if(window.svaraType) return window.svaraType.get() }catch(e){}
+    return 's2';                             // its own default, so the row renders checked even if that layer is late
+  }
   return '';
 }
 /* Wave 5 (UI-2) — sliding segmented control (port of the 21st.dev SegmentedControl, see v5segcss).
@@ -3784,8 +3951,12 @@ function setRender(){
   var keep = b.scrollTop, sys = setSys, h = '';
   h += '<div class="setGrp"><h3>Playback</h3>'+
     setRow('Autoplay similar','Keeps playing similar songs when the queue ends', setSw('autoplay','Autoplay similar'))+
-    setRow('Default shuffle','Shuffles the queue as it is built', setSw('shuffle','Default shuffle'))+
-    setRow('Repeat mode','', setSeg('repeat',[['off','Off'],['all','All'],['one','One']], setLive('repeat')))+
+    setRow('Default shuffle','Shuffles the queue as it is built', setSw('shuffle','Default shuffle'))+    setRow('Repeat mode','', setSeg('repeat',[['off','Off'],['all','All'],['one','One']], setLive('repeat'))) +
+    /* UI-5: crossfade. The outgoing song keeps playing while the next one is faded in under it,
+       and the next track is buffered ahead either way — the hint says both, because turning the
+       fade off does NOT turn the preload off. */
+    setRow('Crossfade','Fades the next song in under this one. Either way the next track is loaded ahead of time, so the change is seamless.',
+      setSeg('crossfade',[['off','Off'],['2','2s'],['4','4s'],['8','8s']], setLive('crossfade')), true) +
     setRow('Volume','Mirrors the mini player’s slider',
       '<div class="setRangeWrap"><input type="range" min="0" max="100" step="1" value="'+volume+'" data-setkey="volume" aria-label="Volume" style="--v:'+volume+'%"><span class="setNum" id="setVolNum">'+volume+'%</span></div>')+
   '</div>';
@@ -3801,6 +3972,10 @@ function setRender(){
      sv_set_gfxLevel is authoritative when set; unset keeps today's derived look (gfxLevel(), v4lmjs).
      Reduced motion is a hard ceiling — the hint says so, and the applied look stays 'reduced'. */
   h += '<div class="setGrp"><h3>Appearance</h3>'+
+    /* UI-7: the app-wide text size. A TYPE scale, not a zoom — see v5typecss; the base size of every
+       surface is multiplied by one factor, so nothing reflows and no overlay can drift. */
+    setRow('Text size','Scales the app’s type — headings and labels proportionally. Layout, artwork and spacing do not move.',
+      setSeg('typeScale',[['s0','100%'],['s1','105%'],['s2','110%'],['s3','115%']], setLive('typeScale')), true)+
     setRow('Graphics level','Glass buttons, motion and the animated wave background. Reduced motion always forces the lowest look. The wave background changes on the next launch.',
       setSeg('gfxLevel',[['low','Low'],['medium','Medium'],['high','High']], setLive('gfxLevel')), true)+
   '</div>';
@@ -3850,9 +4025,10 @@ function setSync(){
   var rp = p.querySelector('input[data-setkey="repeat"][value="'+repeat+'"]'); if(rp && !rp.checked) rp.checked = true;
   var pr = p.querySelector('input[data-setkey="provider"][value="'+setLive('provider')+'"]'); if(pr && !pr.checked) pr.checked = true;
   var gx = p.querySelector('input[data-setkey="gfxLevel"][value="'+setGfxLevel()+'"]'); if(gx && !gx.checked) gx.checked = true;
+  var ts = p.querySelector('input[data-setkey="typeScale"][value="'+setLive('typeScale')+'"]'); if(ts && !ts.checked) ts.checked = true;
   /* Wave 5 (UI-2): the sliding thumb reads its index from data-i on the .setSeg container, so
      every path that can move a radio (this 900 ms resync, an import, a rollback) must re-derive it */
-  syncSeg('repeat'); syncSeg('provider'); syncSeg('gfxLevel');
+  syncSeg('repeat'); syncSeg('provider'); syncSeg('gfxLevel'); syncSeg('typeScale');
 }
 /* Wave 5 (UI-2) — ONE helper for the sliding segmented control's thumb index. The radios stay the
    single source of truth: this reads whichever one is :checked and mirrors its position into
@@ -3901,8 +4077,8 @@ var ABOUT = {
   name: 'Shubham Nag',
   role: 'Creator & Maintainer · Product Architect & Designer',
   // avatar: '',    // future photo hook — no placeholder is rendered today (Wave 4N-b)
-  github: '',       // GitHub profile URL
-  instagram: '',    // Instagram profile URL
+  github: 'https://github.com/Shubham0743X',                    // GitHub profile URL
+  instagram: 'https://www.instagram.com/notso_shubhamm?mdxt=MWV1YzcxNmNhcXRhZA==',   // Instagram profile URL (verbatim as supplied)
   repo: ''          // repository URL
 };
 var ABOUT_TIP = 'Not published yet';
@@ -4115,6 +4291,7 @@ function setRefresh(){
   var rp = LS.get('sv_set_repeat', null); if(rp==='off'||rp==='all'||rp==='one') repeat = rp;
   var ap = LS.get('sv_set_autoplay', null);
   if(typeof ap==='boolean'){ v3autoOn = ap; LS.set('sv_auto', ap?'on':'off') }
+  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','off')||'off') }catch(e){}   // UI-5: an import can change it
   try{ updatePlRows() }catch(e){}
   try{ paintControls(); paintShuf(); paintAuto(); paintFavs(); renderSHist() }catch(e){}
   try{ refreshHearts() }catch(e){}
@@ -4143,8 +4320,19 @@ document.addEventListener('input', function(e){
     setPut('sv_set_repeat', repeat);
   } else if(key==='volume'){
     setVolume(t.value);
+  } else if(key==='crossfade'){
+    /* UI-5: persist, then hand the value to the live engine the same way gfxLevel hands off to
+       window.svaraGfx — one owner, no duplicated state. */
+    setPut('sv_set_crossfade', t.value);
+    try{ if(window.svaraXfade) window.svaraXfade.set(t.value) }catch(e){}
+    toast(t.value==='off' ? 'Crossfade off' : 'Crossfade: '+t.value+'s');
   } else if(key==='provider'){
     setProvider(t.value);
+  } else if(key==='typeScale'){
+    /* UI-7: persist, then hand the step to the live layer the same way gfxLevel hands off to
+       window.svaraGfx — one owner (window.svaraType), no duplicated state. */
+    setPut('sv_set_typeScale', t.value);
+    try{ if(window.svaraType) window.svaraType.set(t.value) }catch(e){}
   } else if(key==='gfxLevel'){
     /* Wave 5 — persist then hand off to the EXISTING live hook: v4lmjs listens for
        'svara-gfx-change', re-scans and re-applies (mounts/disposes the liquid-metal layer,
@@ -4158,7 +4346,7 @@ document.addEventListener('input', function(e){
   }
   /* Wave 5 (UI-2): the sliding segmented control keeps its state in the radios; data-i (the thumb
      index) is mirrored from whichever one the user just picked. Persistence above is untouched. */
-  if(key==='repeat' || key==='provider' || key==='gfxLevel') syncSeg(key);
+  if(key==='repeat' || key==='provider' || key==='gfxLevel' || key==='crossfade' || key==='typeScale') syncSeg(key);
 });
 /* ONE delegated click handler: the gear, every panel action, and click-outside */
 document.addEventListener('click', function(e){
@@ -4210,6 +4398,7 @@ document.addEventListener('keydown', function(e){
   var ap = LS.get('sv_set_autoplay', null);
   if(typeof ap==='boolean') v3autoOn = ap;
   LS.set('sv_auto', v3autoOn ? 'on' : 'off');
+  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','off')||'off') }catch(e){}   // UI-5 (engine re-reads it on its own too)
   try{ paintControls(); paintShuf(); paintAuto() }catch(e){}
 })();
 /* the open panel mirrors the live player (the mini player can change under it) */
@@ -7850,7 +8039,7 @@ html[data-gfx="reduced"] .glb-l:hover,html[data-gfx="reduced"] .glb-l.is-hover{b
            #setPanel .setAbout) keep their chrome ring. */
 (function(){
 'use strict';
-var FULL='.chip[data-chip],#searchFilters .fchip,.srch,.art-back,.sec h2 .go,#aboutCard .abBtn,#setPanel .setAct,.lyrseg button,.lyrchip button,.art-acts .pact.ghost,.topres .trbtn.ghost';
+var FULL='.chip[data-chip],#searchFilters .fchip,.srch,.art-back,.sec h2 .go,#aboutCard .abBtn,#setPanel .setAct,.art-acts .pact.ghost,.topres .trbtn.ghost';   /* UI-10: .lyrseg/.lyrchip buttons left this list — the lyrics-provider pills carry a FIXED dark-translucent style (#v5provcss) at every graphics level, so the gated .glb chrome must not touch them */
 var LITE='.tic,.dots,.pact:not(#pvFav):not(#pvMenu),.mbtn:not(#mFav),.pbtn,.lyrbtn,.rail .ov .pb,#setPanel .setX,#aboutCard .abX';
 var SKIP='#go,.gobtn,#newPl,#setPanel .setAbout,.lm,#playBtn,#pvPlay,.mbtn.main,.art-acts .pact:not(.ghost),.topres .trbtn:not(.ghost),.np button,#npGo';
 function mark(){
@@ -8206,6 +8395,493 @@ html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
     wrapped.__sb4btWrapped = true;
     try{ window[name] = wrapped }catch(e){}
   });
+})();
+</script>
+
+<script id="v5xfjs">
+/* ===== Wave 5 (UI-5) — crossfade, instant hand-off and stream prefetch =====
+   One idle element (audioAlt), three jobs, all additive:
+     1. PREFETCH — /api/prefetch resolves the stream URL of the tracks that come next while the
+        current one plays, and of whatever the cursor rests on. MEASURED on this machine: that
+        resolution costs 3.6-4.5 s cold and 0.07-0.23 s warm, and it was the WHOLE "songs take ages
+        to start" cost — the audio itself was already streamed progressively (Range/206 piped
+        straight through from the first byte). Warming also runs on hover, so the first track of a
+        session starts fast too, not just the second one.
+     2. HAND-OFF — the next track is buffered into the idle element ahead of time, so reaching the
+        end of a song needs no new stream at all: the buffered element simply becomes the active
+        one. That is the "seamless" part with crossfade off.
+     3. CROSSFADE — with it on, the incoming song is faded in under the outgoing one on an
+        equal-power curve. Settings → Playback → Crossfade (Off / 2s / 4s / 8s).
+   Every path here degrades into the behaviour that already existed: if the buffered element is not
+   ready, or its play() is refused, or the queue changed underneath, the ordinary loadAt() advance
+   runs instead. Crossfade off + nothing buffered = the app exactly as it was. */
+(function(){
+  var XF_KEY='sv_set_crossfade';
+  var XF_STEPS={off:0,'2':2,'4':4,'8':8};
+  function xfModeNow(){ try{ var v=JSON.parse(localStorage.getItem(XF_KEY)||'"off"'); return (v in XF_STEPS)?v:'off' }catch(e){ return 'off' } }
+  var xfMode=xfModeNow();
+  function xfSecs(){ return XF_STEPS[xfMode]||0 }
+  function volNow(){ return Math.max(0,Math.min(1,(typeof volume==='number'?volume:80)/100)) }
+  function idleOf(){ return audio===MEDIA[0]?MEDIA[1]:MEDIA[0] }
+  try{ audio.preload='auto' }catch(e){}
+
+  /* ---------- 1) prefetch ---------- */
+  var warmed={}, warmT=null;
+  function warm(id){
+    if(!id||warmed[id])return;
+    warmed[id]=1;
+    try{ fetch('/api/prefetch?id='+encodeURIComponent(id),{cache:'no-store'}).catch(function(){}) }catch(e){}
+  }
+  function warmAhead(n){
+    if(cur<0)return;
+    for(var k=1;k<=n;k++){
+      var pos=cur+k; if(pos>=seq.length)return;
+      var it=queue[seq[pos]]; if(it&&it.id)warm(it.id);
+    }
+  }
+  /* Hovering a row means the click is ~a second away: 140 ms of rest starts the resolve, so the
+     FIRST track of a session is warm too. Debounced, and each id is asked for at most once. */
+  var hovId='';
+  function rowIdUnder(t){
+    /* the id is NOT an ancestor of what the cursor lands on: it sits on the ⋮ button / play button
+       INSIDE the row. So walk up (bounded) until an element either carries the attribute itself
+       or contains one — that is the row/card the user is pointing at. */
+    var node=t, hops=0;
+    while(node&&node!==document.body&&hops++<6){
+      var own=node.getAttribute&&(node.getAttribute('data-menu')||node.getAttribute('data-play-item'));
+      if(own)return own;
+      var inner=node.querySelector&&node.querySelector('[data-menu],[data-play-item]');
+      if(inner)return inner.getAttribute('data-menu')||inner.getAttribute('data-play-item')||'';
+      node=node.parentElement;
+    }
+    return '';
+  }
+  document.addEventListener('pointerover',function(e){
+    var t=e.target; if(!t||!t.getAttribute)return;
+    var id=rowIdUnder(t);
+    if(!id||id===hovId)return;
+    hovId=id;
+    clearTimeout(warmT);
+    warmT=setTimeout(function(){ warm(id) },140);
+  },true);
+
+  /* ---------- 2) the idle element: buffer the next track, then hand over ---------- */
+  var pre={el:null,pos:-1,id:''};
+  function preStop(){
+    var el=pre.el;
+    pre={el:null,pos:-1,id:''};
+    if(!el)return;
+    try{ el.pause(); el.removeAttribute('src'); el.load() }catch(e){}
+    try{ el.volume=volNow() }catch(e){}
+  }
+  function preSync(){
+    if(xfState)return;
+    if(repeat==='one'){ preStop(); return }          // the same song repeats: nothing to buffer ahead
+    if(cur<0||cur+1>=seq.length){ preStop(); return }
+    var it=queue[seq[cur+1]];
+    if(!it||!it.id){ preStop(); return }
+    if(pre.el&&pre.id===it.id)return;                 // already buffering exactly this one
+    preStop();
+    var el=idleOf();
+    el.volume=volNow();
+    el.src='/api/stream?id='+it.id;                   // preload=auto: buffers, never plays
+    pre={el:el,pos:cur+1,id:it.id};
+  }
+  /* End of song: is the buffered element already the right track? Then this is a cut, not a load.
+     false = "not ready", and the ordinary advance runs instead. */
+  window.xfHandoff=function(){
+    var s=pre; if(!s.el)return false;
+    if(s.pos<0||!seq[s.pos])return false;
+    var it=queue[seq[s.pos]];
+    if(!it||it.id!==s.id)return false;                // the queue changed under us
+    if(s.el.readyState<2)return false;                // not buffered enough to start cleanly
+    var el=s.el, pos=s.pos;
+    pre={el:null,pos:-1,id:''};
+    el.volume=volNow();
+    var pr=el.play();
+    if(pr&&pr.catch)pr.catch(function(){ try{ loadAt(pos) }catch(e){} });
+    audio=el; cur=pos;
+    setNowUI(it); renderQueue(); paintRowCursor(); paintControls(); paintSeek();
+    try{ el.dispatchEvent(new Event('play')) }catch(e){}   // history/art/state: exactly one play
+    warmAhead(2);
+    return true;
+  };
+
+  /* ---------- 3) crossfade ---------- */
+  var xfState=null;
+  window.xfOwnsAdvance=function(){ return !!xfState };   // the base 'ended' handler asks this
+  function xfCancel(){
+    var s=xfState; if(!s)return;
+    xfState=null;
+    clearInterval(s.timer);
+    try{ s.out.volume=volNow() }catch(e){}              // the outgoing element is still the active one
+    try{ s.in.pause(); s.in.removeAttribute('src'); s.in.load() }catch(e){}
+    try{ s.in.volume=volNow() }catch(e){}
+  }
+  function xfTick(){
+    var s=xfState; if(!s)return;
+    var t=(Date.now()-s.t0)/(s.secs*1000);
+    if(t>=1){ xfFinish(); return }
+    var v=volNow();
+    s.out.volume=v*Math.cos(t*Math.PI/2);               // equal power: constant perceived loudness
+    s.in.volume=v*Math.sin(t*Math.PI/2);
+  }
+  function xfStart(){
+    var secs=xfSecs(); if(!secs||xfState)return false;
+    if(repeat==='one')return false;                     // the same song repeats: nothing to fade into
+    if(cur<0||cur+1>=seq.length)return false;
+    if(audio.paused||audio.seeking)return false;
+    var d=audio.duration;
+    var left=d-audio.currentTime;
+    if(!isFinite(d)||left<XF_MIN)return false;          // too little left to cross anything into
+    /* The REMAINING time is what matters, not the total duration: the probe below fires up to a
+       quarter second late, and an eight-second fade started with four seconds left used to be
+       cancelled by the end-of-song pause. So the fade simply TAKES whatever is left when that is
+       shorter than the configured length — seeking into the last seconds still crossfades, just
+       faster, instead of silently degrading to a cut. Above XF_MIN that always leaves room for
+       the swap to land just before the outgoing song ends. */
+    if(left<secs)secs=left;
+    var it=queue[seq[cur+1]]; if(!it||!it.id)return false;
+    var inEl=idleOf(), reuse=false;
+    /* side benefit: if the idle element is already buffering exactly this track (the preload),
+       the fade REUSES that buffer instead of throwing it away and streaming it again. */
+    if(pre.el&&pre.el===inEl&&pre.id===it.id&&pre.el.readyState>=2){
+      reuse=true;
+      pre={el:null,pos:-1,id:''};
+    } else if(pre.el)preStop();
+    xfState={out:audio,in:inEl,inPos:cur+1,secs:secs,t0:Date.now(),timer:0};
+    if(!reuse) inEl.src='/api/stream?id='+it.id;
+    function onErr(){ try{ inEl.removeEventListener('error',onErr) }catch(e){}; xfCancel() }
+    try{ inEl.addEventListener('error',onErr) }catch(e){}
+    inEl.volume=0;                                      // a reused buffer fades in from silence too
+    var pr=inEl.play();
+    if(pr&&pr.catch)pr.catch(function(){ xfCancel() });  // refused → the ordinary advance runs
+    xfState.timer=setInterval(xfTick,40);
+    return true;
+  }
+  function xfFinish(){
+    var s=xfState; if(!s)return;
+    xfState=null;
+    clearInterval(s.timer);
+    /* never became playable: hand the advance back to the normal path, once, on the active element */
+    if(s.in.paused||s.in.readyState<2){
+      try{ s.in.pause(); s.in.removeAttribute('src'); s.in.load() }catch(e){}
+      try{ s.out.volume=volNow() }catch(e){}
+      try{ loadAt(s.inPos) }catch(e){}
+      return;
+    }
+    var it=queue[seq[s.inPos]];
+    try{ s.out.volume=0 }catch(e){}                     // silent: it ends by itself, events inert
+    audio=s.in; cur=s.inPos;                            // THE HAND-OFF
+    s.in.volume=volNow();
+    if(it){ setNowUI(it); renderQueue(); paintRowCursor(); paintControls(); paintSeek() }
+    try{ s.in.dispatchEvent(new Event('play')) }catch(e){}
+    warmAhead(2);
+  }
+  var XF_MIN=0.6;   /* below this there is not enough of a song left to fade into — cut instead */
+  /* The trigger: a quarter-second probe on the ACTIVE element (timeupdate fires ~4x/s). The fade
+     starts one margin early so its swap lands just BEFORE the outgoing song ends — the outgoing
+     element is then already idle, so its own `ended` can never double-advance. */
+  var xfLast=0, preLast=0;
+  onAudio('timeupdate',function(){
+    var now=Date.now();
+    if(now-xfLast>250){
+      xfLast=now;
+      if(!xfState&&xfSecs()&&!audio.paused){
+        var d=audio.duration;
+        if(isFinite(d)&&d>0&&d-audio.currentTime<=xfSecs()+0.25)xfStart();
+      }
+    }
+    if(now-preLast>1000){ preLast=now; if(!xfState)preSync() }
+  });
+  /* The natural end of a song fires `pause` a moment BEFORE `ended` — cancelling on that would
+     throw away a fade that is a quarter second from completing its swap. Only a real pause (the
+     user, or a new load) cancels; reaching the end of the media is left to the fade's own clock. */
+  onAudio('pause',function(){
+    var d=audio.duration;
+    if(audio.ended||(isFinite(d)&&d>0&&d-audio.currentTime<=0.05))return;
+    xfCancel();
+  });
+  onAudio('seeking',xfCancel);
+
+  /* Every explicit load wins over a fade or a stale buffer, and no element may keep a faded
+     volume after the swap. loadAt() is the single funnel for play/pause-next/prev/row clicks,
+     so wrapping it here covers them all. */
+  var _loadAt=loadAt;
+  loadAt=function(pos,autoplay){
+    xfCancel();
+    preStop();
+    MEDIA.forEach(function(el){ try{ el.volume=volNow() }catch(e){} });
+    var r=_loadAt(pos,autoplay);
+    warmAhead(2);
+    return r;
+  };
+  window.xfStopPreload=preStop;
+
+  window.svaraXfade={
+    get:function(){ return xfMode },
+    secs:function(){ return xfSecs() },
+    /* read-only introspection: what is buffered in the idle element, and is a fade running? */
+    state:function(){ return { mode:xfMode, secs:xfSecs(), fading:!!xfState, outId:xfState?(((nowItem()||{}).id)||''):'', bufferedId:pre.id, bufferedPos:pre.pos, bufferedReady:pre.el?pre.el.readyState:-1, active:audio===MEDIA[0]?'a':'b' } },
+    set:function(v){
+      if(!(v in XF_STEPS))return;
+      xfMode=v;
+      if(!xfSecs())xfCancel();                          // switching off stops a fade in progress
+    }
+  };
+})();
+</script>
+
+<style id="v5libcss">
+/* ===== Wave 5 (UI-7) — the Library page =====
+   Layout only; every card reuses the .rail / .art / .row primitives (and their hover + heart
+   affordances) so nothing here invents a second visual language. */
+.libbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 20px}
+.libsorts{margin-left:auto;display:flex;align-items:center;gap:6px}
+.libsorts .lbl{font-size:12px;color:var(--dim);margin-right:2px}
+.libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:26px 18px;align-items:start}
+.libgrid .rail{width:auto;min-width:0}
+.libgrid .rname{font-size:14px}
+.libgrid .rsub2{font-size:12px}
+/* the auto playlists (Liked music) have no cover art of their own — a glyph tile in the accent */
+.libart.auto{display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,rgba(var(--amb),.28),rgba(0,0,0,.45))}
+.libart.auto .ic{width:42%;height:42%;color:var(--acc)}
+.libart.auto .ic svg{stroke-width:1.6}
+/* artists are circular, like the reference library */
+.libart.round{border-radius:50%}
+.libfoot{font-size:13px;color:var(--dim);margin:24px 2px 0;line-height:1.6}
+@media(max-width:660px){.libgrid{grid-template-columns:repeat(auto-fill,minmax(138px,1fr))}.libsorts{margin-left:0}}
+</style>
+
+<script id="v5libjs">
+/* ===== Wave 5 (UI-7) — the Library page =====
+   The sidebar's Library button used to just open Liked music, so the app had no library at all.
+   This is one page with four filter chips and a grid that adapts to the window:
+     Playlists — Liked music (the auto playlist) + every user playlist, cover = its first track
+     Songs     — Liked music as rows (the app's list primitive), so a click plays it in context
+     Albums    — Liked albums, with the same heart that likes them everywhere else
+     Artists   — every artist in your history, by plays, circular like the reference
+   "Appropriate information" per card: track counts, artist · year for albums, song counts for
+   artists, Pinned for pinned playlists. Sort by Recently played / A–Z applies to all four tabs.
+   Everything is built from EXISTING globals (favs / pls / hist / LIKED_ALBUMS / listHTML /
+   thumb / ic / esc / LSget / splitArtists) and every card navigates through an EXISTING handler
+   ([data-lib], [data-artalbum], [data-artist-name]) — no new click runtime, no duplicated state. */
+(function(){
+  'use strict';
+  var TABS = [['playlists','Playlists'],['songs','Songs'],['albums','Albums'],['artists','Artists']];
+  var tab = 'playlists', sort = 'recent';
+
+  function likedSongs(){ return Object.values(favs).filter(function(x){ return x && x.id }) }
+  function lastOf(id){ var h = hist[id]; return (h && h.last) || 0 }
+  function pinList(){ var p = LSget('sv_pins', []); return Array.isArray(p) ? p : [] }
+  function plNames(){ return Object.keys(pls) }
+  /* artists are derived from the listening history: a play count, the songs of theirs you played,
+     and the most recent one's artwork as the portrait (we have no real artist images locally). */
+  function artistList(){
+    var m = {};
+    Object.keys(hist || {}).forEach(function(id){
+      var h = hist[id]; if(!h) return;
+      splitArtists(h.artist).slice(0,2).forEach(function(n){
+        var e = m[n] || (m[n] = { name:n, plays:0, songs:0, thumb:'', last:0 });
+        e.plays += (h.count || 1); e.songs++;
+        if((h.last||0) > e.last){ e.last = h.last; e.thumb = h.thumb || e.thumb }
+      });
+    });
+    return Object.keys(m).map(function(k){ return m[k] });
+  }
+  function byRecent(a, b){ return b.recent - a.recent }
+  function byName(a, b){ return String(a.name).localeCompare(String(b.name)) }
+
+  /* ---- cards ---- */
+  function autoCard(kind, title, sub){
+    return '<div class="rail" data-lib="'+kind+'" data-title="'+esc(title)+'">'+
+      '<div class="art libart auto"><span class="ic">'+ic('i-heart')+'</span></div>'+
+      '<div class="rname">'+esc(title)+'</div><div class="rsub2">'+esc(sub)+'</div></div>';
+  }
+  function plCard(n){
+    var items = pls[n] || [], cov = items.length ? thumb(items[0], THUMB_RAIL) : '';
+    var ph = cov ? '' : '<div class="ph"><span class="ic">'+ic('i-list')+'</span></div>';
+    var pinned = pinList().indexOf(n) >= 0;
+    return '<div class="rail" data-lib="pl:'+esc(n)+'" data-title="'+esc(n)+'">'+
+      '<div class="art libart">'+ph+(cov ? '<img loading="lazy" alt="" src="'+esc(cov)+'" onerror="this.style.display=\'none\'">' : '')+
+      '<div class="ov"><span class="pb">'+ic('i-list')+'</span></div></div>'+
+      '<div class="rname">'+esc(n)+'</div>'+
+      '<div class="rsub2">'+(pinned?'Pinned · ':'')+'Playlist · '+items.length+(items.length===1?' song':' songs')+'</div></div>';
+  }
+  function albumCardL(a){
+    var ph = thumb(a, THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+    var sub = [a.artist, a.year].filter(Boolean).join(' · ') || 'Album';
+    return '<div class="rail" data-artalbum="'+esc(a.id)+'" data-title="'+esc(a.title||'')+'">'+
+      '<div class="art libart">'+ph+'<img loading="lazy" alt="" src="'+esc(thumb(a,THUMB_RAIL))+'">'+
+      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div>'+
+      (typeof albHeartHTML==='function' ? albHeartHTML(a) : '')+'</div>'+
+      '<div class="rname">'+esc(a.title||'')+'</div><div class="rsub2">'+esc(sub)+'</div></div>';
+  }
+  function artistCardL(a){
+    var ph = a.thumb ? '' : '<div class="ph"><span class="ic">'+ic('i-note')+'</span></div>';
+    return '<div class="rail" data-artist-name="'+esc(a.name)+'" title="Open artist page">'+
+      '<div class="art libart round">'+ph+(a.thumb ? '<img loading="lazy" alt="" src="'+esc(a.thumb)+'" onerror="this.style.display=\'none\'">' : '')+'</div>'+
+      '<div class="rname">'+esc(a.name)+'</div>'+
+      '<div class="rsub2">Artist · '+a.songs+(a.songs===1?' song':' songs')+'</div></div>';
+  }
+
+  /* ---- one tab's body ---- */
+  function bodyHTML(){
+    var names = plNames(), songs = likedSongs(), albums = likedAlbumList(), artists = artistList();
+    if(tab === 'songs'){
+      var list = songs.map(function(s){ return { it:s, recent:lastOf(s.id), name:s.title } });
+      list.sort(sort === 'az' ? byName : byRecent);
+      if(!list.length) return '<div class="empty">No liked songs yet — tap the ♥ on any song and it lands here.</div>';
+      return listHTML(list.map(function(x){ return x.it }));
+    }
+    if(tab === 'albums'){
+      var al = albums.map(function(a){ return { a:a, recent:0, name:a.title } });
+      if(sort === 'az') al.sort(byName);      /* 'recent' = the order they were liked, untouched */
+      if(!al.length) return '<div class="empty">No liked albums yet — tap the ♥ on an album cover.</div>';
+      return '<div class="libgrid">'+al.map(function(x){ return albumCardL(x.a) }).join('')+'</div>';
+    }
+    if(tab === 'artists'){
+      var ar = artists.map(function(a){ return { a:a, recent:a.plays, name:a.name } });
+      ar.sort(sort === 'az' ? byName : byRecent);
+      if(!ar.length) return '<div class="empty">No artists yet — play something and they collect here.</div>';
+      return '<div class="libgrid">'+ar.map(function(x){ return artistCardL(x.a) }).join('')+'</div>';
+    }
+    /* playlists: Liked music is always FIRST (it is an auto playlist, not a sorted row), then the
+       user's own — Recently played = the newest play among the playlist's tracks. */
+    var pl = names.map(function(n){
+      var items = pls[n] || [], r = 0;
+      items.forEach(function(it){ var t = lastOf(it && it.id); if(t > r) r = t });
+      return { name:n, recent:r };
+    });
+    pl.sort(sort === 'az' ? byName : byRecent);
+    return '<div class="libgrid">'+
+      autoCard('liked', 'Liked music', 'Auto playlist · '+songs.length+(songs.length===1?' song':' songs'))+
+      pl.map(function(x){ return plCard(x.name) }).join('')+'</div>'+
+      (names.length ? '' : '<div class="libfoot">No playlists yet — “New playlist” in the sidebar creates one.</div>');
+  }
+  function headHTML(){
+    return '<div class="libbar"><div class="chips">'+TABS.map(function(t){
+        return '<button class="chip'+(t[0]===tab?' on':'')+'" data-libtab="'+t[0]+'" aria-pressed="'+(t[0]===tab?'true':'false')+'">'+t[1]+'</button>';
+      }).join('')+'</div>'+
+      '<div class="libsorts"><span class="lbl">Sort by</span>'+
+        '<button class="chip'+(sort==='recent'?' on':'')+'" data-libsort="recent" aria-pressed="'+(sort==='recent'?'true':'false')+'">Recently played</button>'+
+        '<button class="chip'+(sort==='az'?' on':'')+'" data-libsort="az" aria-pressed="'+(sort==='az'?'true':'false')+'">A–Z</button>'+
+      '</div></div>';
+  }
+  function subHTML(){
+    var n = plNames().length, s = likedSongs().length, a = likedAlbumCount(), r = artistList().length;
+    return [n+(n===1?' playlist':' playlists'), s+(s===1?' song':' songs'), a+(a===1?' album':' albums'), r+(r===1?' artist':' artists')].join(' · ');
+  }
+
+  function openLibrary(which, how){
+    if(which === 'playlists' || which === 'songs' || which === 'albums' || which === 'artists') tab = which;
+    if(how === 'recent' || how === 'az') sort = how;
+    showDyn('Library', subHTML(), headHTML() + bodyHTML());
+    setNav('lib');
+    /* the Songs tab paints real rows, so it must register its own context (same contract as
+       openLiked) or a row click would play from a stale list; the other tabs hold no rows. */
+    if(tab === 'songs'){ var items = likedSongs(); curList = items; register(items) } else { curList = [] }
+    if(typeof skReveal === 'function'){ var d = document.getElementById('dynSec'); if(d) skReveal(d) }
+    if(typeof refreshSidebar === 'function') refreshSidebar();
+  }
+  window.openLibrary = openLibrary;
+
+  /* Both controls live INSIDE #dynSec, which openLibrary() rebuilds on every click — one delegated
+     listener on the document survives that, and the re-render carries the new active chip. */
+  document.addEventListener('click', function(e){
+    var t = e.target; if(!t || !t.closest) return;
+    var c = t.closest('[data-libtab]');
+    if(c){ e.preventDefault(); openLibrary(c.getAttribute('data-libtab')); return }
+    var s = t.closest('[data-libsort]');
+    if(s){ e.preventDefault(); openLibrary(null, s.getAttribute('data-libsort')); return }
+  });
+
+  /* Un-liking an album from a card here must drop the card, exactly as the Liked-albums view
+     does — the app's own heart handler only repaints hearts, so it would leave a stale card.
+     That handler is a CAPTURE listener registered long before this layer and calls
+     stopPropagation(), but capture listeners on the SAME node still all run (the v4bbjs block
+     relies on the same rule), so this second capture listener re-renders right after it.
+     Guarded on the Library actually being on screen so no other view is ever rebuilt. */
+  document.addEventListener('click', function(e){
+    var t = e.target; if(!t || !t.closest || !t.closest('[data-albheart]')) return;
+    var dyn = document.getElementById('dynSec'), pt = document.getElementById('pgTitle');
+    if(!dyn || dyn.hidden || !pt || String(pt.textContent||'').trim() !== 'Library' || tab !== 'albums') return;
+    openLibrary();
+  }, true);
+})();
+</script>
+
+<style id="v5provcss">
+/* ===== Wave 5 (UI-10) — the lyrics-provider pills + the mini bar's idle state =====
+   Two small, independent fixes, both scoped to the PLAYER PAGE.
+
+   (1) THE PROVIDER PILLS (Auto / YouTube Music / LRClib). They used to be part of the animated
+   glass-button layer (.glb), whose chrome is GATED by html[data-gfx]: full ring + sheen + hover
+   scale at medium/high, but flattened to background:var(--gf5) / border-color:var(--gf20) at low.
+   That flattened pill is the look that got approved (the "Play all"-style pill on a dark
+   surface), so the pills now OWN it as a plain style and are no longer marked .glb at all (see
+   the FULL list in #v4glassjs — the two selectors were removed there). Nothing about them reads
+   the graphics level any more, so all four levels render byte-for-byte the same pill.
+   Type: 10.5px -> 12.5px, and the box grows with it (button padding 6/8 -> 7/11, trough 2 -> 3),
+   i.e. a ~30px pill inside a ~36px trough instead of ~27px in ~31px.
+   The trough is the Up-next rail's OWN surface (rgba(15,15,21,.5) + 1px var(--line)); the buttons
+   sit ONE step brighter than it (--gf5 fill, --gf12 ring — --gf10/--gf20 on hover, --gf15/--gf25
+   plus a top light when selected), so they read as part of the same family without dissolving
+   into the trough. Blur sits on the trough only, and the app's own chrome (#sb, #mini) keeps
+   backdrop-filter at every level, so this is not a new exception to the low-power rule.
+   NOT part of the Text-size scale, by design: no rule for .lyrt/.lyra/.lyrchip exists in
+   #v5typecss, so Settings -> Appearance -> Text size cannot resize these pills.
+
+   (2) THE MINI PLAYER. "Nothing playing" is not a state the bar should occupy: it is now HIDDEN
+   whenever no track is loaded (not deleted — same element, same handlers, no markup change) and
+   slides up on its existing transition the moment one is. The switch is body.svtrack, written by
+   #v5provjs; body:not(.svtrack) is also the BOOT state, so the empty bar can never flash before
+   a script has run. visibility (delayed by the slide-out) keeps it out of the tab order too —
+   pointer-events alone would leave its buttons keyboard-focusable. body.lyrfull is excluded on
+   purpose: in fullscreen lyrics #mini IS the transport bar (Wave 4AO layer). */
+
+/* ---- (1) the provider pills — one fixed look at every graphics level ---- */
+.lyrchip{background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:999px;padding:3px;gap:3px;
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.lyrchip button{padding:7px 11px;font-size:12.5px;font-weight:700;letter-spacing:.3px;border-radius:999px;
+  border:1px solid var(--gf12);background:var(--gf5);color:var(--dim);
+  transition:background .15s ease,border-color .15s ease,color .15s ease}
+.lyrchip button:hover{background:var(--gf10);border-color:var(--gf20);color:var(--tx)}
+.lyrchip button.on{background:var(--gf15);border-color:var(--gf25);color:var(--tx);box-shadow:inset 0 1px 0 var(--gf5)}
+body.lyrfull .lyrchip button{padding:7px 14px}   /* fullscreen bar: content-sized, a touch wider */
+
+/* ---- (2) the mini bar's idle state ---- */
+#mini{transition:opacity .22s ease,transform .3s cubic-bezier(.22,1,.36,1),visibility 0s linear}
+body:not(.svtrack):not(.lyrfull) #mini{opacity:0;transform:translateY(110%);pointer-events:none;visibility:hidden;
+  transition:opacity .22s ease,transform .3s cubic-bezier(.22,1,.36,1),visibility 0s linear .34s}
+</style>
+
+<script id="v5provjs">
+/* ===== Wave 5 (UI-10) — body.svtrack: "a track is loaded" =====
+   The mini bar's visibility is ONE boolean about the app's own state, so it is derived from
+   nowItem() — the same function every surface reads — and written in exactly one place.
+   Two chokepoints cover every path that can change it:
+     setNowUI(it)    names a track (loadAt, plus the two late layers that re-set the UI);
+     paintControls() runs on every play/pause AND on all three queue-clear paths, which are the
+                     only places that take the track AWAY (#clearQ, removeFromQueue, and the
+                     empty-queue branch in both the core block and the late layer).
+   Both are WRAPPED, not replaced: the original runs first, the class is written after, and the
+   return value is passed straight through. Writes are skipped when the value is unchanged, so a
+   track change costs no style recalculation at all. If the layer were absent, nothing else would
+   break: the boot state (no class) already hides the empty bar. */
+(function(){
+'use strict';
+var ST = 'svtrack';
+function has(){ try{ return !!(typeof nowItem === 'function' && nowItem()) }catch(e){ return true } }
+function sync(){
+  var on = has();
+  if(document.body.classList.contains(ST) !== on) document.body.classList.toggle(ST, on);
+}
+var sn = window.setNowUI;
+if(typeof sn === 'function') window.setNowUI = function(){ var r = sn.apply(this, arguments); sync(); return r };
+var pc = window.paintControls;
+if(typeof pc === 'function') window.paintControls = function(){ var r = pc.apply(this, arguments); sync(); return r };
+sync();
 })();
 </script>
 </body>
