@@ -719,10 +719,19 @@ function openMood(label){ doSearch(String(label||'')+' songs', false, undefined,
    WHAT IS NOT TOUCHED: Listen again, Quick picks, Albums for you and Surprise me keep their own
    builders and their own order, and the picked shelves keep the wave-6b handover on top of them.
    The only caps that move are the ones asked for: Quick picks 18 → QP_PAGE with a Show more button,
-   Albums for you 3 artists x 4 albums → FEED_ARTISTS x ALB_PER_ARTIST. */
-var QP_PAGE=30,          /* one page of the Quick picks grid (was a hardcoded 18) */
-    TREND_LIMIT=14,      /* Trending songs */
-    POP_LIMIT=14,        /* Popular right now */
+   Albums for you 3 artists x 4 albums → FEED_ARTISTS x ALB_PER_ARTIST.
+   WAVE 8 moved the SAME caps again, for the same reason (the user asked for more content in the
+   horizontal carousels): one screen of a carousel is now 6 covers and one screen of Quick picks is
+   3 columns x 4 rows, so QP_PAGE=36 is exactly three pick screens, TREND_LIMIT/POP_LIMIT=18 is
+   exactly three cover screens, and ART_SONGS is what keeps an 18-song row round-robin over its four
+   artists instead of running dry at 16. No extra request is made for any of it — the artist route
+   already returns ~100 rows and each search already returns more than a page; these numbers only
+   decide how deep we slice. */
+var QP_PAGE=36,          /* one page of the Quick picks carousel: 9 columns x 4 rows (was 30, and a
+                            hardcoded 18 before that) */
+    TREND_LIMIT=18,      /* Trending songs — three screens of the 6-cover window (was 14) */
+    POP_LIMIT=18,        /* Popular right now — same (was 14) */
+    ART_SONGS=6,         /* songs drawn from each artist's own top-song order (was a hardcoded 4) */
     FEED_ARTISTS=4,      /* artists a category or Home row may draw from (was 3) */
     ALB_PER_ARTIST=6,    /* albums per artist (was 4) */
     ART_AUD_FLOOR=1e6;   /* monthly audience a row must clear to count as a real artist */
@@ -827,7 +836,7 @@ async function catArtists(cat, n){
 }
 /* A channel's own top songs, in YouTube Music's popularity order (never re-sorted by us). */
 async function artistTopSongs(id, n){
-  try{ var j=await feedJSON('/api/artist/songs?id='+encodeURIComponent(id)); return (j.songs||[]).slice(0, n||4) }catch(e){ return [] }
+  try{ var j=await feedJSON('/api/artist/songs?id='+encodeURIComponent(id)); return (j.songs||[]).slice(0, n||ART_SONGS) }catch(e){ return [] }
 }
 /* A plain song search, junk removed and deduped — the fallback for anything without an artist query. */
 async function querySongs(qs, limit, dropTrendWords){
@@ -843,7 +852,7 @@ async function categorySongs(cat, limit){
   var arts=await catArtists(cat, FEED_ARTISTS);
   if(arts.length){
     var lists=[];
-    for(var i=0;i<arts.length;i++) lists.push(await artistTopSongs(arts[i].id, 4));
+    for(var i=0;i<arts.length;i++) lists.push(await artistTopSongs(arts[i].id, ART_SONGS));
     var out=interleave(lists, limit);
     if(out.length) return out;
   }
@@ -893,7 +902,7 @@ async function popularitySongs(limit){
                .slice(0, FEED_ARTISTS);
   if(arts.length){
     var lists=[];
-    for(var k=0;k<arts.length;k++) lists.push(await artistTopSongs(arts[k].id, 4));
+    for(var k=0;k<arts.length;k++) lists.push(await artistTopSongs(arts[k].id, ART_SONGS));
     var out=interleave(lists, limit);
     if(out.length) return { items:out, artists:arts.map(function(a){ return a.name }) };
   }
@@ -10049,5 +10058,52 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   };
 })();
 </script>
+<style id="v8homecss">
+/* ================= Wave 8 — Home's rhythm: six covers a carousel, four rows of picks =================
+   Every number below was measured on the user's own window — 1784x950, which is a 1548px content
+   box, the same box their screenshots were taken in — before and after the change.
+
+   1) A CAROUSEL IS SIX COVERS WIDE, NOT NINE. A .rail was a flat 150px, so 1548px of content showed
+      9.56 covers at once and read as one contact sheet. The width is now a SHARE of its own
+      carousel, so the count holds at any window width, and the .4 is a real card edge peeking in
+      from the right — the only scroll cue this app can give, because ::-webkit-scrollbar{width:0}
+      hides every scrollbar in it. clamp() keeps the old 150px card on a narrow window and refuses a
+      300px one on an ultrawide. Measured: 228x269 per card instead of 150x198, with exactly 6
+      covers fully in view.
+      The two grid views stay out of it: .railwrap.algrid and .libgrid both set .rail{width:auto}
+      with TWO classes, so a single-class .rail rule can never reach them.
+
+   2) QUICK PICKS IS A FOUR-ROW CAROUSEL, NOT A THIRTY-ROW LADDER. grid-auto-flow:column with four
+      fixed rows fills COLUMN-major — ranks 1-4 down the first column, 5-8 in the next — so a column
+      is the reading unit and scrolling right walks DOWN the ranking. The cards keep their present
+      dimensions exactly: grid-auto-columns is the same one-third share the 3-column grid used (3.1
+      of them, for the same right-edge peek), so nothing about a card changes — the grid is simply
+      cut at four rows and unrolled sideways, and 1500x903 of ladder becomes 1500x360.
+      `grid-template-columns:none` is not decoration: without it the base layer's
+      @media(max-width:1000px) rule would still create two EXPLICIT half-width columns, which
+      column-flow fills FIRST, leaving the rest of the first row on an auto-sized track.
+      `overflow-x:auto` is the same declaration .railwrap carries, and it is load-bearing twice over:
+      with the box left visible (this rule's first version had no overflow at all) the nine columns
+      simply PAINT past the section — past the window edge, with 1500px of content unreachable — and,
+      measured, #scroll (whose other axis is auto) becomes horizontally scrollable itself, so the
+      whole page can be dragged sideways. Only the x axis is declared, exactly like .railwrap, so this
+      grid never becomes a vertical scroll container and the wheel chains on to #scroll as it always
+      has.
+
+   3) BREATHING ROOM. Section gap 24 → 40px, title gap 12 → 16px, card gap 12 → 16px, cover-to-title
+      8 → 10px. Every row is now separated from its neighbours by more than it is separated from its
+      own contents, which is what makes the eye read "rows" instead of one long sheet. */
+.railwrap{--railgap:16px;--railcols:6.4;gap:var(--railgap)}
+.rail{width:clamp(150px,calc((100% - (var(--railcols) - 1) * var(--railgap)) / var(--railcols)),300px)}
+.rail .rname{margin-top:10px}
+.list.qpGrid{--qpgap:12px;--qpcols:3.1;
+  display:grid;grid-auto-flow:column;grid-template-columns:none;grid-template-rows:repeat(4,auto);
+  grid-auto-columns:calc((100% - (var(--qpcols) - 1) * var(--qpgap)) / var(--qpcols));
+  gap:var(--qpgap);overflow-x:auto;padding-bottom:6px}
+@media(max-width:1000px){.list.qpGrid{--qpcols:2.2}}
+@media(max-width:660px){.list.qpGrid{--qpcols:1.2}}
+.sec{margin-top:40px}
+.sec h2{margin-bottom:16px}
+</style>
 </body>
 </html>
