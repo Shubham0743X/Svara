@@ -665,7 +665,8 @@ function notePlay(it){
 }
 
 /* ============ home sections ============ */
-/* 4AW: renderHome() is async and its post-await writes target #startRail / #albRail, which live
+/* 4AW: renderHome() is async and its post-await writes target the rails it painted (#albRail and the
+   wave-7 discovery rails; the empty-profile starter rail it originally named is now #popRail), which live
    INSIDE #homeSec. A concurrent render (e.g. setClearHist() firing while one is mid-flight)
    replaces sec.innerHTML and those nodes vanish, so the stale render threw "Cannot set properties
    of null". homeGen is a render-generation counter: every call takes a token, and after EVERY
@@ -690,45 +691,304 @@ function chipRowHTML(active){
    title itself and re-render the pills; the filter argument is left undefined so the mood KEEPS
    the chip the user last picked, exactly like a search-box submit. */
 function openMood(label){ doSearch(String(label||'')+' songs', false, undefined, label) }
+
+/* ============ Wave 7 (HOME-1) — rows that stay, and shelves that are actually popular ============
+   TWO COMPLAINTS, ONE ROOT CAUSE. (1) "Popular right now" was painted ONLY in the empty-profile
+   branch, so the first song ever played deleted it, and with it went the only discovery row a new
+   Home had. (2) Every category shelf — the onboarding picks included — asked YouTube for
+   "<category> songs" and took the first twelve rows. That is YouTube's own order for a bare query,
+   and it mixes real hits with cover uploads, long bhajans, meditation tracks and channels with two
+   subscribers. Measured live: "Bengali songs" put a 6-minute "Uttam Kumar Mondal" upload at #1 and
+   "Party songs" opened on a mashup. That is why the picks felt unpopular.
+   WHAT POPULARITY WE CAN ACTUALLY OBSERVE. There is no play count anywhere in the app's Track shape
+   (server.js §6 decision 7 dropped them), so this wave ranks on the two real signals that DO arrive:
+     • an artist row's subtitle carries "N monthly audience" (/api/search?type=artist) — parsed by the
+       app's OWN trAudience(), never a second parser;
+     • /api/artist/songs?id= returns a channel's catalogue in YouTube Music's own popularity order —
+       measured: Karan Aujla page 1 is Ashke, Boyfriend, Aujla Szn, Straight Up, Low Fade.
+   So a category's popular songs = the top songs of that category's BIGGEST artists, interleaved
+   round-robin so no single artist owns the row. Artists under ART_AUD_FLOOR are never used, and that
+   floor is what removes "Various Bengali Artists" (4.19K subscribers) and "Bollywood Christmas" (2).
+   THE FALLBACK IS THE POINT. A vibe has no artist query that works (measured: "Party artists" and
+   "Focus artists" both return 0 rows), so whenever no artist clears the floor the shelf falls back to
+   the category's own song search through junkSong() — the filter that keeps a 58-minute "NONSTOP
+   MEGAMIX" and "40 Hz Memory Recall (Binaural Beats)" out of a music row.
+   WHAT IS CACHED, AND WHY: these lookups are heavier than one search and renderHome() runs on every
+   navigation, play and resize. feedJSON() memoises each URL for FEED_TTL and collapses concurrent
+   callers onto a single request, so repainting Home costs no network at all.
+   WHAT IS NOT TOUCHED: Listen again, Quick picks, Albums for you and Surprise me keep their own
+   builders and their own order, and the picked shelves keep the wave-6b handover on top of them.
+   The only caps that move are the ones asked for: Quick picks 18 → QP_PAGE with a Show more button,
+   Albums for you 3 artists x 4 albums → FEED_ARTISTS x ALB_PER_ARTIST. */
+var QP_PAGE=30,          /* one page of the Quick picks grid (was a hardcoded 18) */
+    TREND_LIMIT=14,      /* Trending songs */
+    POP_LIMIT=14,        /* Popular right now */
+    FEED_ARTISTS=4,      /* artists a category or Home row may draw from (was 3) */
+    ALB_PER_ARTIST=6,    /* albums per artist (was 4) */
+    ART_AUD_FLOOR=1e6;   /* monthly audience a row must clear to count as a real artist */
+var qpShown=QP_PAGE;     /* the grid grows with Show more; only a data clear resets it */
+var trendArr=[], popArr=[];   /* the two discovery rows' current contents, for their own rail clicks */
+
+/* One rule for the junk a bare query drags in. Artist-derived rows never need it — a channel's own
+   top songs ARE songs. `dropTrendWords` is opt-in: a real song may carry the word, but the literal
+   "Trending Version"/"Trend" uploads a q=trending search returns are not songs (measured: a dj edit
+   "Janabai Aali Trending La" and a regional news jingle both sat in its top ten). */
+var JUNK_RE=/\b(non[- ]?stop|megamix|mashup|meditation|binaural|brain power|study music|background music|sleep music|full album|volume ?\d|vol\.? ?\d+|karaoke|cover version|playlist|compilation|slowed|reverb|8d audio|instrumental)\b/i;
+function durSecs(d){
+  var p=String(d==null?'':d).trim().split(':');
+  if(p.length<2||p.length>3) return 0;
+  var n=p.map(Number);
+  if(n.some(function(x){ return !isFinite(x) })) return 0;
+  return p.length===3 ? n[0]*3600+n[1]*60+n[2] : n[0]*60+n[1];
+}
+function junkSong(it, dropTrendWords){
+  if(!it||!it.id||!it.title) return true;
+  if(durSecs(it.duration)>600) return true;                    /* 10 min: a megamix, not a song */
+  if(JUNK_RE.test(it.title)) return true;
+  if(dropTrendWords && /\btrend(ing|s)?\b/i.test(it.title)) return true;
+  return false;
+}
+function dedupeSongs(list){
+  var out=[], seen={};
+  (list||[]).forEach(function(it){ if(!it||!it.id||seen[it.id]) return; seen[it.id]=1; out.push(it) });
+  return out;
+}
+/* Round-robin: every artist's #1, then every artist's #2 … so a row is never one catalogue in a row. */
+function interleave(lists, limit){
+  var out=[], seen={}, i=0, more=true;
+  lists=(lists||[]).filter(function(l){ return l&&l.length });
+  while(more && (!limit||out.length<limit)){
+    more=false;
+    for(var k=0;k<lists.length;k++){
+      var it=lists[k][i];
+      if(!it) continue;
+      more=true;
+      if(seen[it.id]) continue;
+      seen[it.id]=1; out.push(it);
+      if(limit && out.length>=limit) break;
+    }
+    i++;
+  }
+  return out;
+}
+/* ---- session cache: one request per URL per FEED_TTL, and never two at once ---- */
+var feedCache={}, feedPending={}, FEED_TTL=10*60*1000;
+function feedJSON(url, ttl){
+  var hit=feedCache[url];
+  if(hit && Date.now()-hit.at < (ttl||FEED_TTL)) return Promise.resolve(hit.j);
+  if(feedPending[url]) return feedPending[url];                 /* collapse concurrent callers */
+  var p=fetch(url).then(function(r){ return r.json() }).then(function(j){
+    feedCache[url]={at:Date.now(), j:j};
+    delete feedPending[url];
+    return j;
+  }).catch(function(e){ delete feedPending[url]; throw e });
+  feedPending[url]=p;
+  return p;
+}
+/* A data reset has to drop the cache with everything else, or the next Home would rebuild the rows
+   from what the previous run had already fetched. */
+function clearFeedCache(){ feedCache={}; feedPending={}; qpShown=QP_PAGE }
+/* ---- the popularity helpers ---- */
+/* The app's own audience parser (trAudience, in the All-card block) is SCOPED to that block, not a
+   global — measured on the live page: typeof trAudience === 'undefined'. The first version of this
+   wave called it directly, so EVERY artist parsed as 0 audience, no artist cleared the floor, and
+   both category shelves and Popular right now fell back to a bare song search — i.e. exactly the
+   unpopular rows this wave exists to remove (and the fallback was the old q=trending junk: "Trend",
+   "Janabai Aali Trending La", "Ek Number Par Trending Chalto Hamar News"). So the same rule lives
+   here, with the same semantics: a K/M/B multiplier with a word boundary (so the digits inside a
+   @handle like '@…21march32' never masquerade as 21M), or a plain "<n> subscribers". */
+function audOf(sub){
+  if(typeof window.trAudience==='function') return window.trAudience(sub);   /* reuse it if ever exposed */
+  var s=String(sub==null?'':sub).toLowerCase().replace(/,/g,'');
+  var m=s.match(/(\d+(?:\.\d+)?)\s*([kmb])\b/) || s.match(/(\d+(?:\.\d+)?)\s*subscribers?\b/);
+  if(!m) return 0;
+  var n=parseFloat(m[1]); if(!(n>0)) return 0;
+  var u=m[2]||'';
+  return Math.round(n*(u==='k'?1e3:u==='m'?1e6:u==='b'?1e9:1));
+}
+/* Artists for a category, biggest audience first. Two phrasings are merged because one alone is thin
+   for a smaller language (measured: "Bengali artists" → 3 rows incl. junk, "Bengali singers" → 8). */
+async function catArtists(cat, n){
+  var base=String(cat==null?'':cat).trim(); if(!base) return [];
+  var qs=[base+' singers', base+' artists'], rows=[], seen={};
+  for(var i=0;i<qs.length;i++){
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=artist');
+      (j.items||[]).forEach(function(r){
+        if(!r||!r.id||!/^UC/.test(r.id)||seen[r.id]) return;    /* real channels only */
+        var nm=r.title||r.artist||''; if(!nm) return;
+        seen[r.id]=1; rows.push({id:r.id, name:nm, aud:audOf(r.sub)});
+      });
+    }catch(e){}
+  }
+  return rows.filter(function(r){ return r.aud>=ART_AUD_FLOOR })
+             .sort(function(a,b){ return b.aud-a.aud })
+             .slice(0, n||FEED_ARTISTS);
+}
+/* A channel's own top songs, in YouTube Music's popularity order (never re-sorted by us). */
+async function artistTopSongs(id, n){
+  try{ var j=await feedJSON('/api/artist/songs?id='+encodeURIComponent(id)); return (j.songs||[]).slice(0, n||4) }catch(e){ return [] }
+}
+/* A plain song search, junk removed and deduped — the fallback for anything without an artist query. */
+async function querySongs(qs, limit, dropTrendWords){
+  var list=[];
+  qs=(qs instanceof Array)?qs:[qs];
+  for(var i=0;i<qs.length;i++){
+    try{ var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=song'); if(j.items) list=list.concat(j.items) }catch(e){}
+  }
+  return dedupeSongs(list.filter(function(it){ return !junkSong(it, dropTrendWords) })).slice(0, limit||TREND_LIMIT);
+}
+/* THE CATEGORY SHELF: the most popular songs of a language/vibe/artist pick. */
+async function categorySongs(cat, limit){
+  var arts=await catArtists(cat, FEED_ARTISTS);
+  if(arts.length){
+    var lists=[];
+    for(var i=0;i<arts.length;i++) lists.push(await artistTopSongs(arts[i].id, 4));
+    var out=interleave(lists, limit);
+    if(out.length) return out;
+  }
+  return querySongs(String(cat==null?'':cat).trim()+' songs', limit);
+}
+/* TRENDING SONGS: the queries that are actually about now — measured, "trending songs" returns
+   Heeriye and Humnava Mere, "new songs <year>" returns the current releases. A track BOTH variants
+   returned is ranked first (the only cross-query signal available), then each variant's own order. */
+async function trendSongs(limit){
+  var year=(new Date()).getFullYear();
+  var qs=['trending songs', 'new songs '+year], lists=[], hits={};
+  for(var i=0;i<qs.length;i++){
+    var clean=[];
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=song');
+      clean=dedupeSongs((j.items||[]).filter(function(it){ return !junkSong(it, true) }));
+    }catch(e){}
+    lists.push(clean);
+    clean.forEach(function(it){ hits[it.id]=(hits[it.id]||0)+1 });
+  }
+  var both=lists[0].filter(function(it){ return hits[it.id]>1 });
+  return dedupeSongs(both.concat(lists[0], lists[1])).slice(0, limit||TREND_LIMIT);
+}
+/* POPULAR RIGHT NOW: the biggest artists' biggest songs, whatever the profile is. The picks' own
+   language leads when there is one, so the row reads as the user's own market. Falls back to the
+   plain trending query, which is the row this replaced. */
+async function popularitySongs(limit){
+  var qs=['biggest artists India'];
+  try{
+    var p=LSget('sv_profile', null);
+    var lang=p&&(p.langs||[])[0];
+    if(lang) qs.push(lang+' singers');
+  }catch(e){}
+  var rows=[], seen={};
+  for(var i=0;i<qs.length;i++){
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=artist');
+      (j.items||[]).forEach(function(r){
+        if(!r||!r.id||!/^UC/.test(r.id)||seen[r.id]) return;
+        var nm=r.title||r.artist||''; if(!nm) return;
+        seen[r.id]=1; rows.push({id:r.id, name:nm, aud:audOf(r.sub)});
+      });
+    }catch(e){}
+  }
+  var arts=rows.filter(function(r){ return r.aud>=ART_AUD_FLOOR })
+               .sort(function(a,b){ return b.aud-a.aud })
+               .slice(0, FEED_ARTISTS);
+  if(arts.length){
+    var lists=[];
+    for(var k=0;k<arts.length;k++) lists.push(await artistTopSongs(arts[k].id, 4));
+    var out=interleave(lists, limit);
+    if(out.length) return { items:out, artists:arts.map(function(a){ return a.name }) };
+  }
+  return { items:await querySongs('trending', limit), artists:[] };
+}
+/* ---- painting a Home rail, under the render generation (4AW) ---- */
+function paintRail(gen, id, items, ctx){
+  if(gen!==homeGen) return false;
+  var el=document.getElementById(id); if(!el) return false;
+  el.innerHTML = items.length ? railHTML(items, ctx)
+    : '<div class="empty">Nothing to show yet — keep listening and this fills up.</div>';
+  if(typeof skReveal==='function'){ try{ skReveal(el) }catch(e){} }
+  return true;
+}
+async function fillTrend(gen){
+  var items=await trendSongs(TREND_LIMIT);
+  if(gen!==homeGen) return;
+  trendArr=items;
+  paintRail(gen, 'trendRail', items, 'trend');
+}
+async function fillPopular(gen){
+  var r=await popularitySongs(POP_LIMIT);
+  if(gen!==homeGen) return;
+  popArr=r.items;
+  paintRail(gen, 'popRail', r.items, 'pop');
+}
+/* Albums for you — the builder that was already here, now FEED_ARTISTS artists x ALB_PER_ARTIST albums. */
+async function fillAlbums(gen, names){
+  var cards='';
+  for(var i=0;i<names.length && i<FEED_ARTISTS;i++){
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(names[i])+'&type=album');
+      if(gen!==homeGen) return;                 // 4AW: a newer render owns the DOM now
+      (j.items||[]).slice(0,ALB_PER_ARTIST).forEach(function(al){ cards+=railCard(al,'al') });
+    }catch(e){/* skip artist */}
+  }
+  if(gen!==homeGen) return;                     // 4AW: checked after the LAST await too
+  var ar=document.getElementById('albRail'); if(!ar) return;
+  ar.innerHTML = cards ? '<div class="railwrap">'+cards+'</div>'
+    : '<div class="empty">No albums found yet — keep listening and this fills with your artists’ albums.</div>';
+  if(typeof skReveal==='function'){ try{ skReveal(ar) }catch(e){} }
+}
+/* An empty profile owns no artists, so its Albums row is built from the same big ones the Popular row
+   is built from — the row exists on a first run instead of only after a few plays. */
+async function fillAlbumsFromPopular(gen){
+  var r=await popularitySongs(POP_LIMIT);       // cached: the Popular fill already asked
+  if(gen!==homeGen) return;
+  if(r.artists.length) fillAlbums(gen, r.artists);
+  else fillAlbums(gen, []);
+}
+/* Quick picks: Show more reveals the NEXT page of the same scored list — no fetch, no new order. */
+function qpMore(){
+  qpShown += QP_PAGE;
+  quickList = topScored(qpShown);
+  var g=document.querySelector('#homeSec .qpGrid');
+  if(g) g.innerHTML=quickList.map(rowHTML).join('');
+  var b=document.querySelector('#homeSec [data-qpmore]');
+  if(b && topScored(qpShown+QP_PAGE).length<=quickList.length && b.parentNode) b.parentNode.removeChild(b);
+}
+/* Exposed for the console (and for this wave's own checks), exactly like the wave-6 hooks. */
+window.svaraFeed={
+  trend:trendSongs, popular:popularitySongs, category:categorySongs, artists:catArtists,
+  junk:junkSong, clear:clearFeedCache,
+  state:function(){ return { qpShown:qpShown, page:QP_PAGE, trend:(trendArr||[]).length, pop:(popArr||[]).length, cached:Object.keys(feedCache).length } }
+};
 var homeGen=0;
 async function renderHome(){
   var gen=++homeGen;
   const sec=$('#homeSec');
-  const recent=topRecent(12),scored=topScored(18),arts=topArtists(3);
+  const recent=topRecent(12),scored=topScored(qpShown),arts=topArtists(FEED_ARTISTS);
   /* Home shows the row with NO active pill (the shared builder, no second copy of the markup). */
   let h=chipRowHTML(null);
   const none=!Object.keys(hist).length;
   quickList=scored;
+  /* Wave 7: the three discovery rows are built ONCE here and painted into BOTH branches. They are the
+     rows a first play used to take away, and the reason a fresh Home felt empty. */
+  const trendSec=`<div class="sec"><h2>Trending songs</h2><div class="railwrap" id="trendRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
+  const popSec=`<div class="sec"><h2>Popular right now</h2><div class="railwrap" id="popRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
+  const albSec=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading your albums…</div>'}</div></div>`;
+  const more=topScored(qpShown+QP_PAGE).length>scored.length;   /* is there a next page of picks? */
   if(!none){
     if(recent.length)h+=`<div class="sec"><h2>Listen again</h2>${railHTML(recent,'la')}</div>`;
-    h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button></h2>${listHTML(quickList,'qpGrid')}</div>`;
-    if(arts.length)h+=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading your albums…</div>'}</div></div>`;
+    h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button>${more?'<button class="go" data-qpmore="1">Show more</button>':''}</h2>${listHTML(quickList,'qpGrid')}</div>`;
+    h+=albSec+trendSec+popSec;
     h+=`<div class="sec"><h2>Surprise me<button class="go" id="diceBig">🎲 Play a radio from your taste</button></h2><div class="empty" style="padding:6px 2px">Your radio never jumps between languages — it seeds from what you listen to most.</div></div>`;
   }else{
     h+=`<div class="sec"><h2>Welcome to Svara</h2><div class="empty">Search any song and press play.<br>After a few songs, Home fills with <b>Listen again</b>, <b>Quick picks</b> and <b>Albums for you</b> — all from your taste.</div></div>`;
-    h+=`<div class="sec"><h2>Popular right now</h2><div id="startRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
+    h+=trendSec+popSec+albSec;
   }
   sec.innerHTML=h;
-  // background starter content for empty profile
-  if(none){try{const r=await fetch('/api/search?q=trending');const j=await r.json();const it=(j.items||[]).slice(0,12);if(gen!==homeGen)return;const sr=document.getElementById('startRail');if(sr)sr.innerHTML=railHTML(it,'start');if(typeof skReveal==='function')skReveal(document.getElementById('startRail'));}catch(e){if(gen!==homeGen)return;var sr2=document.getElementById('startRail');if(sr2)sr2.innerHTML=''}}
-  // albums for you
-  if(!none&&arts.length){
-    try{
-      let cards='';
-      for(const a of arts){
-        try{
-          const r=await fetch('/api/search?q='+encodeURIComponent(a)+'&type=album');
-          const j=await r.json();
-          if(gen!==homeGen)return;                 // 4AW: a newer render owns the DOM now
-          (j.items||[]).slice(0,4).forEach(al=>{cards+=railCard(al,'al')});
-        }catch(e){/* skip artist */}
-      }
-      if(gen!==homeGen)return;                   // 4AW: checked after the LAST await too
-      var ar=document.getElementById('albRail');
-      if(ar)ar.innerHTML=cards?`<div class="railwrap">${cards}</div>`:'<div class="empty">No albums found yet — keep listening and this fills with your artists’ albums.</div>';
-      if(typeof skReveal==='function')skReveal(document.getElementById('albRail'));
-    }catch(e){if(gen!==homeGen)return;var ar2=document.getElementById('albRail');if(ar2)ar2.innerHTML='<div class="empty">Could not load albums right now.</div>'}
-  }
+  /* Wave 7 fills. Each one owns one rail, checks the generation after every await, and asks its
+     helpers, which are cached — so a repaint of Home that changes nothing costs no network. */
+  fillTrend(gen);
+  fillPopular(gen);
+  if(arts.length) fillAlbums(gen, arts); else fillAlbumsFromPopular(gen);
 }
 
 /* ============ playback ============ */
@@ -1028,7 +1288,9 @@ document.addEventListener('click',e=>{
   if(rail){
     const ctx=rail.dataset.rail,id=rail.dataset.id;
     if(ctx==='al'){openAlbum(id,rail.dataset.title||'');return}
-    const arr=ctx==='la'?topRecent(12):ctx==='start'?starterArr:[];
+    /* Wave 7 adds two contexts of its own: 'pop' (Popular right now) and 'trend' (Trending songs).
+       The legacy 'start' context is untouched — it is the welcome rail's own re-fetch path. */
+    const arr=ctx==='la'?topRecent(12):ctx==='start'?starterArr:ctx==='pop'?popArr:ctx==='trend'?trendArr:[];
     if(!arr.length)return;
     const idx=arr.findIndex(x=>x.id===id);playList(arr,idx>=0?idx:0,true);
   }
@@ -1038,8 +1300,11 @@ document.addEventListener('click',e=>{
      view — same data-chip attribute, same document-level listener. Nothing is written to history. */
   const chip=e.target.closest('[data-chip]');
   if(chip){openMood(chip.dataset.chip)}
+  /* Wave 7: Play all plays exactly the grid that is on screen (it grows with Show more), and Show
+     more reveals the next page of the same scored list. */
   const qp=e.target.closest('[data-qp]');
-  if(qp){const s=topScored(18);if(s.length)playList(s,0,true)}
+  if(qp){const s=(quickList&&quickList.length)?quickList:topScored(qpShown);if(s.length)playList(s,0,true)}
+  if(e.target.closest('[data-qpmore]')){qpMore()}
   if(e.target.closest('#diceBig')){diceRadio()}
 });
 /* rail data-i fix: cards in same wrap with same id possible; fine */
@@ -9051,8 +9316,20 @@ html[data-gfx="full"] .oncGlass,html[data-gfx="medium"] .oncGlass{-webkit-backdr
   font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
 .oncBan .no{flex:0 0 auto;padding:8px 10px;background:none;border:0;color:var(--dim);font-family:inherit;font-size:12.5px;cursor:pointer}
 .oncBan .no:hover{color:#fff}
+/* ---------- Wave 6b: the picked shelves graduate out ----------
+   --oncOp is a row's dim level (transitioned, so it eases as listening accumulates);
+   .oncRetiring is the one-shot exit — fade, then collapse the row out of the flow. Only rows THIS
+   block built ever carry .oncSec, so nothing the app itself renders can be caught by either rule. */
+.oncSec{transition:opacity .55s ease,transform .55s ease}
+.oncSec.oncRetiring{animation:oncRetire .6s cubic-bezier(.4,0,.2,1) forwards;overflow:hidden;pointer-events:none}
+@keyframes oncRetire{
+  0%{opacity:var(--oncOp,1);max-height:640px}
+  55%{opacity:.18}
+  100%{opacity:0;max-height:0;margin:0;padding:0;transform:translateY(-8px)}
+}
 @media (prefers-reduced-motion:reduce){
   .oncDots i.beat{animation:none;opacity:.85}
+  .oncSec.oncRetiring{animation-duration:.16s}
   .oncAv,.oncTile:hover .oncAv,.oncFace{transition:none;transform:none}
 }
 html[data-gfx="low"] .oncGlass,html[data-gfx="reduced"] .oncGlass{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(255,255,255,.03)}
@@ -9082,9 +9359,17 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
    seed tag on a real play), _4asHistItems (hide only still-tagged seeds), setRender (add the
    Settings row). Nothing outside this block is edited.
 
-   NOTE: the rails this wave adds carry `data-oncq`, NOT `data-rail`. The app's rail handler only
-   understands ctx 'al' / 'la' / 'start' and returns silently for anything else, so an unknown ctx
-   would be a dead click; these cards are played by this block's own listener. */
+   WAVE 6b — THE HANDOVER: the picked shelves are a STARTING POINT and this block retires them as
+   real listening accumulates (the long note sits above fillShelves). The app's own rows are never
+   touched — the picked block only ever moves around them — and `blendFeed()` is the pure function
+   that decides what stays, what dims and what goes. `window.svaraPersonalise.state()` reports it.
+
+   NOTE: the rails this wave adds are keyed by `data-oncq` on the WRAP, and these cards are played by
+   this block's own listener rather than by the app's rail handler (which answers only 'al' / 'la' /
+   'start' / the wave-7 'pop' / 'trend' and returns silently for anything else — an unknown ctx would
+   be a dead click). The cards themselves are built by the app's own railCard(), so they carry the same
+   `data-rail="onc"` the base layer writes: 'onc' matches no branch of the app's handler, on purpose.
+   Building them by hand instead is what silently lost the clickable artist names on these rows. */
 (function(){
   var LANGS = ['English','Hindi','Punjabi','Tamil','Spanish','Korean','Japanese','French','German'];
   var VIBES = ['Lo-Fi Chill','Indie Pop','Hip Hop','Synthwave','Deep House','Acoustic','R&B','Techno',
@@ -9107,6 +9392,87 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   var railSeq = 0;
   var step = 1, open = false, busy = false, gridGen = 0, homeGen6 = 0, searchTimer = null;
   var root = null;
+
+  /* ---------- Wave 6b: the handover (the long note sits above fillShelves) ---------- */
+  var KG='sv_onboard_graduated', KR='sv_onboard_retired';
+  /* START: genuine plays after which the picked block is pushed BELOW the app's own rows and starts
+     to dim. FULL: genuine plays after which every picked shelf retires. ROW_HITS: real plays of a
+     shelf's OWN tracks that retire that shelf early — by then the feed is already serving it. */
+  var TRANS = { START:4, FULL:18, ROW_HITS:2 };
+  var PICKED = '#svara-picks';      // the token blendFeed() uses for the picked block itself
+  var rowsNow = [];                 // the picked shelves painted by the CURRENT Home render
+
+  /* Every genuine entry in the real history store. Seeds never count — not here, not anywhere. */
+  function playsAll(){ var n=0; try{ Object.keys(hist||{}).forEach(function(k){ var e=hist[k]; if(e&&!e.seed) n++ }) }catch(e){} return n }
+  /* Genuine plays recorded SINCE the picks were made: the single number the whole handover runs on.
+     A track that was already in history and got played again after onboarding counts — the question
+     is "has listening happened since", not "how many new tracks arrived". A profile with no
+     timestamp falls back to the absolute count. */
+  function sincePlays(p){
+    if(!p || !p.at) return playsAll();
+    var n=0;
+    try{ Object.keys(hist||{}).forEach(function(k){ var e=hist[k]; if(e && !e.seed && (e.last||0)>=p.at) n++ }) }catch(e){}
+    return n;
+  }
+  function tOf(n){ return Math.max(0, Math.min(1, (n-TRANS.START)/Math.max(1, TRANS.FULL-TRANS.START))) }
+  /* How many of a shelf's own tracks the user has really PLAYED SINCE the picks were made. A seed
+     that was played lost its tag in notePlay, so it counts here — that is the point: the shelf's
+     content is what the feed is now serving, so the shelf is the duplicate. The `since` part is not
+     decoration: a shelf is fetched fresh on every Home render, so merely requiring "a track that is
+     in the user's history" retired a shelf on its FIRST paint whenever two of the twelve search hits
+     happened to be old favourites (measured). Requiring the play to be recent cannot fire before the
+     user has listened, which is what the whole handover is supposed to be driven by. */
+  function rowHits(items){
+    var at = (profile && profile.at) || 0, n=0;
+    (items||[]).forEach(function(it){
+      var e=(it&&it.id)?hist[it.id]:null;
+      if(e && !e.seed && ((e.last||0) >= at)) n++;
+    });
+    return n;
+  }
+  function retiredMap(){ var m=LSget(KR,null); return (m && typeof m==='object')?m:{} }
+  function setRetired(key){ var m=retiredMap(); if(m[key]) return; m[key]=1; try{ LSset(KR,m) }catch(e){} }
+  function graduated(){ return !!LSget(KG,0) }
+  function feedState(){
+    var n=sincePlays(profile), ret=retiredMap();
+    return { plays:n, t:+tOf(n).toFixed(3), pushed:n>=TRANS.START, graduated:graduated(), thresholds:TRANS,
+             rows:rowsNow.map(function(r){ return {key:r.key, items:(r.items||[]).length, hits:rowHits(r.items), retired:!!ret[r.key]} }) };
+  }
+
+  /* ===== THE BLENDING FUNCTION — pure: no DOM, no fetch, no writes =====
+     dynamic : the app's OWN rows, as opaque tokens in the order the app rendered them.
+     rows    : this block's picked shelves, [{key,title,items}].
+     st      : {t (0..1), pushed (bool), retired ({key:1})}.
+     Returns the layout `order` the feed should be in, plus ONE VERDICT PER PICKED SHELF:
+       keep    → painted, at `opacity` (dimmed by how far it has come)
+       retire  → painted once with the exit animation, then unmounted for good
+       dropped → not painted at all (it graduated on an earlier pass)
+     `dynamic` is never reordered, filtered or rewritten — the picked block only ever moves AROUND
+     it, which is precisely what leaves Listen again / Quick picks / Albums for you / Surprise me
+     untouched. Nothing here reads storage, so the same inputs always give the same plan. */
+  function blendFeed(dynamic, rows, st){
+    dynamic = dynamic || []; rows = rows || []; st = st || {};
+    var keep=[], retire=[], dropped=[];
+    rows.forEach(function(r){
+      if((st.retired||{})[r.key]){ dropped.push(r); return }
+      var hits = rowHits(r.items);
+      var own  = Math.min(1, hits/TRANS.ROW_HITS);   // how much of this shelf the feed already serves
+      if(own>=1 || (st.t||0)>=1) retire.push({row:r, hits:hits, deg:1, opacity:0});
+      else {
+        /* Dimming is about the HANDOVER'S progress, so it starts only once the block has been pushed
+           below the app's rows: a picked shelf still sitting on top at full size but already half
+           faded reads as broken, not as temporary (measured — one row painted at 0.64 while on top).
+           A shelf the feed has fully taken over still leaves early, via `own` above. */
+        var deg = st.pushed ? Math.max(st.t||0, own) : 0;
+        keep.push({row:r, hits:hits, deg:deg, opacity:+(1-0.72*deg).toFixed(3)});
+      }
+    });
+    // whatever is leaving, leaves last
+    var picked = keep.concat(retire);
+    var order = st.pushed ? dynamic.slice().concat([PICKED]) : [PICKED].concat(dynamic.slice());
+    return { order:order, keep:keep, retire:retire, dropped:dropped, pushed:!!st.pushed, t:st.t||0,
+             dynamicCount:dynamic.length, pickedCount:picked.length };
+  }
 
   var profile = LSget(KP, null) || null;
   function seen(){ return !!LSget(KS, 0) }
@@ -9320,6 +9686,9 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     profile = {v:1, langs:sel.langs.slice(), genres:sel.genres.slice(), artists:sel.artists.slice(), at:Date.now()};
     try{ LSset(KP, profile) }catch(e){}
     setSeen(1);
+    /* wave 6b: NEW picks ⇒ a fresh picked block that starts on top again, for the full three stages */
+    try{ LSset(KG,0); LSset(KR,null) }catch(e){}
+    rowsNow = [];
     var note=el('oncBuildNote');
     if(note && !sel.artists.length) note.textContent = 'Saving your languages and vibes…';
     var minShow = new Promise(function(res){ setTimeout(res, 1500) });   // the screen is the point; never flash past it
@@ -9347,47 +9716,174 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
       '<button class="go" type="button" data-oncbanner="1">Personalise</button>'+
       '<button class="no" type="button" data-oncbanner="0">Not now</button></div>';
   }
+  /* ===== WAVE 6b — THE HANDOVER =====
+     A picked shelf is a STARTING POINT: it exists to put something on Home before any listening has
+     happened. Once listening HAS happened the app's own rows are the better feed, so the picked ones
+     retire — without ever touching Listen again / Quick picks / Albums for you / Surprise me (this
+     block reads those rows and only ever moves its own block around them).
+     THE SIGNAL IS GENUINE PLAYS ONLY: sincePlays() counts entries in `ml_history` that are not seeds
+     and whose last play is at/after the profile was saved, so a feed that was only ever filled by
+     the picks can never graduate itself.
+     THREE STAGES, derived from that one number — nothing anywhere stores a stage:
+       n <  START (4)   picked shelves sit ON TOP, at full opacity;
+       n >= START       pushed BELOW every dynamic row and dimmed by t = (n-START)/(FULL-START);
+       n >= FULL (18)   every remaining picked shelf retires: fade, collapse, unmounted.
+     A SINGLE SHELF CAN GO EARLIER: once ROW_HITS (2) of its own tracks have been genuinely played
+     SINCE the picks were made, that shelf is already what the feed is serving, so it retires first
+     whatever the global count is. Along with the two thresholds above, that rule is the only thing
+     that removes a row, and it can only ever match a row this block built — a shelf is identified by
+     `data-onckey`, which only fillShelves() writes.
+     WHAT REMEMBERS WHAT: `sv_onboard_retired` (key→1, keyed by the SHELF TITLE so it survives the
+     per-render rail keys) keeps a retired shelf from being painted in any later session, and
+     `sv_onboard_graduated` stops the block being fetched at all once every shelf has gone. Both are
+     cleared when the picks are made again (saveAndSeed) or reset (clear()).
+     THE SEEDS IN ml_history ARE DELIBERATELY KEPT: they are the taste evidence Quick picks and the
+     radio score from, and they age out of Listen again on their own. Graduating removes the
+     duplicate SURFACE, not the signal behind it — dropping them would make the app's own rows
+     emptier, not freer, which is the opposite of the handover this is. */
+
+  /* The app's OWN Home rows, in the order the app rendered them (read-only). */
+  function dynRows(){
+    var sec=document.getElementById('homeSec'); if(!sec) return [];
+    return Array.prototype.filter.call(sec.children, function(n){
+      return n && n.classList && n.classList.contains('sec') && !n.classList.contains('oncSec');
+    });
+  }
   async function fillShelves(host, p){
     var mine = ++homeGen6;
     var qs = [];
-    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, q:g+' songs'}) });
-    (p.langs||[]).slice(0,1).forEach(function(L){ qs.push({t:L+' music', q:L+' songs'}) });
-    if((p.artists||[]).length) qs.push({t:'More like '+p.artists[0].name, q:p.artists[0].name+' songs'});
+    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, cat:g}) });
+    (p.langs||[]).slice(0,1).forEach(function(L){ qs.push({t:L+' music', cat:L}) });
+    if((p.artists||[]).length){ var A=p.artists[0]; qs.push({t:'More like '+A.name, cat:A.name, aid:A.id}) }
     for(var i=0;i<qs.length;i++){
+      if(graduated()) return;                                     // the picked feed is over: stop asking
+      if(rowsNow.some(function(r){ return r.key===qs[i].t })) continue;
       try{
-        var r = await fetch('/api/search?q='+encodeURIComponent(qs[i].q)+'&type=song');
-        var j = await r.json();
+        /* WAVE 7: a picked category is its MOST POPULAR songs, never the head of a bare
+           "<category> songs" query (which is what served covers, bhajans and two-subscriber
+           channels). An artist pick asks that channel's own catalogue in YouTube Music's popularity
+           order; a language or vibe asks wave 7's category route, which ranks the category's biggest
+           artists by monthly audience and falls back to a junk-filtered song search when a vibe has
+           no artist query at all. Both are cached, so this costs nothing on a later render. */
+        var items = (qs[i].aid && /^UC/.test(qs[i].aid))
+          ? await artistTopSongs(qs[i].aid, 12)
+          : await categorySongs(qs[i].cat, 12);
         if(mine!==homeGen6) return;
-        var items = (j.items||[]).filter(function(x){ return x && x.id }).slice(0,12);
+        items = (items||[]).filter(function(x){ return x && x.id }).slice(0,12);
         if(!items.length) continue;
         var key = 'r'+(++railSeq);
         rails[key] = items;
-        host.insertAdjacentHTML('beforeend', '<div class="sec"><h2>'+esc(qs[i].t)+'</h2>'+
+        var node = document.createElement('div');
+        node.className = 'sec oncSec';
+        /* data-onckey is the STABLE identity (the shelf's own title), which is what lets a shelf be
+           retired for good; data-oncq stays the per-render playback key (see the header note on the
+           app's rail handler). */
+        node.setAttribute('data-onckey', qs[i].t);
+        node.innerHTML = '<h2>'+esc(qs[i].t)+'</h2>'+
           '<div class="railwrap" data-oncq="'+key+'">'+items.map(function(it){
-            /* the same .rail card markup the app renders, minus data-rail (see the header note) */
-            var ph = it.thumb ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
-            return '<div class="rail" data-id="'+esc(it.id)+'">'+
-              '<div class="art">'+ph+'<img loading="lazy" src="'+esc(it.thumb||'')+'" onerror="this.style.display=\'none\'">'+
-                '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
-              '<div class="rname">'+esc(it.title||'')+'</div><div class="rsub2">'+esc(it.artist||'')+'</div></div>';
-          }).join('')+'</div></div>');
-        if(typeof skReveal==='function'){ try{ skReveal(host.lastElementChild) }catch(e){} }
+            /* THE APP'S OWN CARD, NOT A COPY OF IT. `railCard` is reassigned in the v3 layer to the
+               version whose artist line is artistLinksHTML() — clickable <span class="alink"> spans
+               carrying data-artist-id / data-artist-name. Hand-rolling that markup (as this block first
+               did, copying the BASE layer's card) shipped the base layer's PLAIN-TEXT artist line, so
+               these were the only rows on Home whose artist names could not be clicked — every other
+               rail picked up the v3 card for free by going through railHTML().
+               The ctx is 'onc': no branch of the app's rail handler answers to it, so that handler
+               returns without playing and the [data-oncq] handler below plays this shelf's own list.
+               A click on an artist NAME never reaches either — the artist layer takes .alink in the
+               CAPTURE phase and calls preventDefault + stopPropagation (measured: a synthetic click on
+               an .alink never arrives at a document bubble listener), so a name click opens the artist
+               page and can never start the shelf. */
+            return railCard(it, 'onc');
+          }).join('')+'</div>';
+        host.appendChild(node);
+        rowsNow.push({key:qs[i].t, items:items, node:node});
+        applyBlend(host);                                          // place, dim or retire on THIS state
+        if(typeof skReveal==='function'){ try{ skReveal(node) }catch(e){} }
       }catch(e){}
+    }
+  }
+  /* One retirement, all of it: the row fades and collapses, then is unmounted and remembered. When
+     the LAST picked shelf leaves, the block itself goes and `sv_onboard_graduated` is written, so a
+     later Home render does not even fetch it. */
+  function retireRow(node, key){
+    if(!node || node.getAttribute('data-oncretiring')) return;
+    node.setAttribute('data-oncretiring','1');
+    node.style.removeProperty('opacity');            // the keyframes own the fade, from --oncOp on
+    node.classList.add('oncRetiring');
+    var done=false;
+    function fin(ev){
+      if(ev && ev.target!==node) return;             // the row's own animation only, never a child's
+      if(done) return; done=true;
+      node.removeEventListener('animationend', fin);
+      setRetired(key);                               // never painted again, in any later session
+      if(node.parentNode) node.parentNode.removeChild(node);
+      var host=document.getElementById('oncShelves');
+      if(host && !host.querySelector('.oncSec')){    // the last one just left
+        try{ LSset(KG,1) }catch(e){}
+        if(host.parentNode) host.parentNode.removeChild(host);
+        rowsNow = [];                                // nothing is painted, so nothing is tracked
+      }
+    }
+    node.addEventListener('animationend', fin);
+    setTimeout(fin, 900);                            // a throttled/background window may never fire it
+  }
+  /* Apply the plan. The DOM is a projection of blendFeed()'s output and of nothing else: placement
+     comes from the plan's own `order`, each kept row gets its dim level, retiring rows are told to
+     go, and rows that graduated on an earlier pass are simply not in the DOM. */
+  function applyBlend(host){
+    if(!host || !host.parentNode) return;
+    var dyn = dynRows();
+    var n = sincePlays(profile);
+    var plan = blendFeed(dyn, rowsNow, {t:tOf(n), pushed:n>=TRANS.START, retired:retiredMap()});
+    var lastTok = plan.order[plan.order.length-1];
+    try{
+      if(lastTok === PICKED) host.parentNode.appendChild(host);        // below every dynamic row
+      else if(dyn[0]) host.parentNode.insertBefore(host, dyn[0]);      // still on top
+    }catch(e){}
+    plan.keep.forEach(function(v){
+      var nd=v.row.node; if(!nd) return;
+      nd.style.setProperty('--oncOp', String(v.opacity));
+      nd.style.opacity = String(v.opacity);                            // dimmed by how far it has come
+    });
+    plan.retire.forEach(function(v){ if(v.row.node) retireRow(v.row.node, v.row.key) });
+    plan.dropped.forEach(function(r){ if(r.node && r.node.parentNode) r.node.parentNode.removeChild(r.node) });
+    if(rowsNow.length && !plan.pickedCount){                           // everything has already gone
+      try{ LSset(KG,1) }catch(e){}
+      if(host.parentNode) host.parentNode.removeChild(host);
+      rowsNow = [];
     }
   }
   function decorateHome(){
     if(typeof curPage==='undefined' || curPage!=='home') return;
     var sec = document.getElementById('homeSec'); if(!sec) return;
     if(profile){
+      if(graduated()) return;                        // wave 6b: the picked feed has served its purpose
       if(sec.querySelector('#oncShelves')) return;   // one set of shelves per Home render, never two
+      rowsNow = [];
       var host = document.createElement('div');
       host.id = 'oncShelves';
-      var first = sec.querySelector('.sec');
-      sec.insertBefore(host, first || null);      // right under the mood pills, above Listen again
+      var dyn = dynRows();
+      /* the first placement already honours the handover, so a pushed block is never born on top and
+         then jumped down: past START it starts life below the app's own rows */
+      if(sincePlays(profile) >= TRANS.START && dyn.length) sec.appendChild(host);
+      else sec.insertBefore(host, dyn[0] || null);   // right under the mood pills, above Listen again
       fillShelves(host, profile);
       return;
     }
     if(shouldOffer() && !sec.querySelector('#oncBan')) sec.insertAdjacentHTML('afterbegin', bannerHTML());
+  }
+  /* ---------- one genuine play can move the feed on; a plain one must not ---------- */
+  /* Called from the wrapped notePlay, i.e. from a REAL play and nothing else. The block is re-blended
+     IN PLACE — style writes, a possible move, a possible retirement — and never re-rendered: no
+     innerHTML is rebuilt, so the user's scroll position and any open player stay exactly where they
+     were, the fade is the CSS transition rather than a jump, and the shelf list cannot change under
+     the verdicts (re-fetching a row mid-run is what would make a retirement depend on search
+     variance instead of on listening). When the last shelf leaves, the block removes itself from
+     here — no Home repaint is involved anywhere in the handover. */
+  function afterPlay(){
+    if(!profile || !rowsNow.length) return;
+    var host=document.getElementById('oncShelves');
+    if(host) applyBlend(host);
   }
 
   /* ---------- the four wrappers ---------- */
@@ -9401,6 +9897,8 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   notePlay = function(it){
     var r = _notePlay.apply(this, arguments);
     try{ if(it && it.id && hist[it.id] && hist[it.id].seed){ delete hist[it.id].seed; LSset('ml_history', hist) } }catch(e){}
+    /* wave 6b: the play has been recorded, so ask the handover whether the feed's shape changed */
+    try{ afterPlay() }catch(e){}
     return r;
   };
   var _histItems = _4asHistItems;
@@ -9538,7 +10036,16 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     open: openFlow,
     seed: function(){ return seed(profile || {artists:[]}) },
     profile: function(){ return profile },
-    clear: function(){ clearSeeds(); LSset(KP,null); setSeen(0); LSset(KB,0) }
+    clear: function(){
+      clearSeeds(); LSset(KP,null); setSeen(0); LSset(KB,0);
+      /* wave 6b: a reset revives the picked feed too — no retirement and no graduation left behind */
+      try{ LSset(KG,0); LSset(KR,null) }catch(e){}
+      rowsNow = [];
+    },
+    /* ---------- wave 6b hooks ---------- */
+    state: feedState,          // the one number, the stage, and every picked shelf's verdict
+    blend: blendFeed,          // pure: (dynamicRows, pickedRows, state) -> layout plan
+    since: function(){ return sincePlays(profile) }   // genuine plays since the picks were made
   };
 })();
 </script>
