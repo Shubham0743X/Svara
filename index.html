@@ -9315,16 +9315,9 @@ html[data-gfx="full"] .oncGlass,html[data-gfx="medium"] .oncGlass{-webkit-backdr
 .oncDots i.beat:nth-child(3){animation-delay:.44s}
 @keyframes oncbeat{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.35);opacity:1}}
 .oncNote{font-size:calc(12.5px * var(--fss));color:var(--dim)}
-/* Home: the one-time offer for a profile that already has history */
-.oncBan{display:flex;align-items:center;gap:14px;margin:2px 2px 16px;padding:14px 16px;border-radius:16px;
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10)}
-.oncBan .g{flex:1 1 auto;min-width:0}
-.oncBan b{display:block;font-size:14.5px;font-weight:700;color:#fff}
-.oncBan span{display:block;margin-top:3px;font-size:12.5px;color:var(--dim)}
-.oncBan .go{flex:0 0 auto;height:34px;padding:0 16px;border:0;border-radius:9999px;background:var(--acc);color:rgb(var(--on-acc));
-  font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
-.oncBan .no{flex:0 0 auto;padding:8px 10px;background:none;border:0;color:var(--dim);font-family:inherit;font-size:12.5px;cursor:pointer}
-.oncBan .no:hover{color:#fff}
+/* Home: the one-time offer for a profile that already has history — REMOVED in wave 8 (the flow is a
+   first-run gate now, so there is nothing left to offer a user who already has history). The whole
+   .oncBan block went with the markup it styled. */
 /* ---------- Wave 6b: the picked shelves graduate out ----------
    --oncOp is a row's dim level (transitioned, so it eases as listening accumulates);
    .oncRetiring is the one-shot exit — fade, then collapse the row out of the flow. Only rows THIS
@@ -9347,14 +9340,18 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
 
 <script id="v6oncjs">
 /* ===== Wave 6 — first-run personalisation: the flow, the profile, and what it seeds =====
-   STORAGE (three keys, all JSON through the app's own LSget/LSset):
+   STORAGE (two keys, both JSON through the app's own LSget/LSset):
      sv_profile          {v:1, langs:[], genres:[], artists:[{id,name,thumb}], at}
      sv_onboard_seen     1 once the flow was completed OR skipped — "skippable, once only"
-     sv_onboard_banner   1 once the one-time Home offer was dismissed
-   WHEN IT RUNS: nothing in hist and no profile and not seen ⇒ it opens by itself (a fresh install).
-   History but no profile ⇒ Home shows the one-time offer instead, and dismissing it is remembered.
-   Settings → "Personalise my taste" reopens it forever, prefilled. A real data reset clears all
-   three keys, which is what brings the first-run path back.
+   (A third key, sv_onboard_banner, belonged to the one-time Home offer wave 8 deleted. An old install
+   may still carry it; nothing reads or writes it any more.)
+   WHEN IT RUNS — WAVE 8: ONCE PER INSTALL, AS A GATE. Nothing in hist and no profile and not seen ⇒
+   it opens during parsing, i.e. before the first paint, and covers the window at z 100 until the user
+   leaves it by one of its OWN two buttons: Step 1's "Skip for now" (skipFlow) or "Continue to
+   Artists" → "Finish Setup" (saveAndSeed). Both exits write sv_onboard_seen, so it cannot come back
+   on a later launch — and there is now no OTHER door in: the Home banner ("Want better picks?") and
+   the Settings row ("Personalise my taste / Redo") are both gone. A real data reset clears the
+   profile and the seen flag, which is what brings the first-run path back.
 
    THE SEED, AND WHY IT IS TAGGED: the picks are written into `ml_history` — the store Listen again,
    Quick picks, Albums for you and the dice radio already read — because that is the only way Home
@@ -9364,9 +9361,10 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
      • the History page never claims you played something you did not (_4asHistItems is wrapped);
      • a re-run replaces only still-unplayed seeds, and a track you have genuinely played is never
        touched by the seeder (it skips any id already in hist).
-   FOUR WRAPPERS, all in this block: renderHome (append the shelves / the offer), notePlay (drop a
-   seed tag on a real play), _4asHistItems (hide only still-tagged seeds), setRender (add the
-   Settings row). Nothing outside this block is edited.
+   THREE WRAPPERS, all in this block: renderHome (append the picked shelves), notePlay (drop a seed
+   tag on a real play) and _4asHistItems (hide only still-tagged seeds). Nothing outside this block is
+   edited — wave 8 also dropped the Settings-row injection it used to need, which was the only code
+   here that touched a node it did not own.
 
    WAVE 6b — THE HANDOVER: the picked shelves are a STARTING POINT and this block retires them as
    real listening accumulates (the long note sits above fillShelves). The app's own rows are never
@@ -9383,7 +9381,10 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   var LANGS = ['English','Hindi','Punjabi','Tamil','Spanish','Korean','Japanese','French','German'];
   var VIBES = ['Lo-Fi Chill','Indie Pop','Hip Hop','Synthwave','Deep House','Acoustic','R&B','Techno',
                'Classical','Jazz','Metal','Neo-Soul','Ambient','Bollywood','EDM'];
-  var KP='sv_profile', KS='sv_onboard_seen', KB='sv_onboard_banner';
+  /* Three keys, all JSON through the app's own LSget/LSset. sv_onboard_banner is no longer read or
+     written (wave 8 removed the Home offer that set it); an old install may still carry the key, and
+     nothing reads it any more. */
+  var KP='sv_profile', KS='sv_onboard_seen';
   var MIN_ARTISTS=3, MAX_SEED_ARTISTS=6, SONGS_PER_ARTIST=5;
 
   var ICON = {
@@ -9607,22 +9608,100 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
       .then(function(r){ return r.json() })
       .then(function(j){ return normArtists(j.items, cap) });
   }
+  /* ===== WAVE 8 — the grid is RANKED, and the junk is filtered out =====
+     The old version asked "<Genre> artists" / "<Lang> music artists" and painted the first 24 hits in
+     QUERY ORDER, which is exactly how an Indian-language pick came back as "Rakhi sharma [21
+     subscribers]", "singer muskan [141]" and "Desi Flow Nation [4]", with "Bollywood Christmas [2]",
+     "Lo Fi Hip Hop [15.3K]" and "Spanish Guitar Cafe Music [57]" in the same grid (all measured).
+     A search for artists is a relevance search, not a popularity one, so the order is the only thing
+     wrong with it — and the app already knows how to read an artist's audience: audOf() is the same
+     parser wave 7 ranks the picked shelves with, so the picker and the feed can never disagree about
+     who a real artist is.
+     WHAT A ROW IS, MEASURED — the route serves exactly two shapes:
+       "Artist • 39.1M monthly audience"  ← a REAL artist entity (girl in red, Brian Eno, Arijit
+                                            Singh, Udit Narayan, Fujii Kaze, Diana Krall…), and
+       "Artist • 85 subscribers"          ← a user-made channel wearing the Artist profile: the same
+                                            shape as every junk row measured ("Synthwave 7
+                                            subscribers", "Jazz Music for Studying 1 subscriber",
+                                            "Lo Fi Hip Hop 15.3K", "Bollywood Christmas 2").
+     So the grid is TIERED ON THAT WORDING, not on size: every "monthly audience" row is in — sorted by
+     audience — and a "subscribers" row is only a FILLER past GRID_AUD_FLOOR = 1e5, ten times lower
+     than wave 7's 1e6 because those thresholds do opposite jobs. A ROW must not be filled by a
+     channel nobody has heard of, so it wants 1e6; a PICKER must not hide the artists the user came to
+     pick, and 1e6 evicted Kishore Kumar (781K), Mohammed Rafi (240K) and R. D. Burman (105K) from a
+     Hindi grid while keeping nothing the user would recognise.
+     THE PHRASINGS WERE MEASURED PER PICK, because one query is thin for some picks and EMPTY for
+     others — "<g> artists" returned zero rows for Synthwave, and "biggest artists India" (the whole
+     old no-pick fallback) returned 1 row, then 1, then 0, on a screen the user cannot leave without
+     three picks:
+       language ⇒ "<L> music" + "<L> singers" + "<L> artists"
+       vibe     ⇒ "<g> music" + "<g> singers" + "<g> band"
+     Each one earns its place. "<L> music" is what carries the big names (Hindi: Udit Narayan 705M,
+     Arijit Singh 643M, A. R. Rahman 557M, Himesh 429M, Kishore Kumar; Punjabi 20 of 20 rows; Tamil 15;
+     Korean 9), and the other two carry the picks where "music" only returns channels — Jazz: Diana
+     Krall and Samara Joy arrive from "Jazz singers" when "Jazz music" kept NONE; Synthwave: The
+     Midnight and Gunship arrive from "Synthwave band" when "Synthwave music" kept none; Acoustic:
+     Anuv Jain (185M) arrives from "Acoustic singers".
+     AND THE LISTS ARE INTERLEAVED, not concatenated: the old loop let the first query own all 24
+     tiles, so a Punjabi pick buried the second and third ones entirely — and each pick's own merge is
+     re-sorted (entity first, then audience) BEFORE the round-robin, so a pick's best artist can never
+     land past the 24-tile cut. A five-pick user sees all five picks whatever order they chose them
+     in. */
+  var GRID_AUD_FLOOR = 1e5;
+  var GRID_ENTITY = /monthly\s*audience/i;
+  /* entity first, then audience — the one comparison everything in this grid is ordered by */
+  function gridRank(a, b){
+    if(!!a.entity !== !!b.entity) return a.entity ? -1 : 1;
+    return b.aud - a.aud;
+  }
+  function gridPicks(){
+    var jobs = [];
+    sel.langs.slice(0,2).forEach(function(L){ jobs.push({cap:L, qs:[L+' music', L+' singers', L+' artists']}) });
+    sel.genres.slice(0,3).forEach(function(g){ jobs.push({cap:g, qs:[g+' music', g+' singers', g+' band']}) });
+    /* A pick-free Continue lands here (step 1's Continue is never disabled). Three broad queries,
+       because one can come back empty and this screen needs three picks to be finishable: measured
+       Indian music 15 rows, English music 8, Hindi music 6. */
+    if(!jobs.length) jobs.push({cap:'Popular', qs:['Indian music', 'English music', 'Hindi music']});
+    return jobs;
+  }
+  async function gridList(cap, q){
+    var url = '/api/search?q='+encodeURIComponent(q)+'&type=artist';
+    try{
+      /* the app's own session cache, so going Back and forward again costs no network */
+      var j = (typeof feedJSON==='function') ? await feedJSON(url)
+                                             : await fetch(url).then(function(r){ return r.json() });
+      var rows = (j && j.items ? j.items : []).map(function(it){
+        if(!it || !it.id || !/^UC/.test(it.id)) return null;              // real channels only
+        var nm = it.title || it.artist || ''; if(!nm) return null;
+        var aud = (typeof audOf==='function') ? audOf(it.sub) : 0;
+        var entity = GRID_ENTITY.test(String(it.sub || ''));       // a real artist, not a channel
+        if(!entity && aud < GRID_AUD_FLOOR) return null;
+        return {id:it.id, name:nm, thumb:it.thumb||'', cap:cap, aud:aud, entity:entity};
+      }).filter(Boolean);
+      rows.sort(gridRank);
+      return rows;
+    }catch(e){ return [] }
+  }
   async function seedGrid(){
     var mine = ++gridGen;
-    var queries = [];
-    sel.genres.slice(0,3).forEach(function(g){ queries.push({q:g+' artists', cap:g}) });
-    sel.langs.slice(0,2).forEach(function(L){ queries.push({q:L+' music artists', cap:L}) });
-    if(!queries.length) queries.push({q:'popular artists', cap:'Popular'});
+    var jobs = gridPicks(), lists = [];
     gridNote('Finding artists for your picks…');
-    var out = [], seenIds = {};
-    for(var i=0;i<queries.length && out.length<24;i++){
-      try{
-        var found = await searchArtists(queries[i].q, queries[i].cap);
-        if(mine!==gridGen) return;
-        found.forEach(function(t){ if(out.length<24 && !seenIds[t.id]){ seenIds[t.id]=1; out.push(t) } });
-      }catch(e){}
+    for(var i=0;i<jobs.length;i++){
+      var cap = jobs[i].cap;
+      /* A pick's own lookups are independent, so they go out TOGETHER and the pick costs one
+         round-trip instead of three. Measured on the same five picks (15 requests): 10.3s one after
+         another against 3.7s this way. The app's feedJSON collapses duplicate URLs and every URL
+         here is distinct, so nothing is fetched twice. (The route itself is not deterministic from
+         run to run — that is a property of the search, not of the parallelism.) */
+      var got = await Promise.all(jobs[i].qs.map(function(q){ return gridList(cap, q) }));
+      if(mine!==gridGen) return;                                       // a newer seed owns the grid
+      var acc = [];
+      got.forEach(function(rows){ acc = acc.concat(rows) });
+      acc.sort(gridRank);                                          // this pick's own best first
+      lists.push(acc);
     }
     if(mine!==gridGen) return;
+    var out = (typeof interleave==='function') ? interleave(lists, 24) : lists[0].slice(0,24);
     paintGrid(out, out.length ? '' : 'No artists came back for those picks — search for one by name.');
   }
   function paintGrid(list, note){
@@ -9716,15 +9795,13 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     if(typeof renderHome==='function' && typeof curPage!=='undefined' && curPage==='home'){ try{ renderHome() }catch(e){} }
   }
 
-  /* ---------- Home: the one-time offer + the picked shelves ---------- */
-  function offerDismissed(){ return !!LSget(KB,0) }
-  function shouldOffer(){ return !profile && !histEmpty() && !seen() && !offerDismissed() }
-  function bannerHTML(){
-    return '<div class="oncBan" id="oncBan"><div class="g"><b>Want better picks?</b>'+
-      '<span>Tell Svara the languages, vibes and artists you like and Home fills with them.</span></div>'+
-      '<button class="go" type="button" data-oncbanner="1">Personalise</button>'+
-      '<button class="no" type="button" data-oncbanner="0">Not now</button></div>';
-  }
+  /* ---------- Home: the picked shelves ----------
+     WAVE 8 REMOVED THE "PERSONALISE MY TASTE" REOPEN PATHS FROM HERE: the Home banner ("Want better
+     picks?") and the Settings row both opened this flow again, and the user asked for it to be a
+     FIRST-RUN ONLY screen. The flow itself, its steps and its own close/skip behaviour are untouched;
+     what is gone is every way back into it, so the overlay can only ever be its first run. The console
+     hook below (svaraPersonalise.open()) is deliberately kept — it is how this wave tested the flow
+     without wiping a profile. */
   /* ===== WAVE 6b — THE HANDOVER =====
      A picked shelf is a STARTING POINT: it exists to put something on Home before any listening has
      happened. Once listening HAS happened the app's own rows are the better feed, so the picked ones
@@ -9865,21 +9942,18 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   function decorateHome(){
     if(typeof curPage==='undefined' || curPage!=='home') return;
     var sec = document.getElementById('homeSec'); if(!sec) return;
-    if(profile){
-      if(graduated()) return;                        // wave 6b: the picked feed has served its purpose
-      if(sec.querySelector('#oncShelves')) return;   // one set of shelves per Home render, never two
-      rowsNow = [];
-      var host = document.createElement('div');
-      host.id = 'oncShelves';
-      var dyn = dynRows();
-      /* the first placement already honours the handover, so a pushed block is never born on top and
-         then jumped down: past START it starts life below the app's own rows */
-      if(sincePlays(profile) >= TRANS.START && dyn.length) sec.appendChild(host);
-      else sec.insertBefore(host, dyn[0] || null);   // right under the mood pills, above Listen again
-      fillShelves(host, profile);
-      return;
-    }
-    if(shouldOffer() && !sec.querySelector('#oncBan')) sec.insertAdjacentHTML('afterbegin', bannerHTML());
+    if(!profile) return;                             // no profile, no picked shelves — and no offer
+    if(graduated()) return;                          // wave 6b: the picked feed has served its purpose
+    if(sec.querySelector('#oncShelves')) return;      // one set of shelves per Home render, never two
+    rowsNow = [];
+    var host = document.createElement('div');
+    host.id = 'oncShelves';
+    var dyn = dynRows();
+    /* the first placement already honours the handover, so a pushed block is never born on top and
+       then jumped down: past START it starts life below the app's own rows */
+    if(sincePlays(profile) >= TRANS.START && dyn.length) sec.appendChild(host);
+    else sec.insertBefore(host, dyn[0] || null);     // right under the mood pills, above Listen again
+    fillShelves(host, profile);
   }
   /* ---------- one genuine play can move the feed on; a plain one must not ---------- */
   /* Called from the wrapped notePlay, i.e. from a REAL play and nothing else. The block is re-blended
@@ -9915,50 +9989,12 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     try{ return _histItems.apply(this, arguments).filter(function(e){ return !(e && e.seed) }) }
     catch(e){ return _histItems.apply(this, arguments) }
   };
-  /* The Settings row. setRender()/setRow() are NOT globals in this file — they live inside another
-     block's own scope — so this row cannot be injected by wrapping a function the way the other
-     three are (wrapping a name that is not visible throws and would take the whole wave down with
-     it). #setBody is rebuilt wholesale on every Settings render, so the row is added by observing
-     that node: the observer is inert while the panel is closed (the node is empty) and only fires
-     on a real repaint. The row markup below is setRow()'s, copied, because setRow() is out of reach
-     from here. */
-  function setRowHTML(label, hint, ctrl){
-    return '<div class="setRow"><div><div class="setLbl">'+esc(label)+'</div>'+
-      (hint ? '<div class="setHint">'+esc(hint)+'</div>' : '')+'</div>'+ctrl+'</div>';
-  }
-  function injectSettingsRow(){
-    var b = document.getElementById('setBody'); if(!b) return;
-    var about = b.querySelector('.setAbout'); if(!about) return;
-    if(b.querySelector('[data-oncsetting]')) return;
-    var g = document.createElement('div'); g.className = 'setGrp';
-    var hint = profile
-      ? 'Your picks: '+(profile.genres||[]).slice(0,2).join(', ')+((profile.artists||[]).length?' · '+(profile.artists||[]).length+' artists':'')
-      : 'Languages, vibes and artists — fills Home from your taste in one pass';
-    g.innerHTML = setRowHTML('Personalise my taste', hint, '<button class="setAct" type="button" data-oncsetting="1">'+(profile?'Redo':'Set up')+'</button>');
-    /* insert into the BODY of the panel, before the About group — not `about.parentNode.insertBefore(g,
-       about.parentNode)`, which asks a node to insert itself before itself and throws NotFoundError
-       (measured; the throw was swallowed by this function's caller's try/catch, so the row silently
-       never appeared). The group is found with closest() so a wrapper around the About button cannot
-       break this. */
-    var aboutGrp = about.closest('.setGrp') || about.parentNode;
-    if(aboutGrp && aboutGrp.parentNode) aboutGrp.parentNode.insertBefore(g, aboutGrp);
-  }
-  var injectQueued = false;
-  function scheduleInject(){
-    if(injectQueued) return;                      // coalesce: at most one inject per 60ms of repaints
-    injectQueued = true;
-    setTimeout(function(){ injectQueued = false; try{ injectSettingsRow() }catch(e){} }, 60);
-  }
-  function watchSettings(){
-    /* #setBody is NOT a stable target to observe: watching that node directly never fired (measured
-       — the row stayed absent across a close/reopen), so the panel's node identity cannot be
-       assumed to survive. document.body with subtree:true is the pattern several other blocks in
-       this file already use (e.g. the runtime-icon and library scanners), and the work per mutation
-       is one early-returning call, so a paint can never snowball — injecting adds a node, which
-       re-fires this, which finds the row already present and stops. */
-    try{ new MutationObserver(scheduleInject).observe(document.body, { childList:true, subtree:true }) }catch(e){}
-    try{ injectSettingsRow() }catch(e){}
-  }
+  /* THE SETTINGS ROW IS GONE (wave 8) — "Personalise my taste / Redo" was the second way back into
+     the flow. It was never a row this block could render from its own scope: setRender()/setRow() live
+     inside another block's closure, so the row had to be injected into #setBody by a body observer and
+     its markup copied by hand. Removing it therefore removes four things that existed only for it —
+     the row builder, the injector, the coalescing scheduler and the observer that watched for Settings
+     repaints — which also means Settings no longer runs any mutation callback from this block at all. */
 
   /* ---------- wiring ---------- */
   document.addEventListener('click', function(e){
@@ -9990,21 +10026,6 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     if(t.closest('[data-oncback]')){ step=1; paint(); return }
     if(t.closest('[data-oncfinish]')){ saveAndSeed(); return }
     if(t.closest('[data-oncskip]')){ skipFlow(); return }
-    var ban=t.closest('[data-oncbanner]');
-    if(ban){
-      if(ban.getAttribute('data-oncbanner')==='1'){ openFlow(true) }
-      else{ LSset(KB,1); var b=document.getElementById('oncBan'); if(b&&b.parentNode) b.parentNode.removeChild(b) }
-      return;
-    }
-    if(t.closest('[data-oncsetting]')){
-      /* close the Settings panel first: setShow() is scoped to its own block, so the panel's own
-         close button is clicked instead — otherwise the panel sits open behind this overlay and is
-         what the user sees the moment the flow closes. Guarded: if the button is ever renamed this
-         simply does nothing. */
-      try{ var x=document.querySelector('#setPanel .setX'); if(x) x.click() }catch(e){}
-      openFlow(true);
-      return;
-    }
     var wrap=t.closest('[data-oncq]');
     if(wrap){
       var arr2=rails[wrap.getAttribute('data-oncq')]; if(!arr2||!arr2.length) return;
@@ -10032,13 +10053,19 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     if(e.key==='Escape' && open && !busy){ e.preventDefault(); skipFlow() }
   });
 
-  /* ---------- boot ---------- */
+  /* ---------- boot: the one and only door into this flow ----------
+     WAVE 8: the flow is a FRESH-INSTALL GATE, so it opens during parsing — mount() appends the opaque
+     overlay to <body> from the last script in the document, i.e. BEFORE the first paint. The old
+     setTimeout(900) let a first-run Home build behind it, so the very first thing a new user saw was
+     the wrong screen, briefly. Nothing else in this file opens the flow, and `seen()` is written by
+     both exits (Finish Setup in saveAndSeed, Skip in skipFlow), so this runs exactly once per install:
+     the two ways out are the two buttons, and until one is pressed the app is behind an overlay that
+     covers the window at z-index 100. */
   function boot(){
     if(!histEmpty() || profile || seen()) return;      // a fresh install only
     openFlow(false);
   }
-  setTimeout(function(){ try{ boot() }catch(e){} }, 900);
-  setTimeout(function(){ try{ watchSettings() }catch(e){} }, 1200);
+  boot();
 
   /* exposed for the console (and for this block's own checks) */
   window.svaraPersonalise = {
@@ -10046,7 +10073,7 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     seed: function(){ return seed(profile || {artists:[]}) },
     profile: function(){ return profile },
     clear: function(){
-      clearSeeds(); LSset(KP,null); setSeen(0); LSset(KB,0);
+      clearSeeds(); LSset(KP,null); setSeen(0);
       /* wave 6b: a reset revives the picked feed too — no retirement and no graduation left behind */
       try{ LSset(KG,0); LSset(KR,null) }catch(e){}
       rowsNow = [];
