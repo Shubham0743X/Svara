@@ -848,9 +848,31 @@ async function catArtists(cat, n){
              .sort(function(a,b){ return b.aud-a.aud })
              .slice(0, n||FEED_ARTISTS);
 }
-/* A channel's own top songs, in YouTube Music's popularity order (never re-sorted by us). */
-async function artistTopSongs(id, n){
-  try{ var j=await feedJSON('/api/artist/songs?id='+encodeURIComponent(id)); return (j.songs||[]).slice(0, n||ART_SONGS) }catch(e){ return [] }
+/* A channel's own top songs, in YouTube Music's popularity order (never re-sorted by us).
+   WAVE 11: `off` is a ROW OFFSET into that same order, so a caller can ask for a LATER WINDOW of the
+   popularity list without changing what the list means (see popWindow()). A window that runs past the
+   end of a short catalogue falls back to its head, so a thin artist can never blank a row. */
+async function artistTopSongs(id, n, off){
+  try{
+    var j=await feedJSON('/api/artist/songs?id='+encodeURIComponent(id));
+    var a=j.songs||[], head=a.slice(0, n||ART_SONGS);
+    if(!off) return head;                                   // the head is the common case: no slice
+    var w=a.slice(off, off+(n||ART_SONGS));
+    return w.length ? w : head;
+  }catch(e){ return [] }
+}
+/* WAVE 11 — "POPULAR RIGHT NOW" MOVES WITHOUT LEAVING THE POPULAR HEAD OF A CATALOGUE.
+   The artist SEEDS cannot rotate: measured live, "trending artists 2026" and "popular artists 2026"
+   return ZERO rows, "top artists 2026" returns two Western acts, and only "biggest artists India"
+   (4 real channels) plus "<language> singers" clear the audience floor. So the row keeps those
+   seeds and rotates the SONGS instead: /api/artist/songs returns a long catalogue in YouTube
+   Music's own popularity order (measured: 147 rows for Shreya Ghoshal — head KALYANI (Remix),
+   Saiyaara Reprise; rows 8-14 Aashiq Banaya Aapne, Tere Hawale; rows 20-26 Dhadhang Dhang,
+   Guli Mata), so moving the window shows different hits, never obscure ones. Three weekly slots
+   never go deeper than row 18 of that order, and the slot is a function of the clock — nothing is
+   stored, so a long-running session rolls into the next window on its own next Home paint. */
+function popWindow(){
+  return (Math.floor(Date.now()/(7*864e5)) % 3) * ART_SONGS;   // 0 / 6 / 12, one step a week
 }
 /* A plain song search, junk removed and deduped — the fallback for anything without an artist query. */
 async function querySongs(qs, limit, dropTrendWords){
@@ -872,23 +894,58 @@ async function categorySongs(cat, limit){
   }
   return querySongs(String(cat==null?'':cat).trim()+' songs', limit);
 }
-/* TRENDING SONGS: the queries that are actually about now — measured, "trending songs" returns
-   Heeriye and Humnava Mere, "new songs <year>" returns the current releases. A track BOTH variants
-   returned is ranked first (the only cross-query signal available), then each variant's own order. */
+/* TRENDING SONGS — WAVE 11: a DATED query set, ranked by cross-query consensus.
+   What each query returns was measured live (2026-10-13) through this app's own
+   /api/search?type=song, AFTER junkSong():
+     "trending songs"            Heeriye · KALYANI (Remix) · Arz Kiya Hai · Udi Udi
+     "trending songs this week"  Love Like This (Diljit) · Panjeban · DEALER · No Shortcut
+     "bollywood trending songs <y>"  Meri Banogi Kya · Amplifier · DARKHAAST · Aaj Ki Raat
+     "viral songs <y>"           Thodi Si Daaru · Dooron Dooron · Kithe Reh Gaya · Arabic Kuthu
+     "trending songs India"      KALYANI · GUZARISH · Lover (Diljit) · Thoda Thoda Pyaar
+     "top hits <y>"              Shararat (Dhurandhar) · Snooze · Sapphire
+   and the queries that FAILED, which is why none of them is in the pool: a MONTH NAME is matched
+   literally ("trending songs October" ⇒ "we fell in love in october" and Zulu gospel; "new songs
+   October 2026" ⇒ the same), "trending artists 2026" and "popular artists 2026" return ZERO rows,
+   "top artists 2026" returns two Western acts, and "trending hits 2026" is study-beat playlists.
+   So the OLD pair is gone: one of its two halves was that month/year query, which is why the row
+   drifted into whatever a date string happened to match instead of what is actually big.
+   TWO ANCHORS PLUS TWO ROTATING. The anchors are fixed (the two whose results are quoted above);
+   the other two are drawn from the pool by a slot that advances twice a day, so the row asks a
+   different pair of questions tomorrow while never dropping the two that are always right. A track
+   is then ranked by HOW MANY of the four queries returned it — the only cross-query signal
+   available — with ties broken by first appearance, so the top of the row is what several
+   independent "what is big now" questions agree on, not one query's private order. Nothing is
+   stored: the slot is a function of the clock, so a session that spans a slot boundary picks the
+   new queries up on its next Home paint, and feedJSON's 10-minute memo means a repaint costs no
+   network at all. */
+function trendQueries(){
+  var y=(new Date()).getFullYear();
+  var pool=['bollywood trending songs '+y, 'viral songs '+y, 'trending songs India',
+            'top hits '+y, 'popular songs '+y];
+  var slot=Math.floor(Date.now()/(12*3600*1000));        /* two slots a day */
+  var a=slot%pool.length, b=(a+1)%pool.length;
+  var qs=['trending songs', 'trending songs this week', pool[a], pool[b]], out=[];
+  qs.forEach(function(q){ if(out.indexOf(q)<0) out.push(q) });   /* a short pool can repeat a neighbour */
+  return out;
+}
 async function trendSongs(limit){
-  var year=(new Date()).getFullYear();
-  var qs=['trending songs', 'new songs '+year], lists=[], hits={};
+  var qs=trendQueries(), seen={}, order=[];
   for(var i=0;i<qs.length;i++){
     var clean=[];
     try{
       var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=song');
       clean=dedupeSongs((j.items||[]).filter(function(it){ return !junkSong(it, true) }));
     }catch(e){}
-    lists.push(clean);
-    clean.forEach(function(it){ hits[it.id]=(hits[it.id]||0)+1 });
+    clean.forEach(function(it){
+      var h=seen[it.id];
+      if(!h){ h=seen[it.id]={it:it, n:0, first:order.length}; order.push(it.id) }
+      h.n++;
+    });
   }
-  var both=lists[0].filter(function(it){ return hits[it.id]>1 });
-  return dedupeSongs(both.concat(lists[0], lists[1])).slice(0, limit||TREND_LIMIT);
+  return order.map(function(id){ return seen[id] })
+              .sort(function(x,z){ return (z.n-x.n) || (x.first-z.first) })
+              .slice(0, limit||TREND_LIMIT)
+              .map(function(x){ return x.it });
 }
 /* POPULAR RIGHT NOW: the biggest artists' biggest songs, whatever the profile is. The picks' own
    language leads when there is one, so the row reads as the user's own market. Falls back to the
@@ -915,8 +972,8 @@ async function popularitySongs(limit){
                .sort(function(a,b){ return b.aud-a.aud })
                .slice(0, FEED_ARTISTS);
   if(arts.length){
-    var lists=[];
-    for(var k=0;k<arts.length;k++) lists.push(await artistTopSongs(arts[k].id, ART_SONGS));
+    var lists=[], win=popWindow();          /* WAVE 11: this week's window in each artist's own order */
+    for(var k=0;k<arts.length;k++) lists.push(await artistTopSongs(arts[k].id, ART_SONGS, win));
     var out=interleave(lists, limit);
     if(out.length) return { items:out, artists:arts.map(function(a){ return a.name }) };
   }
@@ -980,7 +1037,8 @@ function qpMore(){
 window.svaraFeed={
   trend:trendSongs, popular:popularitySongs, category:categorySongs, artists:catArtists,
   junk:junkSong, clear:clearFeedCache,
-  state:function(){ return { qpShown:qpShown, page:QP_PAGE, trend:(trendArr||[]).length, pop:(popArr||[]).length, cached:Object.keys(feedCache).length } }
+  trendQ:trendQueries, win:popWindow,          /* WAVE 11: what the two discovery rows are asking now */
+  state:function(){ return { qpShown:qpShown, page:QP_PAGE, trend:(trendArr||[]).length, pop:(popArr||[]).length, cached:Object.keys(feedCache).length, trendQ:trendQueries(), win:popWindow() } }
 };
 var homeGen=0;
 async function renderHome(){
@@ -993,21 +1051,29 @@ async function renderHome(){
   quickList=scored;
   /* Wave 7: the three discovery rows are built ONCE here and painted into BOTH branches. They are the
      rows a first play used to take away, and the reason a fresh Home felt empty. */
-  const trendSec=`<div class="sec"><h2>Trending songs</h2><div class="railwrap" id="trendRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
+  /* WAVE 11: Trending songs is the FIRST row on Home and its cards are WIDE feature cards, not
+     covers — but only the SECTION's class changes (v11trendcss sizes them), so the card markup, its
+     playback handler and skRail's placeholder markup are all untouched, and the wave-10 width fix
+     for the nested skeleton wrapper still applies. Four placeholders is what fills the row at
+     --herocols: three whole cards and the same small peek the cover rows show. */
+  const trendSec=`<div class="sec heroSec" id="trendSec"><h2>Trending songs</h2><div class="railwrap" id="trendRail">${typeof skRail==='function'?skRail(4):'<div class="empty">Loading…</div>'}</div></div>`;
   const popSec=`<div class="sec"><h2>Popular right now</h2><div class="railwrap" id="popRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
   const albSec=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading your albums…</div>'}</div></div>`;
   const more=topScored(qpShown+QP_PAGE).length>scored.length;   /* is there a next page of picks? */
+  /* WAVE 11 ORDER (the user's): Trending songs → Quick picks → Listen again → Popular right now →
+     Albums for you → the picked onboarding shelves → Surprise me. The picked shelves land after
+     Albums for you (see decorateHome, which anchors every one of them to that row), so the app's
+     own rows run first and the personalisation closes the page. */
   if(!none){
-    if(recent.length)h+=`<div class="sec"><h2>Listen again</h2>${railHTML(recent,'la')}</div>`;
+    h+=trendSec;
     h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button>${more?'<button class="go" data-qpmore="1">Show more</button>':''}</h2>${listHTML(quickList,'qpGrid')}</div>`;
-    /* WAVE 9 ORDER: the discovery pair first, then Albums for you. The picked onboarding shelves are
-       placed around these rows by the wave-6 block (see decorateHome) — vibes after the discovery
-       pair, the language and artist shelves after Albums for you. */
-    h+=trendSec+popSec+albSec;
+    if(recent.length)h+=`<div class="sec"><h2>Listen again</h2>${railHTML(recent,'la')}</div>`;
+    h+=popSec+albSec;
     h+=`<div class="sec"><h2>Surprise me<button class="go" id="diceBig">🎲 Play a radio from your taste</button></h2><div class="empty" style="padding:6px 2px">Your radio never jumps between languages — it seeds from what you listen to most.</div></div>`;
   }else{
+    h+=trendSec;
     h+=`<div class="sec"><h2>Welcome to Svara</h2><div class="empty">Search any song and press play.<br>After a few songs, Home fills with <b>Listen again</b>, <b>Quick picks</b> and <b>Albums for you</b> — all from your taste.</div></div>`;
-    h+=trendSec+popSec+albSec;
+    h+=popSec+albSec;
   }
   sec.innerHTML=h;
   /* Wave 7 fills. Each one owns one rail, checks the generation after every await, and asks its
@@ -9383,10 +9449,12 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
    edited — wave 8 also dropped the Settings-row injection it used to need, which was the only code
    here that touched a node it did not own.
 
-   WAVE 6b — THE HANDOVER: the picked shelves are a STARTING POINT and this block retires them as
-   real listening accumulates (the long note sits above fillShelves). The app's own rows are never
-   touched — the picked block only ever moves around them — and `blendFeed()` is the pure function
-   that decides what stays, what dims and what goes. `window.svaraPersonalise.state()` reports it.
+   WAVE 6b gave the picked shelves a HANDOVER; WAVE 12 RE-CLOCKS IT ON TIME. A shelf is a STARTING
+   POINT, so its OWN inactivity retires it — 14 days idle dims it, 21 days idle collapses it out and
+   filters it for good — and any use of it (playing one of its tracks, from anywhere) resets its
+   clock and puts it straight back to full opacity. The app's own rows are NEVER dimmed, collapsed or
+   unmounted: `blendFeed()` builds no verdict for them at all and `applyBlend()` refuses any node that
+   is not one of this block's shelves. `window.svaraPersonalise.state()` reports both halves.
 
    NOTE: the rails this wave adds are keyed by `data-oncq` on the WRAP, and these cards are played by
    this block's own listener rather than by the app's rail handler (which answers only 'al' / 'la' /
@@ -9420,84 +9488,132 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   var step = 1, open = false, busy = false, gridGen = 0, homeGen6 = 0, searchTimer = null;
   var root = null;
 
-  /* ---------- Wave 6b: the handover (the long note sits above fillShelves) ---------- */
-  var KG='sv_onboard_graduated', KR='sv_onboard_retired';
-  /* START: genuine plays after which the picked block is pushed BELOW the app's own rows and starts
-     to dim. FULL: genuine plays after which every picked shelf retires. ROW_HITS: real plays of a
-     shelf's OWN tracks that retire that shelf early — by then the feed is already serving it. */
-  var TRANS = { START:4, FULL:18, ROW_HITS:2 };
+  /* ---------- Wave 12: the time-based handover (the long note sits above fillShelves) ---------- */
+  var KG='sv_onboard_graduated', KR='sv_onboard_retired', KT='sv_onboard_touch';
+  /* ONE DAY AND FOUR NUMBERS. A shelf is stamped when it is created and re-stamped on every
+     interaction; DIM_DAYS and GONE_DAYS are the ages at which it dims and at which it leaves;
+     DIM_TOP is the opacity it drops to ON the dim day — a visible step, so the threshold does
+     something the moment it is crossed — and DIM_FLOOR is what it has reached by the removal age, so
+     the collapse is never a jump from full brightness. No play count appears anywhere below: the
+     clock is the whole policy. */
+  var DECAY = { DIM_DAYS:14, GONE_DAYS:21, DAY:864e5, DIM_TOP:0.72, DIM_FLOOR:0.45 };
   var PICKED = '#svara-picks';      // the token blendFeed() uses for the picked block itself
+  var ONC_SEL = '.oncSec[data-onckey]';   // THE ONLY KIND OF NODE THIS BLOCK MAY EVER DECAY
   var rowsNow = [];                 // the picked shelves painted by the CURRENT Home render
 
-  /* Every genuine entry in the real history store. Seeds never count — not here, not anywhere. */
-  function playsAll(){ var n=0; try{ Object.keys(hist||{}).forEach(function(k){ var e=hist[k]; if(e&&!e.seed) n++ }) }catch(e){} return n }
-  /* Genuine plays recorded SINCE the picks were made: the single number the whole handover runs on.
-     A track that was already in history and got played again after onboarding counts — the question
-     is "has listening happened since", not "how many new tracks arrived". A profile with no
-     timestamp falls back to the absolute count. */
-  function sincePlays(p){
-    if(!p || !p.at) return playsAll();
-    var n=0;
-    try{ Object.keys(hist||{}).forEach(function(k){ var e=hist[k]; if(e && !e.seed && (e.last||0)>=p.at) n++ }) }catch(e){}
-    return n;
+  /* ===== WAVE 12 — THE SHELF CLOCK: Date math, not play counts =====
+     sv_onboard_touch is {shelfTitle: ms} — ONE STAMP PER SHELF, keyed by the same stable title that
+     sv_onboard_retired uses, so it survives the per-render rail keys. Everything below is pure Date
+     math on that stamp: no play history, no session state, no DOM. */
+  function touchMap(){ var m=LSget(KT,null); return (m && typeof m==='object')?m:{} }
+  function touchedAt(key){ var m=touchMap(), v=m[key]; return (typeof v==='number' && v>0)?v:0 }
+  /* Stamp a shelf. `at` is the overwrite, used by the console hook to back-date a shelf — the only
+     way to see the 14/21-day thresholds without waiting three weeks for them. */
+  function touch(key, at){
+    if(!key) return 0;
+    var m=touchMap(), ts=(typeof at==='number' && at>0)?at:Date.now();
+    m[key]=ts;
+    try{ LSset(KT,m) }catch(e){}
+    return ts;
   }
-  function tOf(n){ return Math.max(0, Math.min(1, (n-TRANS.START)/Math.max(1, TRANS.FULL-TRANS.START))) }
-  /* How many of a shelf's own tracks the user has really PLAYED SINCE the picks were made. A seed
-     that was played lost its tag in notePlay, so it counts here — that is the point: the shelf's
-     content is what the feed is now serving, so the shelf is the duplicate. The `since` part is not
-     decoration: a shelf is fetched fresh on every Home render, so merely requiring "a track that is
-     in the user's history" retired a shelf on its FIRST paint whenever two of the twelve search hits
-     happened to be old favourites (measured). Requiring the play to be recent cannot fire before the
-     user has listened, which is what the whole handover is supposed to be driven by. */
-  function rowHits(items){
-    var at = (profile && profile.at) || 0, n=0;
-    (items||[]).forEach(function(it){
-      var e=(it&&it.id)?hist[it.id]:null;
-      if(e && !e.seed && ((e.last||0) >= at)) n++;
-    });
-    return n;
+  /* Whole days (fractional) since the shelf was last used = (NOW - stamp) / ONE DAY. An UNSTAMPED
+     shelf reports 0, i.e. brand new — and that fallback is load-bearing: an install that predates
+     this wave has no stamps at all, and reading a missing stamp as "infinitely old" would retire
+     every shelf it owns on the first paint after the update. fillShelves stamps such a shelf with
+     NOW (never with profile.at) so its clock starts when this wave first sees it. */
+  function daysIdle(key, now){
+    var at=touchedAt(key); if(!at) return 0;
+    var d=((typeof now==='number')?now:Date.now())-at;
+    d = d/DECAY.DAY;
+    return d>0 ? d : 0;
+  }
+  /* THE WHOLE LIFECYCLE FOR ONE SHELF, in one place:
+       keep    < 14 days idle  → full opacity (1)
+       dim    >= 14 days       → dimmed: 0.72 on the day, ramping down to 0.45 by the removal age
+       retire >= 21 days       → collapses out of the feed and is filtered for good
+     The ramp runs between two real levels rather than from full brightness: the row must LOOK
+     different on the day it crosses 14 days (otherwise the threshold does nothing a user could see),
+     and it must not be at full brightness on the day it is due to leave. `dim` is the ramp position
+     (0 on the dim day, 1 at the removal age) and `opacity` is what applyBlend() writes. A shelf that
+     is already in sv_onboard_retired never gets a verdict at all — blendFeed() drops it before
+     asking, because retirement is permanent. */
+  function verdictOf(key, now){
+    var d=daysIdle(key, now), days=+d.toFixed(3);
+    if(d >= DECAY.GONE_DAYS) return {key:key, days:days, verdict:'retire', dim:1, opacity:0};
+    if(d >= DECAY.DIM_DAYS){
+      var k=(d-DECAY.DIM_DAYS)/Math.max(1, DECAY.GONE_DAYS-DECAY.DIM_DAYS);
+      return {key:key, days:days, verdict:'dim', dim:+k.toFixed(3),
+              opacity:+(DECAY.DIM_TOP+(DECAY.DIM_FLOOR-DECAY.DIM_TOP)*k).toFixed(3)};
+    }
+    return {key:key, days:days, verdict:'keep', dim:0, opacity:1};
+  }
+  /* The shelf titles a profile produces — the SAME list fillShelves paints, so the stamps written at
+     the moment the picks are made are exactly the rows that are about to appear. */
+  function shelfKeys(p){
+    var out=[];
+    ((p&&p.genres)||[]).slice(0,2).forEach(function(g){ if(g) out.push(g) });
+    ((p&&p.langs)||[]).slice(0,1).forEach(function(L){ if(L) out.push(L+' music') });
+    if(p && (p.artists||[]).length) out.push('More like '+p.artists[0].name);
+    return out;
   }
   function retiredMap(){ var m=LSget(KR,null); return (m && typeof m==='object')?m:{} }
   function setRetired(key){ var m=retiredMap(); if(m[key]) return; m[key]=1; try{ LSset(KR,m) }catch(e){} }
   function graduated(){ return !!LSget(KG,0) }
+  /* THE FIXED ROWS, BY TITLE — every row on Home that is NOT one of this block's shelves (dynRows()
+     already excludes .oncSec). Read-only, and exactly the list the console hook reports as protected:
+     nothing in this block ever writes an opacity, a class or a removal to any node in it. */
+  function fixedTitles(){
+    return dynRows().map(function(n){
+      var h=n.querySelector('h2');
+      return h ? h.textContent.replace(/Play all|Show more/g,'').replace(/🎲[\s\S]*/,'').trim() : '';
+    });
+  }
+  /* ---------- the console hook's state: every shelf's age and verdict, and the protected rows ---------- */
   function feedState(){
-    var n=sincePlays(profile), ret=retiredMap();
-    return { plays:n, t:+tOf(n).toFixed(3), pushed:n>=TRANS.START, graduated:graduated(), thresholds:TRANS,
-             rows:rowsNow.map(function(r){ return {key:r.key, items:(r.items||[]).length, hits:rowHits(r.items), retired:!!ret[r.key]} }) };
+    var now=Date.now(), ret=retiredMap();
+    return { now:now, day:DECAY.DAY,
+             thresholds:{dim:DECAY.DIM_DAYS, gone:DECAY.GONE_DAYS, top:DECAY.DIM_TOP, floor:DECAY.DIM_FLOOR},
+             graduated:graduated(), fixed:fixedTitles(),
+             rows:rowsNow.map(function(r){
+               var v=verdictOf(r.key, now);
+               return {key:r.key, items:(r.items||[]).length, touchedAt:touchedAt(r.key), days:v.days,
+                       verdict:ret[r.key]?'retired':v.verdict, opacity:v.opacity};
+             }) };
   }
 
   /* ===== THE BLENDING FUNCTION — pure: no DOM, no fetch, no writes =====
      dynamic : the app's OWN rows, as opaque tokens in the order the app rendered them.
-     rows    : this block's picked shelves, [{key,title,items}].
-     st      : {t (0..1), pushed (bool), retired ({key:1})}.
-     Returns the layout `order` the feed should be in, plus ONE VERDICT PER PICKED SHELF:
-       keep    → painted, at `opacity` (dimmed by how far it has come)
+     rows    : this block's picked shelves, [{key,title,items,node}].
+     st      : {now (ms, defaulted to now), retired ({key:1})} — the clock and nothing else.
+     Returns every picked shelf's verdict, keyed to the request the user made:
+       keep    → painted at `opacity` (1 until the shelf is DIM_DAYS old, dimmed after that)
        retire  → painted once with the exit animation, then unmounted for good
-       dropped → not painted at all (it graduated on an earlier pass)
-     `dynamic` is never reordered, filtered or rewritten — the picked block only ever moves AROUND
-     it, which is precisely what leaves Listen again / Quick picks / Albums for you / Surprise me
-     untouched. Nothing here reads storage, so the same inputs always give the same plan. */
+       dropped → not painted at all (it retired on an earlier pass — retirement is permanent)
+     ABSOLUTELY PROTECTED FIXED ROWS. `dynamic` comes back as `guard`, and that is structural rather
+     than conditional: no keep/retire/dropped entry is ever built for a row in it, so there is no code
+     path below that could dim, collapse or unmount one — Listen again, Quick picks, Trending songs,
+     Popular right now, Albums for you and Surprise me are not "skipped by a check", they are never
+     inputs to one. The only keys verdictOf() is ever asked about are the picked shelves' own titles,
+     and a picked node that somehow arrived inside `dynamic` is reported in `misplaced` and left
+     ALONE rather than judged. Nothing here reads storage or the clock twice, so the same inputs
+     always give the same plan. */
   function blendFeed(dynamic, rows, st){
     dynamic = dynamic || []; rows = rows || []; st = st || {};
-    var keep=[], retire=[], dropped=[];
-    rows.forEach(function(r){
-      if((st.retired||{})[r.key]){ dropped.push(r); return }
-      var hits = rowHits(r.items);
-      var own  = Math.min(1, hits/TRANS.ROW_HITS);   // how much of this shelf the feed already serves
-      if(own>=1 || (st.t||0)>=1) retire.push({row:r, hits:hits, deg:1, opacity:0});
-      else {
-        /* Dimming is about the HANDOVER'S progress, so it starts only once the block has been pushed
-           below the app's rows: a picked shelf still sitting on top at full size but already half
-           faded reads as broken, not as temporary (measured — one row painted at 0.64 while on top).
-           A shelf the feed has fully taken over still leaves early, via `own` above. */
-        var deg = st.pushed ? Math.max(st.t||0, own) : 0;
-        keep.push({row:r, hits:hits, deg:deg, opacity:+(1-0.72*deg).toFixed(3)});
-      }
+    var keep=[], retire=[], dropped=[], guard=[], misplaced=[];
+    dynamic.forEach(function(r){                    // the app's rows: pass-through, never judged
+      if(r && r.classList && r.classList.contains('oncSec')) misplaced.push(r);
+      else guard.push(r);
     });
-    // whatever is leaving, leaves last
-    var picked = keep.concat(retire);
-    var order = st.pushed ? dynamic.slice().concat([PICKED]) : [PICKED].concat(dynamic.slice());
-    return { order:order, keep:keep, retire:retire, dropped:dropped, pushed:!!st.pushed, t:st.t||0,
+    var ret = st.retired || {}, now = st.now;
+    rows.forEach(function(r){
+      if(ret[r.key]){ dropped.push({row:r, key:r.key, reason:'retired'}); return }   // permanent
+      var v = verdictOf(r.key, now);
+      if(v.verdict==='retire') retire.push({row:r, key:r.key, days:v.days, verdict:'retire', deg:1, opacity:0});
+      else keep.push({row:r, key:r.key, days:v.days, verdict:v.verdict, deg:v.dim, opacity:v.opacity});
+    });
+    var picked = keep.concat(retire);               // whatever is leaving, leaves last
+    return { order:dynamic.slice().concat([PICKED]), keep:keep, retire:retire, dropped:dropped,
+             guard:guard, misplaced:misplaced, fixedCount:guard.length, refusedCount:0,
              dynamicCount:dynamic.length, pickedCount:picked.length };
   }
 
@@ -9791,8 +9907,11 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     profile = {v:1, langs:sel.langs.slice(), genres:sel.genres.slice(), artists:sel.artists.slice(), at:Date.now()};
     try{ LSset(KP, profile) }catch(e){}
     setSeen(1);
-    /* wave 6b: NEW picks ⇒ a fresh picked block that starts on top again, for the full three stages */
-    try{ LSset(KG,0); LSset(KR,null) }catch(e){}
+    /* wave 6b: NEW picks ⇒ a fresh picked block, for the full three stages. WAVE 12: the shelf clocks
+       are restarted with it — every key this profile will produce is stamped at the moment the picks
+       are made (which IS the install moment), and any stamp left by an older profile is dropped. */
+    try{ LSset(KG,0); LSset(KR,null); LSset(KT,null) }catch(e){}
+    shelfKeys(profile).forEach(function(k){ touch(k, profile.at) });
     rowsNow = [];
     var note=el('oncBuildNote');
     if(note && !sel.artists.length) note.textContent = 'Saving your languages and vibes…';
@@ -9819,32 +9938,37 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
      what is gone is every way back into it, so the overlay can only ever be its first run. The console
      hook below (svaraPersonalise.open()) is deliberately kept — it is how this wave tested the flow
      without wiping a profile. */
-  /* ===== WAVE 6b — THE HANDOVER =====
+  /* ===== WAVE 6b's HANDOVER, RE-CLOCKED IN WAVE 12 =====
      A picked shelf is a STARTING POINT: it exists to put something on Home before any listening has
-     happened. Once listening HAS happened the app's own rows are the better feed, so the picked ones
-     retire — without ever touching Listen again / Quick picks / Albums for you / Surprise me (this
-     block reads those rows and only ever moves its own block around them).
-     THE SIGNAL IS GENUINE PLAYS ONLY: sincePlays() counts entries in `ml_history` that are not seeds
-     and whose last play is at/after the profile was saved, so a feed that was only ever filled by
-     the picks can never graduate itself.
-     THREE STAGES, derived from that one number — nothing anywhere stores a stage:
-       n <  START (4)   picked shelves sit ON TOP, at full opacity;
-       n >= START       dimmed by t = (n-START)/(FULL-START) — wave 9 dropped the old whole-block
-                        push BELOW the app's rows, because every shelf now has its own anchor;
-       n >= FULL (18)   every remaining picked shelf retires: fade, collapse, unmounted.
-     A SINGLE SHELF CAN GO EARLIER: once ROW_HITS (2) of its own tracks have been genuinely played
-     SINCE the picks were made, that shelf is already what the feed is serving, so it retires first
-     whatever the global count is. Along with the two thresholds above, that rule is the only thing
-     that removes a row, and it can only ever match a row this block built — a shelf is identified by
-     `data-onckey`, which only fillShelves() writes.
-     WHAT REMEMBERS WHAT: `sv_onboard_retired` (key→1, keyed by the SHELF TITLE so it survives the
-     per-render rail keys) keeps a retired shelf from being painted in any later session, and
-     `sv_onboard_graduated` stops the block being fetched at all once every shelf has gone. Both are
-     cleared when the picks are made again (saveAndSeed) or reset (clear()).
+     happened, so the thing that finally removes it is its OWN inactivity — not the app's activity.
+     That is the whole change. The old clock was a running count of genuine plays (sincePlays(): 4 to
+     start dimming, 18 to retire, plus 2 plays of a shelf's own tracks to retire it early), and plays
+     are the wrong clock for this: a user who listened daily but never touched the shelf kept it alive
+     forever, one busy evening killed every shelf at once, and the "2 of its own tracks" rule retired
+     rows on search variance rather than on use (measured).
+     THE CLOCK: every shelf carries a `last_interacted_timestamp` — sv_onboard_touch, keyed by the
+     shelf title, the same stable key sv_onboard_retired uses. saveAndSeed stamps every key a new
+     profile will produce at the moment the picks are made (the install moment), and fillShelves
+     lazily stamps any shelf it paints that has no stamp yet, with NOW.
+     THREE STAGES, derived from that stamp and nothing else — nothing anywhere stores a stage:
+       < 14 days (DIM_DAYS)    full opacity;
+       >= 14 days              dimmed: 0.72 on the day, ramping to DIM_FLOOR (0.45) by the removal age;
+       >= 21 days (GONE_DAYS)  retires: fade, collapse, unmounted, and filtered for good.
+     RESET ON USE: playing a track that lives in a shelf's own list — from anywhere: the shelf's card,
+     search, a playlist, the queue — re-stamps that shelf and re-blends it in place, so a dimmed row
+     is back to 100% opacity the moment it is used. A retired shelf is NOT revived: retired is
+     permanent, and such a shelf is dropped before any verdict is even computed for it.
+     WHAT REMEMBERS WHAT: `sv_onboard_touch` (key→ms) is the clock; `sv_onboard_retired` (key→1) keeps
+     a retired shelf out of every later session; `sv_onboard_graduated` stops the block being fetched
+     at all once every shelf has gone. All three are cleared when the picks are made again
+     (saveAndSeed) or reset (clear()).
+     WHAT CAN NEVER AGE: the app's own rows. Listen again, Quick picks, Trending songs, Popular right
+     now, Albums for you and Surprise me are never dimmed, collapsed or unmounted — blendFeed() builds
+     no entry for them at all, and applyBlend() refuses any node that is not `.oncSec[data-onckey]`
+     even if a plan named it (see the notes on both).
      THE SEEDS IN ml_history ARE DELIBERATELY KEPT: they are the taste evidence Quick picks and the
-     radio score from, and they age out of Listen again on their own. Graduating removes the
-     duplicate SURFACE, not the signal behind it — dropping them would make the app's own rows
-     emptier, not freer, which is the opposite of the handover this is. */
+     radio score from, and they age out of Listen again on their own. The handover removes the
+     duplicate SURFACE, not the signal behind it. */
 
   /* The app's OWN Home rows, in the order the app rendered them (read-only). */
   function dynRows(){
@@ -9853,15 +9977,18 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
       return n && n.classList && n.classList.contains('sec') && !n.classList.contains('oncSec');
     });
   }
-  /* WAVE 9 — WHERE A PICKED SHELF GOES. The picked shelves used to be ONE block that sat above every
-     app row or below all of them. Each shelf is now placed at its own ANCHOR, so Home reads the way
-     the user asked for it:
-       Listen again → Quick picks → Trending songs → Popular right now → <vibes> → Albums for you →
-       <language> → <artist> → Surprise me
-     A vibe shelf anchors to the discovery pair, the language shelf to Albums for you, and the artist
-     shelf to the same anchor as the language one (it is built LAST, so it lands after it). The anchor
-     is found by the row's own <h2> text: the section carries no id of its own — the ids (#albRail,
-     #popRail) live on the rail INSIDE it — and that text is exactly what renderHome writes. */
+  /* WAVE 9, RE-ANCHORED IN WAVE 11 — WHERE A PICKED SHELF GOES. The picked shelves used to be ONE
+     block that sat above every app row or below all of them, and in wave 9 each shelf sat at its own
+     anchor. Home now reads the way the user asked for it:
+       Trending songs → Quick picks → Listen again → Popular right now → Albums for you →
+       <vibes> → <language> → <artist> → Surprise me
+     so every picked shelf shares ONE anchor — the "Albums for you" row — and the picked shelves
+     therefore sit together AFTER the app's own rows, in the order they were picked (a vibe, the
+     other vibe, the language, the artist). Sharing the anchor KEY is what makes that order hold:
+     `parked` chains shelves that name the same anchor one after another, so two shelves pointing at
+     one row keep their pick order instead of stacking up in reverse. The anchor is found by the
+     row's own <h2> text: the section carries no id of its own — the ids (#albRail, #popRail) live on
+     the rail INSIDE it — and that text is exactly what renderHome writes. */
   function rowByTitle(title){
     var sec=document.getElementById('homeSec'); if(!sec) return null;
     var kids=sec.children;
@@ -9878,11 +10005,14 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     var qs = [];
     var parked = {};      // anchor key -> the LAST shelf parked there, so two vibe shelves keep the
                           // order they were picked in instead of stacking up in reverse
-    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, cat:g, a:'disc'}) });
+    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, cat:g, a:'alb'}) });   /* wave 11: every shelf lands after Albums for you */
     (p.langs||[]).slice(0,1).forEach(function(L){ qs.push({t:L+' music', cat:L, a:'alb'}) });
     if((p.artists||[]).length){ var A=p.artists[0]; qs.push({t:'More like '+A.name, cat:A.name, aid:A.id, a:'alb'}) }
     for(var i=0;i<qs.length;i++){
       if(graduated()) return;                                     // the picked feed is over: stop asking
+      /* WAVE 12: a RETIRED shelf is not even fetched now. It used to be fetched, painted and then
+         removed by the plan — a search spent on a row that could never be shown again. */
+      if(retiredMap()[qs[i].t]) continue;
       if(rowsNow.some(function(r){ return r.key===qs[i].t })) continue;
       try{
         /* WAVE 7: a picked category is its MOST POPULAR songs, never the head of a bare
@@ -9923,14 +10053,18 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
           }).join('')+'</div>';
         /* the ANCHOR, or the end of the feed when Home has no such row (a variant without Quick
            picks, or a future reorder) — a shelf is never dropped for want of an anchor */
-        var anchor = parked[qs[i].a] || (qs[i].a==='disc'
-          ? (rowByTitle('Popular right now') || rowByTitle('Trending songs'))
-          : rowByTitle('Albums for you'));
+        var anchor = parked[qs[i].a] || rowByTitle('Albums for you') ||
+                     rowByTitle('Popular right now') || rowByTitle('Trending songs');
         if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(node, anchor.nextSibling);
         else sec.appendChild(node);
         parked[qs[i].a] = node;
+        /* WAVE 12: THE SHELF'S CLOCK STARTS HERE. saveAndSeed already stamped every key a fresh
+           profile produces; this line covers an install that predates the stamps (and any key it did
+           not predict), and it stamps with NOW — never with profile.at — so updating can never make
+           an existing shelf look weeks old and vanish on its first paint. */
+        if(!touchedAt(qs[i].t)) touch(qs[i].t, Date.now());
         rowsNow.push({key:qs[i].t, items:items, node:node});
-        applyBlend();                                              // dim or retire on THIS state
+        applyBlend();                                              // keep / dim / retire on THIS age
         if(typeof skReveal==='function'){ try{ skReveal(node) }catch(e){} }
       }catch(e){}
     }
@@ -9959,27 +10093,38 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     node.addEventListener('animationend', fin);
     setTimeout(fin, 900);                            // a throttled/background window may never fire it
   }
-  /* Apply the plan: each kept row gets its dim level, retiring rows are told to go, and rows that
-     graduated on an earlier pass are simply not in the DOM. Placement is NOT part of this any more
-     (wave 9): a shelf is placed once, at its anchor, and never moves again — what used to be a
-     whole-block push below the app's rows is now the dim level alone, and blendFeed()'s `order` is
-     kept only as the console hook's description of the layout. */
+  /* Apply the plan: each kept shelf gets its dim level, retiring ones are told to go, and shelves that
+     retired on an earlier pass are simply not in the DOM. Placement is NOT part of this (wave 11): a
+     shelf is placed once, at its anchor, and never moves again.
+     THE PERMISSION CHECK IS THE POINT. Every node this writes to must match .oncSec[data-onckey] AND
+     be a shelf THIS render actually painted (rowsNow) — the class and attribute only fillShelves()
+     ever writes, and the only markup the wave-6b CSS names. Anything else is REFUSED, counted, and
+     left exactly as it was, so even a corrupted plan cannot dim, collapse or unmount a fixed row:
+     the app's own rows are not merely missing from the verdicts, they are un-writable from here. */
   function applyBlend(){
-    var sec=document.getElementById('homeSec'); if(!sec) return;
-    var dyn = dynRows();
-    var n = sincePlays(profile);
-    var plan = blendFeed(dyn, rowsNow, {t:tOf(n), pushed:n>=TRANS.START, retired:retiredMap()});
+    var sec=document.getElementById('homeSec'); if(!sec) return {fixed:0, judged:0, refused:0};
+    var mine = rowsNow.filter(function(r){ return r && r.node });
+    var plan = blendFeed(dynRows(), rowsNow, {now:Date.now(), retired:retiredMap()});
+    var judged=0, refused=0;
+    function own(nd){                                  // may this node be touched at all?
+      judged++;
+      var ok = !!(nd && nd.classList && nd.classList.contains('oncSec') && nd.getAttribute('data-onckey')
+                  && mine.some(function(r){ return r.node===nd }));
+      if(!ok) refused++;
+      return ok;
+    }
     plan.keep.forEach(function(v){
-      var nd=v.row.node; if(!nd) return;
+      var nd=v.row.node; if(!own(nd)) return;
       nd.style.setProperty('--oncOp', String(v.opacity));
-      nd.style.opacity = String(v.opacity);                            // dimmed by how far it has come
+      nd.style.opacity = String(v.opacity);        // 1 until it is 14 days old, then dimmed
     });
-    plan.retire.forEach(function(v){ if(v.row.node) retireRow(v.row.node, v.row.key) });
-    plan.dropped.forEach(function(r){ if(r.node && r.node.parentNode) r.node.parentNode.removeChild(r.node) });
+    plan.retire.forEach(function(v){ var nd=v.row.node; if(own(nd)) retireRow(nd, v.row.key) });
+    plan.dropped.forEach(function(r){ var nd=r.row.node; if(own(nd) && nd.parentNode) nd.parentNode.removeChild(nd) });
     if(rowsNow.length && !plan.pickedCount){                           // everything has already gone
       try{ LSset(KG,1) }catch(e){}
       rowsNow = [];
     }
+    return {fixed:plan.fixedCount, judged:judged, refused:refused, plan:plan};
   }
   function decorateHome(){
     if(typeof curPage==='undefined' || curPage!=='home') return;
@@ -9990,17 +10135,31 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     rowsNow = [];
     fillShelves(sec, profile);                       // every shelf lands at its own anchor
   }
-  /* ---------- one genuine play can move the feed on; a plain one must not ---------- */
-  /* Called from the wrapped notePlay, i.e. from a REAL play and nothing else. The block is re-blended
-     IN PLACE — style writes, a possible move, a possible retirement — and never re-rendered: no
-     innerHTML is rebuilt, so the user's scroll position and any open player stay exactly where they
-     were, the fade is the CSS transition rather than a jump, and the shelf list cannot change under
-     the verdicts (re-fetching a row mid-run is what would make a retirement depend on search
-     variance instead of on listening). When the last shelf leaves, the block removes itself from
-     here — no Home repaint is involved anywhere in the handover. */
-  function afterPlay(){
-    if(!profile || !rowsNow.length) return;
-    if(document.querySelector('#homeSec .oncSec')) applyBlend();
+  /* ---------- RESET ON INTERACTION: a genuine play re-stamps every shelf that serves that track ---------- */
+  /* Called from the wrapped notePlay, i.e. from a REAL play and nothing else. A track that lives in a
+     picked shelf's own list is the clearest possible "this shelf is still useful" signal, and it
+     counts wherever the play came FROM — the shelf's own card, search results, a playlist, the queue
+     — which is why the test is the track's id against each shelf's items rather than "was this click
+     on the row". The shelf is re-stamped and the block re-blended IN PLACE (style writes only: no
+     innerHTML is rebuilt, so scroll position, the open player and the shelf list itself all stay put).
+     A play that belongs to no shelf does nothing at all. */
+  function afterPlay(it){
+    if(!it || !it.id || !rowsNow.length) return 0;
+    var hit=0;
+    rowsNow.forEach(function(r){
+      if((r.items||[]).some(function(x){ return x && x.id===it.id })){ touch(r.key, Date.now()); hit++ }
+    });
+    if(hit) applyBlend();
+    return hit;
+  }
+  /* A CLICK STRAIGHT ON A SHELF'S CARD is an interaction even if the stream never starts, so the reset
+     never depends on notePlay having fired. The node carries the stable shelf title. */
+  function touchShelf(nd){
+    var key = (nd && nd.getAttribute) ? nd.getAttribute('data-onckey') : '';
+    if(!key) return 0;
+    var ts = touch(key, Date.now());
+    try{ applyBlend() }catch(e){}        // a dimmed shelf is back at 100% opacity right away
+    return ts;
   }
 
   /* ---------- the four wrappers ---------- */
@@ -10014,8 +10173,8 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   notePlay = function(it){
     var r = _notePlay.apply(this, arguments);
     try{ if(it && it.id && hist[it.id] && hist[it.id].seed){ delete hist[it.id].seed; LSset('ml_history', hist) } }catch(e){}
-    /* wave 6b: the play has been recorded, so ask the handover whether the feed's shape changed */
-    try{ afterPlay() }catch(e){}
+    /* wave 12: the play has been recorded, so reset the clock of any shelf that serves this track */
+    try{ afterPlay(it) }catch(e){}
     return r;
   };
   var _histItems = _4asHistItems;
@@ -10066,6 +10225,9 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
       var card=t.closest('.rail'); var cid=card?card.getAttribute('data-id'):'';
       var idx=arr2.map(function(x){ return x.id }).indexOf(cid);
       try{ playList(arr2, idx>=0?idx:0, true) }catch(e){}
+      /* WAVE 12: PLAYING OUT OF THIS SHELF IS USING IT — the row's own stamp is reset here as well as
+         through notePlay, so a card whose stream fails to start still counts as an interaction. */
+      touchShelf(wrap.closest(ONC_SEL) || wrap);
       return;
     }
   });
@@ -10109,13 +10271,19 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     clear: function(){
       clearSeeds(); LSset(KP,null); setSeen(0);
       /* wave 6b: a reset revives the picked feed too — no retirement and no graduation left behind */
-      try{ LSset(KG,0); LSset(KR,null) }catch(e){}
+      try{ LSset(KG,0); LSset(KR,null); LSset(KT,null) }catch(e){}
       rowsNow = [];
     },
-    /* ---------- wave 6b hooks ---------- */
-    state: feedState,          // the one number, the stage, and every picked shelf's verdict
-    blend: blendFeed,          // pure: (dynamicRows, pickedRows, state) -> layout plan
-    since: function(){ return sincePlays(profile) }   // genuine plays since the picks were made
+    /* ---------- wave 12 hooks: the shelf clock ---------- */
+    state: feedState,          // every shelf's age in days + verdict, and the protected rows by title
+    blend: blendFeed,          // pure: (dynamicRows, pickedRows, {now, retired}) -> layout plan
+    days: daysIdle,            // (shelfTitle[, now]) -> days since its last interaction
+    touch: touch,              // (shelfTitle[, at]) -> stamp it; `at` back-dates, which is how the
+                               //   14/21-day thresholds are testable without waiting three weeks
+    verdict: verdictOf,        // (shelfTitle[, now]) -> {verdict, days, dim, opacity}
+    shelfKeys: shelfKeys,      // the titles a profile produces — the keys the clock is kept under
+    fixed: fixedTitles,        // the app's own rows, by title: the ones that can never decay
+    apply: applyBlend          // re-apply the plan now; returns {fixed, judged, refused}
   };
 })();
 </script>
@@ -10179,6 +10347,46 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
       The two grid views are untouched: no skeleton is ever built inside .railwrap.algrid/.libgrid. */
 .railwrap>.sk-region{flex:1 1 auto;min-width:0}
 .railwrap>.sk-region>.railwrap{width:100%}
+</style>
+<style id="v11trendcss">
+/* ================= Wave 11 — Trending songs as wide feature cards =================
+   THE ROW CHANGED SHAPE, NOT ITS MARKUP. A Trending card is the SAME .rail card every other row
+   renders — same .art / .rname / .rsub2 children, same data-rail/data-id hooks, same railCard() —
+   because everything below is scoped to the SECTION class renderHome now puts on that row
+   (.heroSec). Nothing was copied, so the card keeps its click-to-play, its hover play button, its
+   artist links and its lazy image without a single line of new JS. The skeleton reuses skRail()
+   for the same reason: its placeholder cards take their width and aspect from these same rules.
+
+   1) THE CARD IS A 16:9 FEATURE, NOT A SQUARE COVER. --herocols is the card COUNT, exactly like
+      --railcols on the cover rows, so the shape holds at any window width rather than being a fixed
+      pixel size that only looks right on one screen. Measured on the user's own window (1784x950,
+      a 1500px rail): a card is 458x257 — the same proportions as the Apple Music card in their
+      reference — where a cover card in the row below it is 221x271. Three whole cards fit with the
+      fourth peeking, and the responsive steps keep that promise down the sizes: 900px window →
+      2.2 columns, 271x153 per card; 600px → 1.2 columns, 261x147.
+   2) THE TEXT SITS IN THE ART, OVER A BOTTOM FADE. The title and artist are absolutely positioned in
+      the card's lower-left corner — .rail is the positioning context, so the two lines cost no
+      height and the card is exactly as tall as its cover — and a black gradient rising from the
+      bottom edge (.art::after) is what keeps them legible over any artwork, which is the whole
+      reason a feature card can carry text inside the image at all. The gradient is a child of .art
+      and the text is a sibling that paints after it, so no z-index trick is needed (2 is insurance).
+   3) NOTHING ELSE MOVES. The docked .ov hover button keeps its behaviour and only gains padding so
+      it does not sit on top of the title at the card's new height.
+   The two GRID views are untouched: no .heroSec ever wraps .railwrap.algrid or .libgrid, and a
+   single-class .rail rule can never reach them anyway. */
+.heroSec .railwrap{--railgap:16px;--herocols:3.2;gap:var(--railgap)}
+.heroSec .rail{position:relative;width:clamp(240px,calc((100% - (var(--herocols) - 1) * var(--railgap)) / var(--herocols)),660px)}
+.heroSec .rail .art{aspect-ratio:16/9;border-radius:16px}
+.heroSec .rail .art::after{content:'';position:absolute;left:0;right:0;bottom:0;height:68%;pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.28) 42%,rgba(0,0,0,.78) 100%)}
+.heroSec .rail .rname,.heroSec .rail .rsub2{position:absolute;left:16px;right:16px;margin:0;z-index:2;
+  text-shadow:0 1px 10px rgba(0,0,0,.55)}
+.heroSec .rail .rname{bottom:31px;font-size:17px;font-weight:750}
+.heroSec .rail .rsub2{bottom:14px;font-size:12.5px;color:rgba(255,255,255,.72)}
+.heroSec .rail .ov{padding:12px}
+.heroSec .rail .ov .pb{width:40px;height:40px}
+@media(max-width:1000px){.heroSec .railwrap{--herocols:2.2}}
+@media(max-width:660px){.heroSec .railwrap{--herocols:1.2}}
 </style>
 </body>
 </html>
