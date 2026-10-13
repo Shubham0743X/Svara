@@ -47,7 +47,7 @@ img{display:block}
    instead of the tracks losing their equality, and it keeps its ideal width on any normal window
    (504 = the 236px sidebar plus 16px of clearance on both sides, so the field can never slide
    under the sidebar: measured at the 900px minimum window it is 396px wide, 16px clear). */
-#top{display:grid;grid-template-columns:minmax(96px,1fr) minmax(0,min(560px,calc(100vw - 504px))) minmax(96px,1fr);align-items:center;gap:10px;padding:14px 22px 8px;position:relative;z-index:4;margin-left:-236px;width:calc(100% + 236px)}
+#top{display:grid;grid-template-columns:minmax(96px,1fr) minmax(0,min(560px,calc(100vw - 504px))) minmax(96px,1fr);align-items:center;gap:10px;padding:20px 22px 8px;position:relative;z-index:4;margin-left:-236px;width:calc(100% + 236px)}
 .srch{grid-column:2;width:100%;position:relative;display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 5px 3px 14px;gap:8px;transition:border-color .2s}
 .srch:focus-within{border-color:var(--acc2)}
 .srch .ic{width:16px;height:16px;color:var(--dim)}
@@ -90,6 +90,20 @@ img{display:block}
   display:flex;align-items:center;gap:8px}
 .npdot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.8)}
 #pgTitle.pgIdle .npdot{visibility:hidden}   /* UI-9: idle — no dot at all; `visibility` (not display) keeps its 8px slot in the flex row */
+/* WAVE 9 — the IDLE Home header is TIGHTER than the playing one, on purpose.
+   UI-11 reserved the now-playing box in both states so the pills never moved; the cost is that
+   with nothing playing the user looks at ~62px of blank rhythm between the search bar and the mood
+   pills (measured on the user's own window: pills 104px below the search bar). The box is now
+   reserved at FULL height only while a track is loaded (the state that actually prints
+   "Now playing / title · artist"); idle it collapses to the dot's own 8px plus one 12px hint line,
+   which puts the pills ~32px higher. Starting a track therefore DOES move the pills now — that is
+   the requested behaviour ("less gap when nothing is playing, same gap as now when something is"),
+   and it is the one place this file still trades a layout jump for breathing room.
+   Both rules are scoped to Home-not-hidden AND .pgIdle: #pgTitle keeps its classes across a page
+   switch (nothing ever removes .pgIdle except homeLine), so the idle guard alone would follow the
+   user onto History and tighten ITS subtitle. */
+#scroll:has(#homeSec:not([hidden])) #pgTitle.pgIdle{margin:2px 2px 0;font-size:0;line-height:0;gap:0}
+#scroll:has(#homeSec:not([hidden])) #pgTitle.pgIdle+#pgSub{margin:0 2px 12px;font-size:12px;line-height:1}
 /* home sections */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0 2px}
 .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 15px;font-size:13px;white-space:nowrap;color:var(--dim)}
@@ -986,7 +1000,10 @@ async function renderHome(){
   if(!none){
     if(recent.length)h+=`<div class="sec"><h2>Listen again</h2>${railHTML(recent,'la')}</div>`;
     h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button>${more?'<button class="go" data-qpmore="1">Show more</button>':''}</h2>${listHTML(quickList,'qpGrid')}</div>`;
-    h+=albSec+trendSec+popSec;
+    /* WAVE 9 ORDER: the discovery pair first, then Albums for you. The picked onboarding shelves are
+       placed around these rows by the wave-6 block (see decorateHome) — vibes after the discovery
+       pair, the language and artist shelves after Albums for you. */
+    h+=trendSec+popSec+albSec;
     h+=`<div class="sec"><h2>Surprise me<button class="go" id="diceBig">🎲 Play a radio from your taste</button></h2><div class="empty" style="padding:6px 2px">Your radio never jumps between languages — it seeds from what you listen to most.</div></div>`;
   }else{
     h+=`<div class="sec"><h2>Welcome to Svara</h2><div class="empty">Search any song and press play.<br>After a few songs, Home fills with <b>Listen again</b>, <b>Quick picks</b> and <b>Albums for you</b> — all from your taste.</div></div>`;
@@ -9812,7 +9829,8 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
      the picks can never graduate itself.
      THREE STAGES, derived from that one number — nothing anywhere stores a stage:
        n <  START (4)   picked shelves sit ON TOP, at full opacity;
-       n >= START       pushed BELOW every dynamic row and dimmed by t = (n-START)/(FULL-START);
+       n >= START       dimmed by t = (n-START)/(FULL-START) — wave 9 dropped the old whole-block
+                        push BELOW the app's rows, because every shelf now has its own anchor;
        n >= FULL (18)   every remaining picked shelf retires: fade, collapse, unmounted.
      A SINGLE SHELF CAN GO EARLIER: once ROW_HITS (2) of its own tracks have been genuinely played
      SINCE the picks were made, that shelf is already what the feed is serving, so it retires first
@@ -9835,12 +9853,34 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
       return n && n.classList && n.classList.contains('sec') && !n.classList.contains('oncSec');
     });
   }
-  async function fillShelves(host, p){
+  /* WAVE 9 — WHERE A PICKED SHELF GOES. The picked shelves used to be ONE block that sat above every
+     app row or below all of them. Each shelf is now placed at its own ANCHOR, so Home reads the way
+     the user asked for it:
+       Listen again → Quick picks → Trending songs → Popular right now → <vibes> → Albums for you →
+       <language> → <artist> → Surprise me
+     A vibe shelf anchors to the discovery pair, the language shelf to Albums for you, and the artist
+     shelf to the same anchor as the language one (it is built LAST, so it lands after it). The anchor
+     is found by the row's own <h2> text: the section carries no id of its own — the ids (#albRail,
+     #popRail) live on the rail INSIDE it — and that text is exactly what renderHome writes. */
+  function rowByTitle(title){
+    var sec=document.getElementById('homeSec'); if(!sec) return null;
+    var kids=sec.children;
+    for(var i=0;i<kids.length;i++){
+      var n=kids[i];
+      if(!n || !n.classList || !n.classList.contains('sec') || n.classList.contains('oncSec')) continue;
+      var h=n.querySelector('h2'); if(!h) continue;
+      if(h.textContent.replace(/Play all|Show more/g,'').trim().indexOf(title)===0) return n;
+    }
+    return null;
+  }
+  async function fillShelves(sec, p){
     var mine = ++homeGen6;
     var qs = [];
-    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, cat:g}) });
-    (p.langs||[]).slice(0,1).forEach(function(L){ qs.push({t:L+' music', cat:L}) });
-    if((p.artists||[]).length){ var A=p.artists[0]; qs.push({t:'More like '+A.name, cat:A.name, aid:A.id}) }
+    var parked = {};      // anchor key -> the LAST shelf parked there, so two vibe shelves keep the
+                          // order they were picked in instead of stacking up in reverse
+    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, cat:g, a:'disc'}) });
+    (p.langs||[]).slice(0,1).forEach(function(L){ qs.push({t:L+' music', cat:L, a:'alb'}) });
+    if((p.artists||[]).length){ var A=p.artists[0]; qs.push({t:'More like '+A.name, cat:A.name, aid:A.id, a:'alb'}) }
     for(var i=0;i<qs.length;i++){
       if(graduated()) return;                                     // the picked feed is over: stop asking
       if(rowsNow.some(function(r){ return r.key===qs[i].t })) continue;
@@ -9881,9 +9921,16 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
                page and can never start the shelf. */
             return railCard(it, 'onc');
           }).join('')+'</div>';
-        host.appendChild(node);
+        /* the ANCHOR, or the end of the feed when Home has no such row (a variant without Quick
+           picks, or a future reorder) — a shelf is never dropped for want of an anchor */
+        var anchor = parked[qs[i].a] || (qs[i].a==='disc'
+          ? (rowByTitle('Popular right now') || rowByTitle('Trending songs'))
+          : rowByTitle('Albums for you'));
+        if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(node, anchor.nextSibling);
+        else sec.appendChild(node);
+        parked[qs[i].a] = node;
         rowsNow.push({key:qs[i].t, items:items, node:node});
-        applyBlend(host);                                          // place, dim or retire on THIS state
+        applyBlend();                                              // dim or retire on THIS state
         if(typeof skReveal==='function'){ try{ skReveal(node) }catch(e){} }
       }catch(e){}
     }
@@ -9903,29 +9950,25 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
       node.removeEventListener('animationend', fin);
       setRetired(key);                               // never painted again, in any later session
       if(node.parentNode) node.parentNode.removeChild(node);
-      var host=document.getElementById('oncShelves');
-      if(host && !host.querySelector('.oncSec')){    // the last one just left
+      var sec=document.getElementById('homeSec');
+      if(sec && !sec.querySelector('.oncSec')){      // the last one just left
         try{ LSset(KG,1) }catch(e){}
-        if(host.parentNode) host.parentNode.removeChild(host);
         rowsNow = [];                                // nothing is painted, so nothing is tracked
       }
     }
     node.addEventListener('animationend', fin);
     setTimeout(fin, 900);                            // a throttled/background window may never fire it
   }
-  /* Apply the plan. The DOM is a projection of blendFeed()'s output and of nothing else: placement
-     comes from the plan's own `order`, each kept row gets its dim level, retiring rows are told to
-     go, and rows that graduated on an earlier pass are simply not in the DOM. */
-  function applyBlend(host){
-    if(!host || !host.parentNode) return;
+  /* Apply the plan: each kept row gets its dim level, retiring rows are told to go, and rows that
+     graduated on an earlier pass are simply not in the DOM. Placement is NOT part of this any more
+     (wave 9): a shelf is placed once, at its anchor, and never moves again — what used to be a
+     whole-block push below the app's rows is now the dim level alone, and blendFeed()'s `order` is
+     kept only as the console hook's description of the layout. */
+  function applyBlend(){
+    var sec=document.getElementById('homeSec'); if(!sec) return;
     var dyn = dynRows();
     var n = sincePlays(profile);
     var plan = blendFeed(dyn, rowsNow, {t:tOf(n), pushed:n>=TRANS.START, retired:retiredMap()});
-    var lastTok = plan.order[plan.order.length-1];
-    try{
-      if(lastTok === PICKED) host.parentNode.appendChild(host);        // below every dynamic row
-      else if(dyn[0]) host.parentNode.insertBefore(host, dyn[0]);      // still on top
-    }catch(e){}
     plan.keep.forEach(function(v){
       var nd=v.row.node; if(!nd) return;
       nd.style.setProperty('--oncOp', String(v.opacity));
@@ -9935,25 +9978,17 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
     plan.dropped.forEach(function(r){ if(r.node && r.node.parentNode) r.node.parentNode.removeChild(r.node) });
     if(rowsNow.length && !plan.pickedCount){                           // everything has already gone
       try{ LSset(KG,1) }catch(e){}
-      if(host.parentNode) host.parentNode.removeChild(host);
       rowsNow = [];
     }
   }
   function decorateHome(){
     if(typeof curPage==='undefined' || curPage!=='home') return;
     var sec = document.getElementById('homeSec'); if(!sec) return;
-    if(!profile) return;                             // no profile, no picked shelves — and no offer
+    if(!profile) return;                             // no profile, no picked shelves
     if(graduated()) return;                          // wave 6b: the picked feed has served its purpose
-    if(sec.querySelector('#oncShelves')) return;      // one set of shelves per Home render, never two
+    if(sec.querySelector('.oncSec')) return;         // one set of shelves per Home render, never two
     rowsNow = [];
-    var host = document.createElement('div');
-    host.id = 'oncShelves';
-    var dyn = dynRows();
-    /* the first placement already honours the handover, so a pushed block is never born on top and
-       then jumped down: past START it starts life below the app's own rows */
-    if(sincePlays(profile) >= TRANS.START && dyn.length) sec.appendChild(host);
-    else sec.insertBefore(host, dyn[0] || null);     // right under the mood pills, above Listen again
-    fillShelves(host, profile);
+    fillShelves(sec, profile);                       // every shelf lands at its own anchor
   }
   /* ---------- one genuine play can move the feed on; a plain one must not ---------- */
   /* Called from the wrapped notePlay, i.e. from a REAL play and nothing else. The block is re-blended
@@ -9965,8 +10000,7 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
      here — no Home repaint is involved anywhere in the handover. */
   function afterPlay(){
     if(!profile || !rowsNow.length) return;
-    var host=document.getElementById('oncShelves');
-    if(host) applyBlend(host);
+    if(document.querySelector('#homeSec .oncSec')) applyBlend();
   }
 
   /* ---------- the four wrappers ---------- */
@@ -10131,6 +10165,20 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
 @media(max-width:660px){.list.qpGrid{--qpcols:1.2}}
 .sec{margin-top:40px}
 .sec h2{margin-bottom:16px}
+/* 4) THE SKELETON MUST MEASURE LIKE THE ROW IT STANDS IN. skRail() wraps its placeholders in a
+      second .railwrap (the skeleton region needs a block context for its shimmer band) and that
+      nested wrapper is a FLEX ITEM of the row's own .railwrap. A skeleton card has no intrinsic
+      width — its .art is empty and its bars are percentage widths — so the nested wrapper's
+      max-content is just the five 16px gaps, and being `overflow-x:auto` its automatic minimum is
+      0 as well: the whole region collapsed to 80px and every placeholder fell back to the clamp's
+      150px floor, clipped to that 80px sliver by the region's own overflow:hidden. Measured on the
+      same Home: skeleton cards 150x194 in an 80px region, real cards 221x260. One 80px placeholder
+      is all a user saw of "Albums for you" for the entire album fetch — exactly the single dark
+      box in the report. The region now takes the row's full width and the nested wrapper is 100%
+      of it, so a placeholder is born at the width the real card will land on (221px, not 150).
+      The two grid views are untouched: no skeleton is ever built inside .railwrap.algrid/.libgrid. */
+.railwrap>.sk-region{flex:1 1 auto;min-width:0}
+.railwrap>.sk-region>.railwrap{width:100%}
 </style>
 </body>
 </html>
