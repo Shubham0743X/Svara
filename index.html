@@ -10690,10 +10690,12 @@ window.setTheme=function(u){
 })();
 </script>
 <style id="v15slidecss">
-/* ===== WAVE 15 — horizontal page slide (Home ⇄ every other main view) =========================
+/* ===== WAVE 15 + 16 — horizontal page slide (EVERY page change, not just Home ⇄ page) ========
    FORWARD (Home → Liked music / Liked albums / a playlist / Library / search results / an artist
-   page / an album page): the incoming page ARRIVES FROM THE LEFT.
-   BACK HOME: Home ARRIVES FROM THE RIGHT.
+   page / an album page): the incoming page ARRIVES FROM THE LEFT. So does EVERY LATERAL MOVE —
+   Liked music ⇄ Liked albums ⇄ a playlist ⇄ Library, artist → artist, album → album (Wave 16).
+   BACK — anything one level OUT of the current page, which in this app is always Home (and an
+   artist/album page's own Back, which reads as the same move): Home ARRIVES FROM THE RIGHT.
    The pair is mirrored on purpose — the two signs live in ONE place (NAV in #v15slidejs), so
    flipping to the iOS convention (forward from the right, back from the left) is a two-character
    edit there and nothing else changes.
@@ -10721,27 +10723,44 @@ html[data-gfx="reduced"] #homeSec.svSlideL,html[data-gfx="reduced"] #dynSec.svSl
 html[data-gfx="reduced"] #homeSec.svSlideR,html[data-gfx="reduced"] #dynSec.svSlideR,html[data-gfx="reduced"] #artSec.svSlideR,html[data-gfx="reduced"] #albSec.svSlideR{animation:none}
 </style>
 <script id="v15slidejs">
-/* ===== WAVE 15 — horizontal page slide, the JS half ===========================================
-   ADDITIVE: it observes the `hidden` attribute the app ALREADY toggles on its page containers and
-   plays a class. No renderer, no navigate function and no CSS above is modified — goHome(),
-   showDyn(), openArtist(), openAlbumPage() and restoreView() all keep working exactly as they did.
+/* ===== WAVE 15 + 16 — horizontal page slide, the JS half ======================================
+   ADDITIVE: it observes the DOM the app ALREADY writes on its page containers (the `hidden` flip,
+   and the in-place rebuild) and plays a class. No renderer, no navigate function and no CSS above
+   is modified — goHome(), showDyn(), openArtist(), openAlbumPage(), restoreView() and
+   albRestoreView() all keep working exactly as they did.
 
    WHY AN OBSERVER AND NOT A WRAPPED FUNCTION: the app's page switch is a single `hidden` flip that
    several layers already rely on (Wave 4BC's ambient wash and the wave's own syncView both observe
-   #homeSec for the same reason). A wrapper would miss restoreView() and the artist/album paths,
-   which set `hidden` directly inside the v3js scope.
+   #homeSec for the same reason). A wrapper would miss restoreView() / albRestoreView() and the
+   artist/album paths, which write their containers directly inside the v3js scope.
 
-   IT CANNOT FIRE ON A REPAINT. Liked music / Liked albums / Library / this app's Quick picks page
-   rebuild themselves in place (a Like calls showDyn() again with the page's own recipe); showDyn
-   writes `homeSec.hidden = true` and `dynSec.hidden = false` while BOTH are already in that state,
-   and assigning an IDL boolean that is already right does not touch the attribute — so there is no
-   mutation, and the slide is only ever a real page CHANGE. */
+   THE TRIGGER IS THE PAGE'S IDENTITY, NOT THE `hidden` ATTRIBUTE (Wave 16). The first version
+   listened for the attribute flip alone, so only Home ⇄ page ever moved: every lateral move —
+   Liked music → Liked albums → a playlist → Library — rebuilds the SAME container (#dynSec) in
+   place, and artist → artist rebuilds #artSec in place, so the attribute never changes and
+   nothing played (reported). The trigger is now a KEY read from what is actually rendered:
+   'home' for #homeSec, 'dyn:<#pgTitle>|<active Library chip>' for #dynSec, and '<sec>:<hero
+   .art-name>' for #artSec / #albSec. A real page change always moves it, in whichever container
+   it happens; a REPAINT always keeps it — a Like rebuilds Liked music under the same title and
+   the same chip, so the slide stays silent on a heart click.
+
+   DIRECTION IS LEVEL BASED. Home is the floor (0), the Library-style lists are one step in (1),
+   artist and album pages are the deepest (2). A move to a SHALLOWER page is a Back and enters
+   from the RIGHT; forward moves and lateral moves inside one level enter from the LEFT. That is
+   the reported shape: Home → anything from the left, anything → Home from the right, and
+   Liked music ⇄ Liked albums ⇄ a playlist all from the left, both ways.
+
+   AN EMPTY KEY MEANS "THIS CONTAINER HAS NO PAGE YET" and is never adopted: the artist and album
+   pages paint a skeleton first (no .art-name) and the real page when the fetch lands, so
+   artist → artist resolves ONCE, on the real render, instead of sliding for the skeleton and
+   again for the page. */
 (function(){
 'use strict';
 /* ONE config object — every knob is a single edit right here. */
-var NAV = { ms:260, dx:46, home:1, other:-1 };
-/* home:+1  => Home enters from the RIGHT when you come back to it
-   other:-1 => every other page enters from the LEFT when you go forward into it */
+var NAV = { ms:260, dx:46, back:1, fwd:-1 };
+/* back:+1 => a page one level OUT of the current one — always Home, or an artist/album page's own
+              Back — enters from the RIGHT
+   fwd:-1  => every forward step AND every lateral step inside one level enters from the LEFT */
 var root = document.documentElement;
 try{ root.style.setProperty('--sv-nav-ms', NAV.ms + 'ms'); root.style.setProperty('--sv-nav-dx', NAV.dx + 'px') }catch(e){}
 
@@ -10754,8 +10773,13 @@ function reduced(){
   return false;
 }
 
-var IDS = ['homeSec','dynSec','artSec','albSec'];
-var seen = {};                                  /* id -> the `hidden` value we have already acted on */
+/* depth of every page container: Home is the floor, the Library-style lists are one step in,
+   artist and album pages are the deepest thing the app has */
+var LEVEL = { homeSec:0, dynSec:1, artSec:2, albSec:2 };
+var ORDER = ['homeSec','dynSec','artSec','albSec'];
+
+function byId(id){ return document.getElementById(id) }
+function textOf(node){ return node ? String(node.textContent || '').replace(/\s+/g,' ').trim() : '' }
 
 function play(node, dir){
   if(!node || reduced()) return;
@@ -10783,30 +10807,219 @@ function play(node, dir){
   node.__svNavT = setTimeout(done, NAV.ms + 140);
 }
 
+/* the ONE page container on screen. #artSec/#albSec do not exist until their first visit
+   (artSection()/albSection() insert them lazily), so nothing here assumes all four are present. */
+function active(){
+  for(var i = 0; i < ORDER.length; i++){ var n = byId(ORDER[i]); if(n && !n.hidden) return n }
+  return null;
+}
+/* THE PAGE'S IDENTITY, in one string. A real page change always moves it, in whichever container
+   it happens; a repaint always keeps it. '' means "this container has no page yet". */
+function keyOf(sec){
+  if(!sec) return '';
+  if(sec.id === 'homeSec') return 'home';
+  if(sec.id === 'dynSec'){
+    var t = textOf(byId('pgTitle'));
+    if(!t) return '';
+    var chip = sec.querySelector('[data-libtab].on');       /* the Library's own tab strip */
+    return 'dyn:' + t + (chip ? '|' + chip.getAttribute('data-libtab') : '');
+  }
+  /* #artSec AND #albSec paint the same hero — <div class="art-name"> is the artist's name on one
+     page and the album's title on the other, so ONE reader covers both. */
+  var name = textOf(sec.querySelector('.art-name'));
+  return name ? sec.id + ':' + name : '';
+}
+var last = null, lastLevel = -1;      /* the page on screen, and how deep that page is */
+
+function sync(){
+  var sec = active(); if(!sec) return;
+  var key = keyOf(sec);
+  /* NOT RENDERED YET (a skeleton, or a page still mounted empty): wait for the next mutation
+     rather than adopting a half-built page — this is what stops artist → artist sliding twice. */
+  if(!key) return;
+  var lvl = LEVEL[sec.id];
+  if(last === null){ last = key; lastLevel = lvl; return }   /* the page we booted on: adopt it */
+  if(key === last) return;                                   /* a repaint of the page already here */
+  var dir = lvl < lastLevel ? NAV.back : NAV.fwd;
+  last = key; lastLevel = lvl;
+  play(sec, dir);
+}
+
 function watch(node){
-  if(!node || !window.MutationObserver) return;
-  seen[node.id] = node.hidden;
+  if(!node || !window.MutationObserver || node.__svNavW) return;
+  node.__svNavW = 1;
   try{
-    new MutationObserver(function(){
-      var now = node.hidden;
-      if(now === seen[node.id]) return;          /* not a real change */
-      seen[node.id] = now;
-      if(now) return;                           /* a page LEAVING: the arriving one does the moving */
-      play(node, node.id === 'homeSec' ? NAV.home : NAV.other);
-    }).observe(node, { attributes:true, attributeFilter:['hidden'] });
+    new MutationObserver(sync).observe(node, {
+      attributes:true, attributeFilter:['hidden'],   /* the container is swapped: Home ⇄ a page */
+      childList:true, subtree:true                   /* the page is rebuilt in place: lateral move */
+    });
   }catch(e){}
 }
 function scan(){
-  for(var i = 0; i < IDS.length; i++){
-    var n = document.getElementById(IDS[i]);
-    /* #artSec and #albSec are created on the FIRST artist/album visit, so they are watched when
-       they appear — no renderer has to know this layer exists */
-    if(n && !(IDS[i] in seen)) watch(n);
-  }
+  for(var i = 0; i < ORDER.length; i++) watch(byId(ORDER[i]));
+  /* the boot page is ADOPTED silently — only a change away from it animates */
+  if(last === null){ var sec = active(); if(sec){ var k = keyOf(sec); if(k){ last = k; lastLevel = LEVEL[sec.id] } } }
 }
 scan();
-var sc = document.getElementById('scroll');
+var sc = byId('scroll');
 if(sc && window.MutationObserver){ try{ new MutationObserver(scan).observe(sc, { childList:true }) }catch(e){} }
+})();
+</script>
+<style id="v16pancss">
+/* ===== WAVE 16 — the player panel: an Up next ⇄ Lyrics slide, and the fullscreen crossfade ====
+   (1) THE PANEL SLIDE. The two tab LABELS are untouched — they are the affordance, and the request
+   was to leave them exactly as they are. What moves is what sits UNDER them: the Up next trio
+   (#pvCtx "Playing from …", #pvHead "Autoplay similar / Clear", #pvQueue the list) on one side and
+   #pvLyrics on the other. #v16panjs reads the side from `#pvLyrics.hidden`, which the app's own tab
+   handler has already flipped by the time its observer runs.
+   DIRECTION: Lyrics is the RIGHT-hand tab, so it arrives from the RIGHT and Up next arrives from the
+   LEFT — the content follows the tab that was clicked. The pair is mirrored and both signs live in
+   ONE place (PANEL in #v16panjs), so flipping the convention is a two-character edit there.
+   The Up next side is THREE sibling blocks and they carry the SAME animation on purpose: identical
+   duration and easing reads as one surface sliding in, not three. Opacity rides along so it reads as
+   motion of the panel, and nothing here touches position, size, scroll or hit-testing.
+   ONE-SHOT, exactly like the page slide: #v16panjs drops the class on animationend — filtered to the
+   node's OWN animation, because animationend bubbles out of the rows inside #pvQueue — with a
+   fallback timer, so no transform outlives the 240ms.
+   REST (the OS switch or the saved sv_set_reduceMotion) takes the whole effect away: #v16panjs skips
+   the class in the same case, and the rule below covers a level change mid-session. */
+@keyframes svPanInL{from{transform:translateX(calc(-1 * var(--sv-pan-dx,44px)));opacity:.001}to{transform:none;opacity:1}}
+@keyframes svPanInR{from{transform:translateX(var(--sv-pan-dx,44px));opacity:.001}to{transform:none;opacity:1}}
+#pvQueue.svPanL,#pvCtx.svPanL,#pvHead.svPanL,#pvLyrics.svPanL{animation:svPanInL var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+#pvQueue.svPanR,#pvCtx.svPanR,#pvHead.svPanR,#pvLyrics.svPanR{animation:svPanInR var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+html[data-gfx="reduced"] #pvQueue.svPanL,html[data-gfx="reduced"] #pvCtx.svPanL,html[data-gfx="reduced"] #pvHead.svPanL,html[data-gfx="reduced"] #pvLyrics.svPanL,
+html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvCtx.svPanR,html[data-gfx="reduced"] #pvHead.svPanR,html[data-gfx="reduced"] #pvLyrics.svPanR{animation:none}
+
+/* (2) THE FULLSCREEN CROSSFADE — the mini player's "Up next" while the fullscreen lyrics overlay
+   is open. The reported bug is "it just switches", and the cause is a cascade accident, not a
+   missing animation: that button has always driven the app's own collapse (#lyrFull →
+   toggleLyrFull → lyrFullClose, a 380ms retract + fade), but the SAME click also flipped the tabs,
+   and `[hidden]{display:none!important}` (bug #7's fix) hid #pvLyrics on the spot — so the retract
+   was never seen and the Up next list appeared in one frame, 380ms before the overlay was gone.
+   `.svxcross` is added for that ramp only and does exactly two things:
+   (a) keeps #pvLyrics on screen while lyrFullClose() fades it. Both rules are !important, so
+       specificity decides and this layer's (1 id + 2 classes) wins over plain [hidden];
+   (b) reveals the Up next trio — which `body.lyrfull …{display:none!important}` hides for the WHOLE
+       ramp — with a fade-in that finishes BEFORE the ramp does, so the list crossfades in UNDER the
+       retracting overlay (still dimming and blurring it) instead of snapping in at the end.
+   The mini player bar is deliberately NOT touched: on this path its own 340ms fade
+   (`body.lyrfull.lyrreveal #mini`) runs WITH the retract, and the player page underneath hides it
+   anyway, so holding it on screen would only add a second fade after the transition was over.
+   The retract, the `lyrreveal` page restore, LF.open, the collapse icon and the inline-style cleanup
+   all stay the app's own (v2js) path — #v16panjs only clicks #lyrFull, exactly as the 4AV handler
+   did. Reduced motion never adds the class at all: lyrFullClose() then finishes in one step. */
+@keyframes svXfadeIn{from{opacity:0}to{opacity:1}}
+body.lyrfull.svxcross #pvLyrics{display:flex!important}
+body.lyrfull.svxcross .pvctx,body.lyrfull.svxcross #pvQueue{display:block!important;animation:svXfadeIn .3s ease both}
+body.lyrfull.svxcross .pvhead{display:flex!important;animation:svXfadeIn .3s ease both}
+</style>
+
+<script id="v16panjs">
+/* ===== WAVE 16 — the panel's slide + the fullscreen crossfade, the JS half =====================
+   ADDITIVE, in the same shape as #v15slidejs: it observes what the app already writes (the `hidden`
+   flip the tab handler performs on #pvLyrics) and plays a class. The tab handler, the lyrics layer
+   and the fullscreen layer are untouched.
+   The ONE thing it takes over is the mini player's "Up next" button inside fullscreen lyrics, and it
+   does that by WRAPPING the handler already there (qb.onclick), never by replacing the node or its
+   listeners — so the 4BA wave's own click listener on that button (the three-line icon animation)
+   keeps working, and the non-fullscreen behaviour stays the 4AV handler's. */
+(function(){
+'use strict';
+/* ONE config object for the panel slide. lyr:+1 => Lyrics arrives from the RIGHT (it is the
+   right-hand tab), up:-1 => Up next arrives from the LEFT. */
+var PANEL = { ms:240, dx:44, lyr:1, up:-1 };
+var XMS = 520;      /* how long the fullscreen crossfade owns the tab switch (the ramp is 380ms) */
+var root = document.documentElement;
+try{ root.style.setProperty('--sv-pan-ms', PANEL.ms + 'ms'); root.style.setProperty('--sv-pan-dx', PANEL.dx + 'px') }catch(e){}
+
+/* the app's OWN rest test, same three steps as #v15slidejs (OS matchMedia, the saved preference,
+   and window.svaraGfx.reduced() which is exactly those two) */
+function reduced(){
+  try{ if(window.svaraGfx && typeof window.svaraGfx.reduced === 'function') return !!window.svaraGfx.reduced() }catch(e){}
+  try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true }catch(e){}
+  try{ if(localStorage.getItem('sv_set_reduceMotion') === 'true') return true }catch(e){}
+  return false;
+}
+function byId(id){ return document.getElementById(id) }
+
+/* the two views: Lyrics is ONE box, Up next is THREE sibling blocks that the tab handler shows and
+   hides together (the "Playing from …" line, the Clear bar, the list) */
+var UP = ['pvCtx','pvHead','pvQueue'];
+
+function oneShot(node, cls){
+  if(!node) return;
+  if(node.__svPanEnd) node.removeEventListener('animationend', node.__svPanEnd);
+  var again = node.classList.contains(cls);       /* a second switch the same way: restart it */
+  node.classList.remove('svPanL','svPanR');
+  if(again) void node.offsetWidth;                /* only re-read layout when it must restart */
+  node.classList.add(cls);
+  function done(){
+    if(node.__svPanT){ clearTimeout(node.__svPanT); node.__svPanT = 0 }
+    if(node.__svPanEnd){ node.removeEventListener('animationend', node.__svPanEnd); node.__svPanEnd = null }
+    node.classList.remove('svPanL','svPanR');
+  }
+  /* animationend BUBBLES, and #pvQueue is full of rows with animations of their own: only this
+     node's OWN slide may end the state. */
+  node.__svPanEnd = function(e){
+    if(e.target !== node) return;
+    if(e.animationName !== 'svPanInL' && e.animationName !== 'svPanInR') return;
+    done();
+  };
+  node.addEventListener('animationend', node.__svPanEnd);
+  /* fallback: the CSS switched the animation off (reduced motion turned on mid-session), or the
+     window was throttled so long that animationend never arrived */
+  node.__svPanT = setTimeout(done, PANEL.ms + 140);
+}
+
+var XLOCK = false;      /* the fullscreen crossfade is driving the tab switch itself */
+
+function play(){
+  if(reduced() || XLOCK) return;
+  var l = byId('pvLyrics'), q = byId('pvQueue');
+  if(!l || !q) return;
+  /* fullscreen owns its own transitions: a transform there would also become the containing block
+     of the overlay's fixed .lyrbar, and XLOCK already covers this layer's own switch */
+  if(document.body.classList.contains('lyrfull')) return;
+  if(!document.body.classList.contains('pv')) return;    /* the player page is not open */
+  var toLyrics = !l.hidden;                              /* the tab handler has already flipped it */
+  var cls = (toLyrics ? PANEL.lyr : PANEL.up) > 0 ? 'svPanR' : 'svPanL';
+  var ids = toLyrics ? ['pvLyrics'] : UP;
+  for(var i = 0; i < ids.length; i++) oneShot(byId(ids[i]), cls);
+}
+
+/* the app's own .tab handler flips the `hidden` flags; that flip is the trigger, so nothing here
+   has to know about #queueBtn, lyrFullOpen() or the keyboard path — every one of them ends up in
+   the same handler and is therefore covered. */
+(function watchTabs(){
+  var l = byId('pvLyrics'); if(!l || l.__svPanW) return;
+  l.__svPanW = 1;
+  try{ new MutationObserver(play).observe(l, { attributes:true, attributeFilter:['hidden'] }) }catch(e){}
+})();
+
+/* ===== (2) the fullscreen crossfade ===========================================================
+   The mini player's "Up next" while `body.lyrfull` is on. XLOCK makes a SECOND click during the
+   ramp fall through to the 4AV handler — which is what the app did before (4AO retargets a reopen
+   without snapping) — so no new state machine is introduced here. */
+function crossfade(){
+  var b = document.body, f = byId('lyrFull'), up = document.querySelector('.tab[data-tab="up"]');
+  XLOCK = true;
+  b.classList.add('svxcross');        /* (a)+(b)+(c) from #v16pancss, for the whole ramp */
+  /* the app's OWN collapse: LF.open, `lyrreveal`, the retract/fade of #pvLyrics and the collapse
+     icon all live inside the v2js layer. #lyrFull is its public handle — the same click this
+     button made before this wave. */
+  if(f) f.click(); else b.classList.remove('lyrfull');
+  if(typeof openPV === 'function') openPV();            /* the page under the overlay (it already is) */
+  if(up) up.click();                                    /* the arriving tab's flags flip in the same tick */
+  setTimeout(function(){ b.classList.remove('svxcross'); XLOCK = false }, XMS);
+}
+var qb = byId('queueBtn');
+if(qb){
+  var _q = qb.onclick;                 /* the 4AV handler: openPV() + the Up next tab */
+  qb.onclick = function(e){
+    if(!XLOCK && !reduced() && document.body.classList.contains('lyrfull')){ crossfade(); return }
+    return (typeof _q === 'function') ? _q.call(this, e) : undefined;
+  };
+}
 })();
 </script>
 </body>
