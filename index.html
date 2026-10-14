@@ -11022,5 +11022,127 @@ if(qb){
 }
 })();
 </script>
+<style id="v17lyrcss">
+/* ===== WAVE 17 — leaving fullscreen lyrics has no blank beat =================================
+   THE REPORT: "from fullscreen lyrics back to the player page the lyrics tab was empty for half a
+   second and then filled back in". Two things on the way OUT, and this block + #v17lyrjs fix both.
+
+   (1) THE BLANK RAIL. 4AO's collapse retracts and fades the fullscreen overlay over 380ms, and
+   `body.lyrfull …{display:none!important}` (line 1815) hides the whole Up next trio for that entire
+   window. With the LYRICS tab on screen the rail is therefore empty from the moment the overlay has
+   retracted to nothing until `finish()` drops lyrfull at 380ms: the rail showed its tab row and
+   nothing else, then the panel appeared in a single frame. MEASURED: overlay opacity 0.75 at 100ms,
+   0.20 at 200ms, panel still absent until 380ms — and the screenshot the report came with is
+   exactly one of those frames (the mini bar is still mid-fade at the bottom of it).
+   `.svhand` hands the panel BACK early: ~200ms in, with the overlay already ~85% gone, #v17lyrjs
+   drops lyrfull/lyrreveal (precisely what finish() does 180ms later) and fades the panel in from 0
+   where it belongs. The overlaying lyrics dissolve out while the rail's own panel dissolves in, so
+   the rail is never blank. The app's own timer still runs and still cleans up; it just finds the
+   classes already gone.
+   The fade is an ANIMATION and not an inline opacity for a reason: the app's `lfClear(el)` clears
+   inline transition/opacity at 380ms, which would cut a transition short mid-flight but cannot
+   touch a running animation. REST drops the fade (the handoff itself still happens, because the
+   retract does not exist to begin with when motion is reduced). */
+#pvLyrics.svhand{animation:svHandIn .22s ease both}
+/* NOT from 0: the handoff lands when the retracting overlay is still ~15% opaque, so the incoming
+   panel starts from that same ~15% — the two cross-dissolve through each other and the trace never
+   dips to nothing (from 0 measured one frame under 0.04, which is the dip this avoids; with it the
+   lowest sample of the whole collapse is 0.11 and no sample is under 0.10). */
+@keyframes svHandIn{from{opacity:.18}to{opacity:1}}
+html[data-gfx="reduced"] #pvLyrics.svhand{animation:none}
+</style>
+
+<script id="v17lyrjs">
+/* ===== WAVE 17 — the fullscreen-lyrics collapse: hand the panel back early, then re-anchor =====
+   ADDITIVE and timing-only: no app function is wrapped and no rule of the app's is overridden. The
+   trigger is the body's own class list, because nothing else signals the collapse:
+   `lyrreveal` is added by lyrFullClose() for the close ramp and by nothing else.
+
+   (2) THE RE-ANCHOR. `finish()` calls sizeLyrPad() but never lyrRecenter(), so the rail keeps the
+   FULLSCREEN scroll offset. MEASURED: scrollTop 323 where the rail rests at 638, which leaves the
+   active line 316px below the rail's own centre (23px below the fold, so the panel showed the
+   lines around it rather than the line being sung) until the next lyric line happens to recentre
+   it — the tail of the "filled back in shortly". It is also why the reduced-motion close (where finish() runs while
+   the overlay is STILL full-screen) leaves the padding half a full screen too tall.
+   The app already owns the exact helper for this — `ensureLyricsUI()` → `lyrReopen()` → sizeLyrPad +
+   lyrRecenter + updateLyrJump, which is the same call the Lyrics TAB makes when it opens the panel
+   — so this layer calls that instead of re-deriving the anchored-target maths (which lives in a
+   private scope). It is called twice, once early and once after the app's own 380ms finish(), so the
+   second call wins whatever the geometry did in between. Every step is guarded, so a close with no
+   ramp at all (reduced motion, closePV) simply skips the handoff and still gets the re-anchor. */
+(function(){
+'use strict';
+var HOLD = 200;                 /* hand over ~85% into the 340ms retract (the ramp is 380ms) */
+var HAND = 240;                 /* a hair longer than the .22s hand-in animation */
+var REDO = [215, 520];          /* re-anchor twice: while the panel is still fading in (so the glide
+                                   is mostly over when it is fully visible), and again after the
+                                   app's own 380ms finish() has re-padded it for the rail */
+var armed = false, handed = false, cooling = false, wasFull = false, handT = 0;
+
+function byId(id){ return document.getElementById(id) }
+/* the app's OWN ramp test (lfReduced()): the OS query alone. Only then is there no retract to
+   re-time — the in-app Reduce-motion setting still gets 4AO's ramp, so it still gets the handoff. */
+function osReduced(){
+  try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) }catch(e){ return false }
+}
+
+/* (1) the handoff */
+function handoff(){
+  var b = document.body, el = byId('pvLyrics');
+  if(!el) return;
+  /* a ramp that is still running, and the arriving view IS the lyrics panel. The mini player's
+     "Up next" in fullscreen (#v16panjs) flips the tab to Up next instead and crossfades the trio
+     in under the retracting overlay — that path must not be disturbed. */
+  if(!b.classList.contains('lyrfull') || !b.classList.contains('lyrreveal') || el.hidden) return;
+  if(osReduced()) return;                     /* no ramp to re-time: lyrFullClose() already finished */
+  /* self-contained: the retract's clip would hide the panel, and its in-flight inline opacity
+     would win again the moment the hand-in animation ended, so both go now — finish() clearing
+     them later is then just a no-op. */
+  el.style.removeProperty('clip-path');
+  el.style.removeProperty('transition');
+  el.style.removeProperty('opacity');
+  b.classList.remove('lyrfull','lyrreveal');  /* the panel is a rail panel again, from right now */
+  el.classList.add('svhand');                 /* ...and it fades in where it belongs */
+  handed = true;
+  clearTimeout(handT);
+  handT = setTimeout(function(){ el.classList.remove('svhand'); handed = false }, HAND);
+}
+
+/* (2) the re-anchor */
+function reanchor(){
+  var b = document.body, el = byId('pvLyrics');
+  if(b.classList.contains('lyrfull')) return;   /* still fullscreen: the app recentres on open */
+  if(!el || el.hidden) return;                  /* the lyrics panel is not the arriving view */
+  if(!b.classList.contains('pv')) return;       /* the player page is not on screen */
+  try{ if(typeof window.ensureLyricsUI === 'function') window.ensureLyricsUI() }catch(e){}
+}
+function reanchorLater(){
+  if(cooling) return;
+  cooling = true;
+  for(var i = 0; i < REDO.length; i++) setTimeout(reanchor, REDO[i]);
+  setTimeout(function(){ cooling = false }, REDO[REDO.length - 1] + 240);
+}
+
+function tick(){
+  var b = document.body, el = byId('pvLyrics'), full = b.classList.contains('lyrfull');
+  if(full){
+    /* reopened during the hand-in: give the overlay its own entrance back */
+    if(handed){ clearTimeout(handT); handed = false; if(el) el.classList.remove('svhand') }
+    if(b.classList.contains('lyrreveal') && !armed){
+      armed = true;
+      setTimeout(handoff, HOLD);
+      reanchorLater();
+    }
+  } else {
+    armed = false;
+    if(wasFull && !handed) reanchorLater();     /* a collapse with no ramp at all */
+  }
+  wasFull = full;
+}
+var body = document.body;
+wasFull = body.classList.contains('lyrfull');
+if(window.MutationObserver){ try{ new MutationObserver(tick).observe(body, { attributes:true, attributeFilter:['class'] }) }catch(e){} }
+})();
+</script>
 </body>
 </html>
