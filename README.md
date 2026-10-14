@@ -8,14 +8,14 @@ keeps your library on your own PC.
 
 ## Download
 
-### ▶ [Download Svara 1.1.0 for Windows (64-bit)](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara.1.1.0.exe)
+### ▶ [Download Svara 1.2.0 for Windows (64-bit)](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara.1.2.0.exe)
 
 Clicking it downloads the current build straight away. Prefer to browse first? Every version, with
 its notes, lives under [**Releases**](https://github.com/Shubham0743X/Svara/releases).
 
 **Getting it running**
 
-1. Click the link above — you get one file, `Svara.1.1.0.exe` (about 114 MB).
+1. Click the link above — you get one file, `Svara.1.2.0.exe` (about 114 MB).
 2. Put it wherever you like (Desktop, a folder, a USB stick) and double-click it.
    There is no installer, no admin prompt, and nothing else to set up.
 3. Start playing. The app carries everything it needs, including the media engine it uses for audio.
