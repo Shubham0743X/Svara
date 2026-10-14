@@ -10689,5 +10689,125 @@ window.setTheme=function(u){
 };
 })();
 </script>
+<style id="v15slidecss">
+/* ===== WAVE 15 — horizontal page slide (Home ⇄ every other main view) =========================
+   FORWARD (Home → Liked music / Liked albums / a playlist / Library / search results / an artist
+   page / an album page): the incoming page ARRIVES FROM THE LEFT.
+   BACK HOME: Home ARRIVES FROM THE RIGHT.
+   The pair is mirrored on purpose — the two signs live in ONE place (NAV in #v15slidejs), so
+   flipping to the iOS convention (forward from the right, back from the left) is a two-character
+   edit there and nothing else changes.
+
+   WHY EXACTLY THESE FOUR CONTAINERS: #scroll only ever toggles #homeSec, #dynSec, #artSec and
+   #albSec — Liked music, Liked albums, playlists, Library, search results and the Quick picks page
+   are ALL #dynSec (they go through showDyn), the artist page is #artSec, the album page #albSec.
+   Everything that must not move — #waveCv, #theme, #menu, #toast, #pvFab, #shist, #setPanel,
+   #aboutCard and the onboarding gate — is a DIRECT CHILD OF BODY, never inside a page container,
+   so a transform here can never become the containing block for a fixed overlay. That is the one
+   real hazard of animating a page container; this layer is built to avoid it.
+
+   ONE-SHOT: #v15slidejs removes the class on animationend (with a fallback timer), so no transform
+   and no stacking context outlives the 260ms. Opacity rides along so the slide reads as motion of
+   the page rather than of the layout; nothing here touches position, size or scroll. */
+@keyframes svSlideInL{from{transform:translateX(calc(-1 * var(--sv-nav-dx,46px)));opacity:.001}to{transform:none;opacity:1}}
+@keyframes svSlideInR{from{transform:translateX(var(--sv-nav-dx,46px));opacity:.001}to{transform:none;opacity:1}}
+#homeSec.svSlideL,#dynSec.svSlideL,#artSec.svSlideL,#albSec.svSlideL{animation:svSlideInL var(--sv-nav-ms,260ms) cubic-bezier(.22,.61,.36,1) both}
+#homeSec.svSlideR,#dynSec.svSlideR,#artSec.svSlideR,#albSec.svSlideR{animation:svSlideInR var(--sv-nav-ms,260ms) cubic-bezier(.22,.61,.36,1) both}
+/* REST (the OS reduced-motion switch or the saved sv_set_reduceMotion) takes the whole effect away.
+   html[data-gfx="reduced"] is written by the app's own gfxReduced(), which is EXACTLY those two
+   tests, and #v15slidejs skips adding the class in the same case — belt and braces, since the
+   attribute is refreshed by the Settings panel but the JS check happens per navigation. */
+html[data-gfx="reduced"] #homeSec.svSlideL,html[data-gfx="reduced"] #dynSec.svSlideL,html[data-gfx="reduced"] #artSec.svSlideL,html[data-gfx="reduced"] #albSec.svSlideL,
+html[data-gfx="reduced"] #homeSec.svSlideR,html[data-gfx="reduced"] #dynSec.svSlideR,html[data-gfx="reduced"] #artSec.svSlideR,html[data-gfx="reduced"] #albSec.svSlideR{animation:none}
+</style>
+<script id="v15slidejs">
+/* ===== WAVE 15 — horizontal page slide, the JS half ===========================================
+   ADDITIVE: it observes the `hidden` attribute the app ALREADY toggles on its page containers and
+   plays a class. No renderer, no navigate function and no CSS above is modified — goHome(),
+   showDyn(), openArtist(), openAlbumPage() and restoreView() all keep working exactly as they did.
+
+   WHY AN OBSERVER AND NOT A WRAPPED FUNCTION: the app's page switch is a single `hidden` flip that
+   several layers already rely on (Wave 4BC's ambient wash and the wave's own syncView both observe
+   #homeSec for the same reason). A wrapper would miss restoreView() and the artist/album paths,
+   which set `hidden` directly inside the v3js scope.
+
+   IT CANNOT FIRE ON A REPAINT. Liked music / Liked albums / Library / this app's Quick picks page
+   rebuild themselves in place (a Like calls showDyn() again with the page's own recipe); showDyn
+   writes `homeSec.hidden = true` and `dynSec.hidden = false` while BOTH are already in that state,
+   and assigning an IDL boolean that is already right does not touch the attribute — so there is no
+   mutation, and the slide is only ever a real page CHANGE. */
+(function(){
+'use strict';
+/* ONE config object — every knob is a single edit right here. */
+var NAV = { ms:260, dx:46, home:1, other:-1 };
+/* home:+1  => Home enters from the RIGHT when you come back to it
+   other:-1 => every other page enters from the LEFT when you go forward into it */
+var root = document.documentElement;
+try{ root.style.setProperty('--sv-nav-ms', NAV.ms + 'ms'); root.style.setProperty('--sv-nav-dx', NAV.dx + 'px') }catch(e){}
+
+/* the app's OWN rest test (window.svaraGfx.reduced() === OS matchMedia OR the saved preference),
+   with a local copy for the hypothetical case where the gfx layer has not booted yet */
+function reduced(){
+  try{ if(window.svaraGfx && typeof window.svaraGfx.reduced === 'function') return !!window.svaraGfx.reduced() }catch(e){}
+  try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true }catch(e){}
+  try{ if(localStorage.getItem('sv_set_reduceMotion') === 'true') return true }catch(e){}
+  return false;
+}
+
+var IDS = ['homeSec','dynSec','artSec','albSec'];
+var seen = {};                                  /* id -> the `hidden` value we have already acted on */
+
+function play(node, dir){
+  if(!node || reduced()) return;
+  var cls = dir > 0 ? 'svSlideR' : 'svSlideL';
+  if(node.__svNavEnd) node.removeEventListener('animationend', node.__svNavEnd);
+  var again = node.classList.contains(cls);      /* a second nav in the same direction: restart it */
+  node.classList.remove('svSlideL','svSlideR');
+  if(again) void node.offsetWidth;               /* only re-read layout when the animation must restart */
+  node.classList.add(cls);
+  function done(){
+    if(node.__svNavT){ clearTimeout(node.__svNavT); node.__svNavT = 0 }
+    if(node.__svNavEnd){ node.removeEventListener('animationend', node.__svNavEnd); node.__svNavEnd = null }
+    node.classList.remove('svSlideL','svSlideR');
+  }
+  /* animationend BUBBLES, and these pages are full of animations (skeletons, the onboarding dots,
+     a coin flip). Only the node's OWN slide animation may end the state. */
+  node.__svNavEnd = function(e){
+    if(e.target !== node) return;
+    if(e.animationName !== 'svSlideInL' && e.animationName !== 'svSlideInR') return;
+    done();
+  };
+  node.addEventListener('animationend', node.__svNavEnd);
+  /* fallback: the CSS switched the animation off (reduced motion turned on mid-session), or the
+     tab was throttled so long that animationend never arrived */
+  node.__svNavT = setTimeout(done, NAV.ms + 140);
+}
+
+function watch(node){
+  if(!node || !window.MutationObserver) return;
+  seen[node.id] = node.hidden;
+  try{
+    new MutationObserver(function(){
+      var now = node.hidden;
+      if(now === seen[node.id]) return;          /* not a real change */
+      seen[node.id] = now;
+      if(now) return;                           /* a page LEAVING: the arriving one does the moving */
+      play(node, node.id === 'homeSec' ? NAV.home : NAV.other);
+    }).observe(node, { attributes:true, attributeFilter:['hidden'] });
+  }catch(e){}
+}
+function scan(){
+  for(var i = 0; i < IDS.length; i++){
+    var n = document.getElementById(IDS[i]);
+    /* #artSec and #albSec are created on the FIRST artist/album visit, so they are watched when
+       they appear — no renderer has to know this layer exists */
+    if(n && !(IDS[i] in seen)) watch(n);
+  }
+}
+scan();
+var sc = document.getElementById('scroll');
+if(sc && window.MutationObserver){ try{ new MutationObserver(scan).observe(sc, { childList:true }) }catch(e){} }
+})();
+</script>
 </body>
 </html>
