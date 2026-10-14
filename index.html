@@ -273,6 +273,13 @@ body.pv #mini{display:none}
 #pvFab .ic{width:20px;height:20px;transition:transform .3s}
 #pvFab.up .ic{transform:rotate(180deg)}
 body.pv #pvFab{display:none}
+/* WAVE 13 — the expand-player chevron is GONE until a track is loaded, not dimmed. It used to sit at
+   40% opacity on an empty Home, and its own click answered "Play something first" (the guard in
+   syncFab's handler below) — a control that exists only to refuse is noise. The gate is
+   body.svtrack, the SAME boolean the mini bar already hides behind (see #v5provjs), so "a track is
+   loaded" has one definition in the app, and the toast path is now unreachable rather than merely
+   helpful. Two ids' worth of selector weight beats #pvFab's own display:flex. */
+body:not(.svtrack) #pvFab{display:none}
 /* (UI-6/UI-8) the old @media (max-width:920px){.pvright{width:290px}} step is gone: the 290px
    clamp floor on --pvrail covers narrow windows, so the rail has ONE source of truth, not two. */
 </style>
@@ -384,9 +391,14 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
   if(intensity !== 'off' && intensity !== 'low' && intensity !== 'medium' && intensity !== 'high') intensity = 'medium';
   /* gfxLevel wins when set (matching gfxLevel()'s precedence); a valid 'low' is classic. When the
      key is unset the exact legacy mapping runs, so nobody's current look changes. */
+  /* WAVE 14 — the FIRST-RUN default is High. The legacy pair is still honoured when it was really
+     written (an explicit 'off', or lowPower, means classic); a profile where NEITHER key exists at
+     all is untouched and now lands on the requested default instead of 'bal'. */
+  var legacyChosen = (rawI !== null || rawL !== null);
   var mode = gfx === 'low'    ? 'classic'
            : gfx === 'medium' ? 'bal'
            : gfx === 'high'   ? 'full'
+           : !legacyChosen ? 'full'
            : (intensity === 'off' || lowPower) ? 'classic'
            : (intensity === 'high' ? 'full' : 'bal');
   var d = document.documentElement;
@@ -558,7 +570,7 @@ let hist=LSget('ml_history',{});          // your listening history (kept from b
 let favs=LSget('sv_favs',{});
 let pls=LSget('sv_pls',{});
 let shist=LSget('sv_shist',[]);
-let lyrPref=LSget('sv_lyr','ytm');
+let lyrPref=LSget('sv_lyr','lrclib');   /* WAVE 14 — LRClib is the first-run default (was 'ytm') */
 const idItem={};
 let toastT;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
@@ -603,7 +615,22 @@ function setNav(on){
    in its idle state and every later visit is repainted by the showDyn/goHome wrapper (which calls
    homeLine() in the same tick as this function), so nothing has to blank it any more. */
 function goHome(){curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
-function showDyn(title,sub,html){curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
+/* WAVE 14 — a dyn page can now say HOW to rebuild itself. `list` = {head, cls}: the page's own bar
+   (if it has one) plus the class its listHTML() list was built with. A repaint — a Like, an unlike,
+   anything that calls refreshHearts() — then rebuilds the page the user is actually looking at.
+   Without it, refreshHearts() fell back to a bare listHTML(curList): that is exactly what turned
+   the Quick picks page's grid back into a plain list and dropped its Back / Play all bar. */
+var dynList=null;
+function showDyn(title,sub,html,list){dynList=(list&&typeof list==='object')?list:null;curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
+/* Rebuild the current dyn page from the same recipe it was built with. Returns false when the page
+   never registered one, so the caller keeps the rebuild it had before this wave. */
+function repaintDyn(){
+  if(!dynList||!curList||!curList.length) return false;
+  var h=(typeof dynList.head==='function')?dynList.head():(dynList.head||'');
+  $('#dynSec').innerHTML=h+listHTML(curList,dynList.cls||'');
+  register(curList);
+  return true;
+}
 
 /* ============ sidebar playlists ============ */
 function updatePlRows(){
@@ -622,7 +649,16 @@ function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlis
    the big 544px token (player hero, #mArt, the queue, the 4Z top-result card and the
    artist banner all keep it, unchanged); the list/rail renderers ask for what their own
    box can actually display instead of making every 44-64px row decode a 544x544 bitmap. */
-var THUMB_ROW='w160-h160-l90-rj',THUMB_RAIL='w256-h256-l90-rj',THUMB_BIG='w544-h544-l90-rj';
+var THUMB_ROW='w160-h160-l90-rj',THUMB_RAIL='w256-h256-l90-rj',THUMB_BIG='w544-h544-l90-rj',
+    /* WAVE 13 — the hero card. A Trending card is 458x257 on the user's window, and it was asking
+       for the RAIL token (256x256): a 1.79x upscale, which is the "slightly pixelated" cover in the
+       report. 720x405 is the 16:9 token, and -p-l90-rj is the same flag combination the artist
+       banners already use for their 2.4:1 crop (heroArt, verified 2400x1000). MEASURED on this
+       artwork: =w720-h405-p-l90-rj delivers exactly 720x405, while the square-style token of the
+       same name (=w720-h405-l90-rj) answers 405x405 — hence the -p. 1.57x the displayed box, so it
+       is crisp at DPR 1 and still has headroom at 1.2; measured cost ~88KB per card, cached after
+       the first paint (see #v13artjs). */
+    THUMB_HERO='w720-h405-p-l90-rj';
 function thumb(it,size){
   let u=(it&&it.thumb)||'';
   if(!u)return '';
@@ -643,15 +679,19 @@ function rowHTML(it){
     <button class="dots" data-menu="${esc(it.id)}"><span class="ic">${ic('i-dots')}</span></button></div></div>`;
 }
 function listHTML(items,extraClass){return `<div class="list${extraClass?' '+extraClass:''}">${(items||[]).map(rowHTML).join('')}</div>`}
-function railCard(it,ctx){
+/* WAVE 13: an optional third argument lets a row ask for its OWN artwork size — the Trending hero
+   passes THUMB_HERO, every other row keeps the rail token by default. Optional, so railHTML's
+   existing callers (Listen again, Albums for you, the artist page) are untouched. */
+function railCard(it,ctx,size){
   const cur=nowItem()&&nowItem().id===it.id;
-  const ph=thumb(it,THUMB_RAIL)?'':`<div class="ph"><span class="ic">${ic('i-disc')}</span></div>`;
+  const sz=size||THUMB_RAIL;
+  const ph=thumb(it,sz)?'':`<div class="ph"><span class="ic">${ic('i-disc')}</span></div>`;
   return `<div class="rail" data-rail="${ctx}" data-id="${esc(it.id)}" data-title="${esc(it.title||'')}">
-    <div class="art">${ph}<img loading="lazy" src="${esc(thumb(it,THUMB_RAIL))}" onerror="this.style.display='none'">
+    <div class="art">${ph}<img loading="lazy" src="${esc(thumb(it,sz))}" onerror="this.style.display='none'">
       <div class="ov"><span class="pb">${ic('i-play')}</span></div></div>
     <div class="rname">${esc(it.title)}</div><div class="rsub2">${esc(it.artist||'')}</div></div>`;
 }
-function railHTML(arr,ctx){return `<div class="railwrap">${arr.map(x=>railCard(x,ctx)).join('')}</div>`}
+function railHTML(arr,ctx,size){return `<div class="railwrap">${arr.map(x=>railCard(x,ctx,size)).join('')}</div>`}
 
 /* ============ personalization core ============ */
 function splitArtists(a){return String(a||'').split(/[,&×;]|\bfeat\.?/i).map(s=>s.trim()).filter(s=>s&&!/^feat/i.test(s))}
@@ -749,7 +789,8 @@ var QP_PAGE=36,          /* one page of the Quick picks carousel: 9 columns x 4 
     FEED_ARTISTS=4,      /* artists a category or Home row may draw from (was 3) */
     ALB_PER_ARTIST=6,    /* albums per artist (was 4) */
     ART_AUD_FLOOR=1e6;   /* monthly audience a row must clear to count as a real artist */
-var qpShown=QP_PAGE;     /* the grid grows with Show more; only a data clear resets it */
+var qpShown=QP_PAGE;     /* WAVE 13: the Home row's own size. It no longer GROWS — Show more opens the
+                            Quick picks page (see openQuickPicks below); only a data clear resets it */
 var trendArr=[], popArr=[];   /* the two discovery rows' current contents, for their own rail clicks */
 
 /* One rule for the junk a bare query drags in. Artist-derived rows never need it — a channel's own
@@ -980,10 +1021,10 @@ async function popularitySongs(limit){
   return { items:await querySongs('trending', limit), artists:[] };
 }
 /* ---- painting a Home rail, under the render generation (4AW) ---- */
-function paintRail(gen, id, items, ctx){
+function paintRail(gen, id, items, ctx, size){
   if(gen!==homeGen) return false;
   var el=document.getElementById(id); if(!el) return false;
-  el.innerHTML = items.length ? railHTML(items, ctx)
+  el.innerHTML = items.length ? railHTML(items, ctx, size)
     : '<div class="empty">Nothing to show yet — keep listening and this fills up.</div>';
   if(typeof skReveal==='function'){ try{ skReveal(el) }catch(e){} }
   return true;
@@ -992,7 +1033,7 @@ async function fillTrend(gen){
   var items=await trendSongs(TREND_LIMIT);
   if(gen!==homeGen) return;
   trendArr=items;
-  paintRail(gen, 'trendRail', items, 'trend');
+  paintRail(gen, 'trendRail', items, 'trend', THUMB_HERO);   /* WAVE 13: the hero asks for 720x405 */
 }
 async function fillPopular(gen){
   var r=await popularitySongs(POP_LIMIT);
@@ -1024,15 +1065,34 @@ async function fillAlbumsFromPopular(gen){
   if(r.artists.length) fillAlbums(gen, r.artists);
   else fillAlbums(gen, []);
 }
-/* Quick picks: Show more reveals the NEXT page of the same scored list — no fetch, no new order. */
-function qpMore(){
-  qpShown += QP_PAGE;
-  quickList = topScored(qpShown);
-  var g=document.querySelector('#homeSec .qpGrid');
-  if(g) g.innerHTML=quickList.map(rowHTML).join('');
-  var b=document.querySelector('#homeSec [data-qpmore]');
-  if(b && topScored(qpShown+QP_PAGE).length<=quickList.length && b.parentNode) b.parentNode.removeChild(b);
+/* ============ WAVE 13 — Show more opens the Quick picks PAGE ============
+   The button used to GROW the Home row: qpMore revealed the next page of the same scored list
+   inside the four-row carousel. It now leaves Home for a full page instead, laid out on the
+   reference grid the user measured on Apple Music's own "New Radio Episodes" row: one item is
+   328x127 — a 298x97 horizontal lockup inside 15px of padding — with a 97px square of artwork and a
+   20px gap before the text.
+   The page is the app's OWN dynamic view (showDyn), so it needs no new routing, no second copy of
+   the Quick picks scoring, and it inherits the app's row contract for free: the items ARE
+   listHTML()'s rows (data-play + curList + register), sized by #v13qpcss at the end of the file.
+   The list is one full page of picks (two Home pages), still in the same scored order, still no
+   fetch — the page is a WINDOW on the same list, never a re-rank. */
+var QP_PAGE_FULL=QP_PAGE*2;               /* what the Quick picks page holds */
+function qpAllItems(){ return topScored(Math.max(qpShown, QP_PAGE_FULL)) }
+function qpAllHeadHTML(){
+  return '<div class="qpbar">'+
+    '<button class="art-back" data-qpback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>'+
+    '<button class="gobtn" data-qpall="1">Play all</button></div>';
 }
+function openQuickPicks(){
+  var items=qpAllItems();
+  if(!items.length){ toast('Play a few songs and Quick picks fills up'); return }
+  var head=qpAllHeadHTML();
+  showDyn('Quick picks', items.length+(items.length===1?' song':' songs')+' from your listening',
+    head+listHTML(items,'qpAll'), { head:head, cls:'qpAll' });   /* WAVE 14: how to rebuild it */
+  curList=items; register(items);
+  var sc=document.getElementById('scroll'); if(sc) sc.scrollTop=0;
+}
+window.svaraQuickPicks={ open:openQuickPicks, items:qpAllItems, page:QP_PAGE_FULL };
 /* Exposed for the console (and for this wave's own checks), exactly like the wave-6 hooks. */
 window.svaraFeed={
   trend:trendSongs, popular:popularitySongs, category:categorySongs, artists:catArtists,
@@ -1277,7 +1337,11 @@ function toggleFav(it){
 }
 function refreshHearts(){
   if(!$('#homeSec').hidden){renderHome()}
-  else if(!$('#dynSec').hidden&&curList.length){$('#dynSec').innerHTML=listHTML(curList);register(curList)}
+  else if(!$('#dynSec').hidden&&curList.length){
+    /* WAVE 14: a page that knows how to rebuild itself keeps its own look (its grid class, its
+       header bar); every other page keeps the plain-list rebuild it always had. */
+    if(!repaintDyn()){ $('#dynSec').innerHTML=listHTML(curList); register(curList) }
+  }
 }
 function addToPlaylist(name,it){
   if(!pls[name])pls[name]=[];
@@ -1394,9 +1458,14 @@ document.addEventListener('click',e=>{
   if(chip){openMood(chip.dataset.chip)}
   /* Wave 7: Play all plays exactly the grid that is on screen (it grows with Show more), and Show
      more reveals the next page of the same scored list. */
+  /* WAVE 13: Show more leaves Home for the Quick picks page; the page's own Play all plays the
+     page's list, and Back is the same .art-back pill the album page uses. The Home row no longer
+     grows in place — qpShown is simply its size — so nothing repaints behind the new view. */
   const qp=e.target.closest('[data-qp]');
   if(qp){const s=(quickList&&quickList.length)?quickList:topScored(qpShown);if(s.length)playList(s,0,true)}
-  if(e.target.closest('[data-qpmore]')){qpMore()}
+  if(e.target.closest('[data-qpmore]')){openQuickPicks();return}
+  if(e.target.closest('[data-qpback]')){goHome();return}
+  if(e.target.closest('[data-qpall]')){const s=qpAllItems();if(s.length)playList(s,0,true);return}
   if(e.target.closest('#diceBig')){diceRadio()}
 });
 /* rail data-i fix: cards in same wrap with same id possible; fine */
@@ -1603,7 +1672,8 @@ $('#queueBtn').onclick=()=>{openPV()};
 function syncFab(){
   const f=$('#pvFab');if(!f)return;
   f.classList.toggle('up',!document.body.classList.contains('pv'));
-  f.style.opacity=queue.length?1:.4;
+  /* WAVE 13: no opacity state is written any more — with nothing loaded the CSS above removes the
+     button outright, and with a track loaded it is always fully opaque. */
 }
 $('#pvFab').onclick=()=>{
   if(document.body.classList.contains('pv')){closePV();return}
@@ -2659,9 +2729,16 @@ if(!$('#homeSec').hidden)renderHome();
 <script id="v2auto">
 /* Auto lyrics source: prefer whichever provider has time-synced lyrics */
 (function(){
+  /* WAVE 14 — this migration used to write 'auto' into EVERY profile that lacked the marker,
+     including one where no provider had ever been chosen, so the app's own default was silently
+     overridden on first run. Now an install that already HAD a stored provider is migrated exactly
+     as before, and a profile with no stored provider keeps the default (LRClib). The one-shot
+     marker is still written either way. */
   if(!localStorage.getItem('sv_lyr_v2')){
-    try{ localStorage.setItem('sv_lyr','"auto"'); localStorage.setItem('sv_lyr_v2','1'); }catch(e){}
-    lyrPref='auto';
+    try{
+      if(localStorage.getItem('sv_lyr') !== null){ localStorage.setItem('sv_lyr','"auto"'); lyrPref='auto' }
+      localStorage.setItem('sv_lyr_v2','1');
+    }catch(e){}
   }
   setInterval(function(){
     var chip=document.getElementById('lyrSeg'); if(!chip)return;
@@ -3024,7 +3101,9 @@ showDyn = function(t,s,h){
      immediately before this call; every other showDyn() caller (liked music, playlists, the
      artist “show all” list) leaves it down, so the chips stay hidden on those views. */
   sView = _sPaint; _sPaint = false;
-  _showDyn(t,s,h);
+  /* WAVE 14: this wrapper used to call through with (t,s,h) only, which silently dropped a page's
+     own rebuild recipe (the 4th argument) and left repaintDyn() with nothing to rebuild from. */
+  _showDyn(t,s,h,arguments[3]);
   hideArtist();
   hideAlbum();                                // 4AL: the album page is its own section
   try{ document.title = String(t).replace(/<[^>]+>/g,'') + ' · Svara' }catch(e){}
@@ -3176,10 +3255,15 @@ rowHTML = function(it){
    "Albums for you", the trending rail) — and by railHTML(). Same markup, the artist
    line under each cover becomes links. Same delegated handler as rows/search/pvA. */
 var _railCard = railCard;
-railCard = function(it, ctx){
-  var ph = thumb(it,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+/* WAVE 13: this wrapper is the card the Home rails actually use, so it must forward the base
+   layer's new optional SIZE argument — without it the Trending row kept asking for the 256px rail
+   token (the pixelated hero) however the base railCard was called. Undefined still means THUMB_RAIL
+   for every other row. */
+railCard = function(it, ctx, size){
+  var sz = size || THUMB_RAIL;
+  var ph = thumb(it,sz) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="rail" data-rail="'+esc(ctx)+'" data-id="'+esc(it.id)+'" data-title="'+esc(it.title||'')+'">'+
-    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it,THUMB_RAIL))+'" onerror="this.style.display=\'none\'">'+
+    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it,sz))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div>'+
       (ctx==='al' && typeof albHeartHTML==='function' ? albHeartHTML(it) : '')+'</div>'+
     '<div class="rname">'+esc(it.title)+'</div>'+
@@ -4257,7 +4341,7 @@ function setQ(sel){ var p = setPanelEl(); return p ? p.querySelector(sel) : null
    documented default so the new segmented control still renders with a checked option. */
 function setGfxLevel(){
   try{ if(window.svaraGfx && typeof window.svaraGfx.level === 'function') return window.svaraGfx.level() }catch(e){}
-  return 'medium';
+  return 'high';                              /* WAVE 14: the documented first-run default (was 'medium') */
 }
 
 /* the panel always shows the LIVE player state — it never keeps its own copy */
@@ -4268,8 +4352,9 @@ function setLive(key){
   if(key==='autoplay') return !!v3autoOn;
   if(key==='crossfade'){                       // UI-5: the live engine is the single source of truth
     try{ if(window.svaraXfade) return window.svaraXfade.get() }catch(e){}
-    var xf = LS.get('sv_set_crossfade','off');
-    return (xf==='off'||xf==='4'||xf==='8') ? xf : 'off';
+    var xf = LS.get('sv_set_crossfade','2');            // WAVE 14: 2s is the first-run default
+    /* '2' was missing from this list, so anyone on 2s saw 'Off' checked until the engine booted. */
+    return (xf==='off'||xf==='2'||xf==='4'||xf==='8') ? xf : '2';
   }
   if(key==='provider') return (lyrPref==='ytm'||lyrPref==='lrclib') ? lyrPref : 'auto';
   if(key==='gfxLevel') return setGfxLevel();
@@ -4667,7 +4752,7 @@ function setRefresh(){
   var rp = LS.get('sv_set_repeat', null); if(rp==='off'||rp==='all'||rp==='one') repeat = rp;
   var ap = LS.get('sv_set_autoplay', null);
   if(typeof ap==='boolean'){ v3autoOn = ap; LS.set('sv_auto', ap?'on':'off') }
-  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','off')||'off') }catch(e){}   // UI-5: an import can change it
+  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','2')||'2') }catch(e){}   // UI-5: an import can change it
   try{ updatePlRows() }catch(e){}
   try{ paintControls(); paintShuf(); paintAuto(); paintFavs(); renderSHist() }catch(e){}
   try{ refreshHearts() }catch(e){}
@@ -4774,7 +4859,7 @@ document.addEventListener('keydown', function(e){
   var ap = LS.get('sv_set_autoplay', null);
   if(typeof ap==='boolean') v3autoOn = ap;
   LS.set('sv_auto', v3autoOn ? 'on' : 'off');
-  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','off')||'off') }catch(e){}   // UI-5 (engine re-reads it on its own too)
+  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','2')||'2') }catch(e){}   // UI-5 (engine re-reads it on its own too)
   try{ paintControls(); paintShuf(); paintAuto() }catch(e){}
 })();
 /* the open panel mirrors the live player (the mini player can change under it) */
@@ -4867,7 +4952,12 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
     var u = '';
     try{ u = artURL(_thumb(it, size)) }catch(e){}
     if(!u && it && /^[A-Za-z0-9_-]{11}$/.test(String(it.id||''))){
-      u = 'https://i.ytimg.com/vi/'+it.id+'/mqdefault.jpg';
+      /* WAVE 13: sddefault (640x480) instead of mqdefault (320x180). A track that reached the app
+         with no artwork URL at all is drawn from YouTube's still, and that still was the SOFTEST
+         thing on the page — a 320px-wide image in a 458px hero card. sddefault is generated for
+         every video (verified 200 on live ids, ~35KB vs maxresdefault's ~95KB, and maxres is only
+         present for HD uploads, so maxres would need a 404 fallback step and sddefault does not). */
+      u = 'https://i.ytimg.com/vi/'+it.id+'/sddefault.jpg';
     }
     return u;
   };
@@ -4880,7 +4970,10 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
      image meanwhile. */
   var RETRY_MS = 900;
   function proxied(u){ return '/api/thumb?url=' + encodeURIComponent(u) }
-  function retryLater(im, url){
+  /* WAVE 13: the delay is now a PARAMETER. 900ms exists only to dodge the host's burst throttle on
+     a retry of the SAME direct request; when the art-cache layer has already recorded that URL as
+     one that must be proxied there is no such request left to dodge, so the proxy step runs now. */
+  function retryLater(im, url, ms){
     var from = im.getAttribute('src');
     setTimeout(function(){
       if(!im.isConnected) return;
@@ -4888,7 +4981,7 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
       if(im.getAttribute('src') !== from) return;      // src changed under us — leave it alone
       im.style.display = '';
       im.setAttribute('src', url);
-    }, RETRY_MS);
+    }, ms == null ? RETRY_MS : ms);
   }
 
   /* 2) Wave 4J failure ladder, per image:
@@ -4912,10 +5005,28 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
     im.dataset.fbsrc = cur;
     if(stage === 0){
       /* step 1 — the SAME URL re-asked through the server proxy, which sends no Referer.
-         This is the step that actually beats the 429/ORB. */
-      im.dataset.fb0 = cur;
+         This is the step that actually beats the 429/ORB.
+         WAVE 13 adds two things to this step, both about not paying for what is already known:
+           (a) `cur` may ALREADY be the proxy URL — the art-cache layer (#v13artjs) hands out the
+               proxy form for artwork it has seen fail, so re-wrapping it would ask /api/thumb for
+               a localhost URL (400 'blocked host'). Unwrap it and move to the smaller token, which
+               is the only step of the ladder still ahead of a proxied src.
+           (b) the art-cache layer's listener is on WINDOW in the capture phase, so it has already
+               recorded this failure by the time we get here: for a URL that is now known-bad the
+               proxy step is taken immediately instead of after RETRY_MS. */
+      var direct = cur, wrapped = false;
+      if(direct.indexOf('/api/thumb?url=') === 0){
+        wrapped = true;
+        try{ direct = decodeURIComponent(direct.slice('/api/thumb?url='.length)) }catch(err){}
+      }
+      var known = false;
+      try{ known = (typeof window.svArtIsBad === 'function') && window.svArtIsBad(direct) }catch(err){}
+      im.dataset.fb0 = direct;
       im.dataset.fbr = '1';
-      retryLater(im, proxied(cur));
+      if(!wrapped){ retryLater(im, proxied(direct), known ? 0 : RETRY_MS); return }
+      var small = smallerToken(direct, im.classList.contains('art-herowide'));
+      if(small){ im.dataset.fbr = '2'; retryLater(im, proxied(small), 0); return }
+      retryLater(im, proxied(direct), 0);
       return;
     }
     if(stage === 1){
@@ -4955,6 +5066,18 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
   }
   function enqueue(im){
     if(!im) return;
+    /* WAVE 14 — artwork that has painted ONCE before is in the browser's own cache, so there is
+       nothing left to serialise: it is promoted in THIS tick, and a repeat visit paints the whole
+       view at once. Artwork that has never painted keeps the 80ms queue: that is the part which
+       dodges the host's burst throttle on a first visit.
+       MEASURED on the 40-album Liked albums grid (one scroll that brings a batch of freshly padded
+       covers into view, counting data-src -> src transitions at 10ms): with this bypass DISABLED the
+       batch left the queue in 21 ticks, first 71ms and last 1820ms after the scroll — the ~90ms
+       staircase — and with it ENABLED the same batch left in ONE tick (28 pending -> 10) at 131ms.
+       (The 12 covers already in view at render are emitted with a plain src and never enter this
+       queue at all, which is why a first-load stall there is the retry ladder's business.) */
+    var s0 = im.getAttribute('data-src');
+    if(s0 && typeof window.svArtSeen === 'function'){ try{ if(window.svArtSeen(s0)){ promote(im); return } }catch(e){} }
     if(lazyQ.indexOf(im) < 0) lazyQ.push(im);
     if(!lazyTimer) lazyTimer = setTimeout(drain, 0);
   }
@@ -5706,18 +5829,24 @@ html[data-fx="bal"]  body::after{
   function fastSin(x){ return SIN_TABLE[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
   function fastCos(x){ return COS_TABLE[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
 
-  /* Never multiplies by devicePixelRatio — the ImageData is deliberately small and upscaled. */
+  /* Never multiplies by devicePixelRatio — the ImageData is deliberately small and upscaled.
+     WAVE 14b — same 0-size guard as the worker's size(): keep the last good frame, never throw. */
   function resizeCanvas(){
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    width  = Math.floor(canvas.width  / WAVE.scale);
-    height = Math.floor(canvas.height / WAVE.scale);
+    var w = window.innerWidth, h = window.innerHeight;
+    if(!(w > 0) || !(h > 0)) return;
+    var sw = Math.floor(w / WAVE.scale), sh = Math.floor(h / WAVE.scale);
+    if(sw < 1 || sh < 1) return;
+    canvas.width  = w;
+    canvas.height = h;
+    width  = sw;
+    height = sh;
     imageData = ctx.createImageData(width, height);
     data = imageData.data;
   }
 
   /* Zero allocations per frame: no objects, arrays or closures are created in here. */
   function render(){
+    if(!data || width < 1 || height < 1) return;      /* nothing measured yet — never touch imageData */
     var time = (Date.now() - startTime) * 0.001;
     for(var y = 0; y < height; y++){
       for(var x = 0; x < width; x++){
@@ -5779,11 +5908,19 @@ html[data-fx="bal"]  body::after{
     function fastCos(x){ return COS[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
     function lc(c){ return Math.min(1, Math.pow(c, 1 / gain) + 0.02 * lift) }
     function size(w, h){
+      /* WAVE 14b — a 0-sized viewport used to reach createImageData(0,0) and throw IndexSizeError
+         in here (the Electron shell creates its window with show:false, so the very first
+         measurement can be 0x0). Keep the LAST GOOD frame instead of writing a dead canvas; the
+         main thread re-measures on load and on every resize. */
+      if(!(w > 0) || !(h > 0)) return;
+      var sw = Math.floor(w / scale), sh = Math.floor(h / scale);
+      if(sw < 1 || sh < 1) return;
       canvas.width = w; canvas.height = h;
-      W = Math.floor(w / scale); H = Math.floor(h / scale);
+      W = sw; H = sh;
       img = ctx.createImageData(W, H); data = img.data;
     }
     function render(){
+      if(!data || W < 1 || H < 1) return;             /* nothing measured yet — never touch img */
       var time = (Date.now() - startTime) * 0.001;
       for(var y = 0; y < H; y++){
         for(var x = 0; x < W; x++){
@@ -5899,7 +6036,16 @@ html[data-fx="bal"]  body::after{
       }
     }catch(e){}
 
-    document.addEventListener('DOMContentLoaded', function(){ syncView() });
+    /* WAVE 14b — RE-MEASURE ON LOAD. The canvas is built during parsing, while the shell window may
+       still be 0-sized (it is created with show:false). This is the frame that heals that first
+       reading, whether or not the user ever resizes the window. */
+    document.addEventListener('DOMContentLoaded', function(){
+      resizeCanvas(); syncView();
+      /* non-worker + reduced motion paints ONE static frame and never loops, so it needs this
+         explicit repaint to come back from a 0-sized first measurement. (Worker mode repaints
+         its own paused frame on the resize message.) */
+      if(REDUCED && !workerMode) render();
+    });
     setTimeout(function(){ syncView() }, 450);        /* the 400ms v3hist Home re-render */
 
     /* Never leave a loop running off-view. */
@@ -8017,7 +8163,8 @@ void main() {
     if(si === 'off') return 'low';
     if(si === 'low') return 'low';
     if(si === 'high') return 'high';
-    return 'medium';
+    if(si === 'medium') return 'medium';   /* a legacy explicit choice still wins over the default */
+    return 'high';                          /* WAVE 14: the first-run default (was 'medium') */
   }
   function gfxReduced(){
     try{ if(lsVal('sv_set_reduceMotion') === true) return true }catch(e){}
@@ -8797,7 +8944,8 @@ html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
 (function(){
   var XF_KEY='sv_set_crossfade';
   var XF_STEPS={off:0,'2':2,'4':4,'8':8};
-  function xfModeNow(){ try{ var v=JSON.parse(localStorage.getItem(XF_KEY)||'"off"'); return (v in XF_STEPS)?v:'off' }catch(e){ return 'off' } }
+  /* WAVE 14: the unset default is 2s (first-run), so the engine agrees with the Settings row. */
+  function xfModeNow(){ try{ var v=JSON.parse(localStorage.getItem(XF_KEY)||'"2"'); return (v in XF_STEPS)?v:'2' }catch(e){ return '2' } }
   var xfMode=xfModeNow();
   function xfSecs(){ return XF_STEPS[xfMode]||0 }
   function volNow(){ return Math.max(0,Math.min(1,(typeof volume==='number'?volume:80)/100)) }
@@ -10388,5 +10536,158 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
 @media(max-width:1000px){.heroSec .railwrap{--herocols:2.2}}
 @media(max-width:660px){.heroSec .railwrap{--herocols:1.2}}
 </style>
+<style id="v13qpcss">
+/* ================= WAVE 13 — the Quick picks PAGE (Show more) =================
+   GEOMETRY, TAKEN FROM THE REFERENCE. The user read these numbers off Apple Music's own "New Radio
+   Episodes" grid in devtools: the list item (li.shelf-grid__list-item) is 328x127, and the
+   horizontal lockup inside it (div.horizontal-lockup) is 298x97 with a 20px column gap — i.e. 15px
+   of padding around the lockup. Apple cancels that padding with -15px margins so the CONTENT pitch
+   is exactly 298px; here the item keeps its padding and a 30px grid gap does the same job, so the
+   visible pitch is 298 (four items per row on the app's ~1500px content width, as in the reference)
+   while the item box itself is the 328x127 that was measured.
+   AND NOTHING IS REBUILT. These items are the app's own .list rows — listHTML()/rowHTML(), the same
+   markup Home's Quick picks line uses — so click-to-play, the hover play button, the heart, the ⋮
+   menu, the current-track highlight and the lazy artwork all come along with no new JS. Only the
+   box changes: 97px of artwork, 13px text, one line each, ellipsised. Scoped to #dynSec .list.qpAll
+   so Home's .list.qpGrid line (3 columns), the Library grid and the album grids cannot be reached —
+   and the class is new, so no existing rule of theirs can match it either. */
+#dynSec .qpbar{display:flex;align-items:center;gap:10px;margin:2px 2px 16px}
+#dynSec .list.qpAll{display:grid;grid-template-columns:repeat(auto-fill,328px);gap:30px;
+  align-items:start;justify-content:start}
+#dynSec .list.qpAll .row{width:328px;height:127px;padding:15px;gap:20px;border-radius:14px;
+  background:linear-gradient(180deg,var(--gf5),var(--gb50));border:1px solid var(--gf12);
+  box-shadow:inset 0 1px 0 var(--gf5);transition:background .18s ease,border-color .18s ease}
+#dynSec .list.qpAll .row:hover{background:linear-gradient(180deg,var(--gf10),var(--gb75));border-color:var(--gf20)}
+#dynSec .list.qpAll .row.cur{background:linear-gradient(180deg,var(--gf15),var(--gf5));border-color:var(--gf20)}
+#dynSec .list.qpAll .row .rt{width:97px;height:97px;border-radius:10px}
+#dynSec .list.qpAll .row .rm{flex:1 1 auto;min-width:0}
+/* the reference's own lockup has NO heart and no ⋮ (Apple's row carries a single ⋮ at the far
+   right), so this app's two buttons have to fit inside the same 298px. They are compacted to
+   25px each and the internal column gap goes 20 -> 16: measured, that leaves the text block 117px
+   of the lockup's 298 (art 97 + 16 + 117 + 16 + 52), where the shared 20px gap left it 90px. The
+   heart is hover-only in the app anyway (.favh, opacity 0 until the row is hovered), so nothing
+   about the resting look is lost. */
+#dynSec .list.qpAll .row{gap:16px}
+#dynSec .list.qpAll .row .rr .favh,#dynSec .list.qpAll .row .rr .dots{padding:4px}
+#dynSec .list.qpAll .row .rr .dots .ic{width:16px;height:16px}
+#dynSec .list.qpAll .row .rr .favh .ic{width:16px;height:16px}
+#dynSec .list.qpAll .row .rtitle{font-size:13px;line-height:17px}
+#dynSec .list.qpAll .row .rsub{font-size:12.5px;line-height:16px}
+/* one column when 328px can no longer be honoured (the same responsive promise the .libgrid keeps) */
+@media(max-width:760px){#dynSec .list.qpAll{grid-template-columns:minmax(0,1fr);gap:16px}
+  #dynSec .list.qpAll .row{width:auto}}
+</style>
+<script id="v13artjs">
+/* ================= WAVE 13 — remember which artwork must go through the proxy =================
+   THE PROBLEM, MEASURED. The Liked albums covers painted in ~0.55-0.9s on EVERY visit — the same
+   four URLs, re-measured three visits in a row (556ms / 887ms / 907ms for one of them), while
+   Home's covers painted in 0ms from the browser's own cache. The pre-existing 4J finding explains
+   it: the artwork host answers the renderer's DIRECT request (one that carries a Referer) with
+   429 + text/html, which surfaces as net::ERR_BLOCKED_BY_ORB. Chromium keeps that failure in its
+   memory cache, so the direct attempt fails again on the next render, and the failure ladder then
+   waits its full 900ms RETRY_MS before asking /api/thumb — the request that actually returns
+   artwork, and one that IS cacheable (the route sends Cache-Control: public, max-age=86400).
+   Neither the network nor the browser cache was the problem: the doomed direct attempt and the
+   900ms that waited on it were.
+   WHAT THIS LAYER DOES. It records artwork URLs that failed DIRECT, keyed WITHOUT the size token
+   (so one artwork is one entry whatever size each row asks for) and without the still's resolution,
+   in localStorage 'sv_artbad'. From then on thumb() hands out the proxy form at RENDER time for
+   that artwork: the doomed direct attempt is never made again, and the first paint of every later
+   view is served from the browser's cache of the proxy response — no error, no 900ms, no blank box.
+   MEASURED AFTER: Liked albums 907ms -> 3ms across three visits, with no new image request at all.
+   THE LADDER IS NOT REPLACED, only told what is already known: this listener is on WINDOW in the
+   CAPTURE phase, so it runs before the ladder's own document-level listener and the ladder can take
+   its proxy step immediately instead of 900ms later (see the stage-0 branch in #v3artjs).
+   The store is bounded (400 keys, oldest dropped) and only ever grows on a REAL failure, so a URL
+   that loads directly is never recorded. */
+(function(){
+'use strict';
+var KEY='sv_artbad', MAX=400, P='/api/thumb?url=';
+var bad={}, order=[];
+try{ var raw=JSON.parse(localStorage.getItem(KEY)||'{}');
+  if(raw&&typeof raw==='object') Object.keys(raw).forEach(function(k){ bad[k]=1; order.push(k) });
+}catch(e){}
+function keyOf(u){
+  u=String(u==null?'':u);
+  if(u.indexOf(P)===0){ try{ u=decodeURIComponent(u.slice(P.length)) }catch(e){} }
+  if(!/^https?:\/\//i.test(u)) return '';              // data:, blob:, an empty src: never proxied
+  var w=u.indexOf('=w'); if(w>0) u=u.slice(0,w);       // the size token is not part of the artwork
+  var m=u.match(/^(https?:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11})\//);
+  if(m) return m[1];                                   // a still is one artwork at any resolution
+  return u;
+}
+function isBad(u){
+  if(!u||String(u).indexOf(P)===0) return false;
+  var k=keyOf(u); return !!(k&&bad[k]);
+}
+function markBad(u){
+  var k=keyOf(u); if(!k||bad[k]) return;
+  bad[k]=1; order.push(k);
+  while(order.length>MAX) delete bad[order.shift()];
+  try{ localStorage.setItem(KEY, JSON.stringify(bad)) }catch(e){}
+}
+window.svArtIsBad=isBad;
+window.svArtMarkBad=markBad;
+window.svArtBad=function(){ return { keys:Object.keys(bad), proxied:order.length } };
+/* ---- WAVE 14: artwork that has ALREADY painted -----------------------------------------------
+   The other half of the same idea. `sv_artbad` decides HOW an artwork is asked for; `sv_artseen`
+   records that it HAS been painted, which is what lets the lazy layer (#v3artjs) skip its 80ms
+   per-image queue on every later view. Keys are the same size-token-free form as above, so one
+   artwork is one entry whatever size a row asks for. A paint is the only proof: the load listener
+   below fires for the URL that finally WORKED, whatever step of the ladder it was. The write is
+   debounced (a grid paints ~24 covers at once) and the store is bounded to 500 artworks. */
+var SKEY='sv_artseen', SMAX=500;
+var seen={}, sorder=[];
+try{ var rawS=JSON.parse(localStorage.getItem(SKEY)||'{}');
+  if(rawS&&typeof rawS==='object') Object.keys(rawS).forEach(function(k){ seen[k]=1; sorder.push(k) });
+}catch(e){}
+var sSaveT=null;
+function saveSeen(){
+  if(sSaveT) return;
+  sSaveT=setTimeout(function(){ sSaveT=null; try{ localStorage.setItem(SKEY, JSON.stringify(seen)) }catch(e){} }, 400);
+}
+function markSeen(u){
+  var k=keyOf(u); if(!k||seen[k]) return;
+  seen[k]=1; sorder.push(k);
+  while(sorder.length>SMAX) delete seen[sorder.shift()];
+  saveSeen();
+}
+window.svArtSeen=function(u){ if(!u) return false; var k=keyOf(u); return !!(k&&seen[k]) };
+window.svArtMarkSeen=markSeen;
+window.svArtSeenDB=function(){ return { keys:Object.keys(seen).length } };
+/* On DOCUMENT, not window — MEASURED: an image's own load event is capture-delivered to document
+   listeners (46 events in one render) and to NO window listener at all, so the same listener on
+   window silently recorded nothing. (The failure ladder's `error` listener sits on document too.) */
+document.addEventListener('load', function(e){
+  var im=e.target;
+  if(!im||im.tagName!=='IMG'||!im.naturalWidth) return;
+  markSeen(im.getAttribute('data-fb0')||im.getAttribute('src')||im.currentSrc);
+}, true);
+/* 1) A DIRECT FAILURE IS REMEMBERED FIRST. data-fb0 is the ORIGINAL url once the ladder is in
+      motion, so a failure that arrives for a proxy src still names the artwork, not the proxy. */
+window.addEventListener('error', function(e){
+  var im=e.target;
+  if(!im||im.tagName!=='IMG') return;
+  markBad(im.getAttribute('data-fb0')||im.getAttribute('src'));
+}, true);
+/* 2) EVERY RENDERED ARTWORK URL passes through here (all the app's renderers call thumb()), so
+      artwork already known to need the proxy is asked for in its proxy form from the first paint. */
+var _thumb=thumb;
+thumb=function(it,size){
+  var u=_thumb(it,size);
+  return (u&&isBad(u)) ? P+encodeURIComponent(u) : u;
+};
+/* 3) setTheme() (the album-colour wash) builds its OWN proxy URL from the artwork URL it is handed —
+      which is now sometimes already the proxy form, and /api/thumb refuses a localhost url (400
+      'blocked host'), so the wash would silently stop updating for exactly the covers that needed
+      the proxy. Unwrap it back to the direct URL: the function then re-wraps it itself, exactly as
+      it always did. */
+var _setTheme=window.setTheme;
+window.setTheme=function(u){
+  if(typeof u==='string'&&u.indexOf(P)===0){ try{ u=decodeURIComponent(u.slice(P.length)) }catch(e){} }
+  return _setTheme(u);
+};
+})();
+</script>
 </body>
 </html>
