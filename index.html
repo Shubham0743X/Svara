@@ -47,7 +47,7 @@ img{display:block}
    instead of the tracks losing their equality, and it keeps its ideal width on any normal window
    (504 = the 236px sidebar plus 16px of clearance on both sides, so the field can never slide
    under the sidebar: measured at the 900px minimum window it is 396px wide, 16px clear). */
-#top{display:grid;grid-template-columns:minmax(96px,1fr) minmax(0,min(560px,calc(100vw - 504px))) minmax(96px,1fr);align-items:center;gap:10px;padding:14px 22px 8px;position:relative;z-index:4;margin-left:-236px;width:calc(100% + 236px)}
+#top{display:grid;grid-template-columns:minmax(96px,1fr) minmax(0,min(560px,calc(100vw - 504px))) minmax(96px,1fr);align-items:center;gap:10px;padding:20px 22px 8px;position:relative;z-index:4;margin-left:-236px;width:calc(100% + 236px)}
 .srch{grid-column:2;width:100%;position:relative;display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 5px 3px 14px;gap:8px;transition:border-color .2s}
 .srch:focus-within{border-color:var(--acc2)}
 .srch .ic{width:16px;height:16px;color:var(--dim)}
@@ -90,6 +90,20 @@ img{display:block}
   display:flex;align-items:center;gap:8px}
 .npdot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.8)}
 #pgTitle.pgIdle .npdot{visibility:hidden}   /* UI-9: idle — no dot at all; `visibility` (not display) keeps its 8px slot in the flex row */
+/* WAVE 9 — the IDLE Home header is TIGHTER than the playing one, on purpose.
+   UI-11 reserved the now-playing box in both states so the pills never moved; the cost is that
+   with nothing playing the user looks at ~62px of blank rhythm between the search bar and the mood
+   pills (measured on the user's own window: pills 104px below the search bar). The box is now
+   reserved at FULL height only while a track is loaded (the state that actually prints
+   "Now playing / title · artist"); idle it collapses to the dot's own 8px plus one 12px hint line,
+   which puts the pills ~32px higher. Starting a track therefore DOES move the pills now — that is
+   the requested behaviour ("less gap when nothing is playing, same gap as now when something is"),
+   and it is the one place this file still trades a layout jump for breathing room.
+   Both rules are scoped to Home-not-hidden AND .pgIdle: #pgTitle keeps its classes across a page
+   switch (nothing ever removes .pgIdle except homeLine), so the idle guard alone would follow the
+   user onto History and tighten ITS subtitle. */
+#scroll:has(#homeSec:not([hidden])) #pgTitle.pgIdle{margin:2px 2px 0;font-size:0;line-height:0;gap:0}
+#scroll:has(#homeSec:not([hidden])) #pgTitle.pgIdle+#pgSub{margin:0 2px 12px;font-size:12px;line-height:1}
 /* home sections */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0 2px}
 .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 15px;font-size:13px;white-space:nowrap;color:var(--dim)}
@@ -259,6 +273,13 @@ body.pv #mini{display:none}
 #pvFab .ic{width:20px;height:20px;transition:transform .3s}
 #pvFab.up .ic{transform:rotate(180deg)}
 body.pv #pvFab{display:none}
+/* WAVE 13 — the expand-player chevron is GONE until a track is loaded, not dimmed. It used to sit at
+   40% opacity on an empty Home, and its own click answered "Play something first" (the guard in
+   syncFab's handler below) — a control that exists only to refuse is noise. The gate is
+   body.svtrack, the SAME boolean the mini bar already hides behind (see #v5provjs), so "a track is
+   loaded" has one definition in the app, and the toast path is now unreachable rather than merely
+   helpful. Two ids' worth of selector weight beats #pvFab's own display:flex. */
+body:not(.svtrack) #pvFab{display:none}
 /* (UI-6/UI-8) the old @media (max-width:920px){.pvright{width:290px}} step is gone: the 290px
    clamp floor on --pvrail covers narrow windows, so the rail has ONE source of truth, not two. */
 </style>
@@ -370,9 +391,14 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
   if(intensity !== 'off' && intensity !== 'low' && intensity !== 'medium' && intensity !== 'high') intensity = 'medium';
   /* gfxLevel wins when set (matching gfxLevel()'s precedence); a valid 'low' is classic. When the
      key is unset the exact legacy mapping runs, so nobody's current look changes. */
+  /* WAVE 14 — the FIRST-RUN default is High. The legacy pair is still honoured when it was really
+     written (an explicit 'off', or lowPower, means classic); a profile where NEITHER key exists at
+     all is untouched and now lands on the requested default instead of 'bal'. */
+  var legacyChosen = (rawI !== null || rawL !== null);
   var mode = gfx === 'low'    ? 'classic'
            : gfx === 'medium' ? 'bal'
            : gfx === 'high'   ? 'full'
+           : !legacyChosen ? 'full'
            : (intensity === 'off' || lowPower) ? 'classic'
            : (intensity === 'high' ? 'full' : 'bal');
   var d = document.documentElement;
@@ -544,7 +570,7 @@ let hist=LSget('ml_history',{});          // your listening history (kept from b
 let favs=LSget('sv_favs',{});
 let pls=LSget('sv_pls',{});
 let shist=LSget('sv_shist',[]);
-let lyrPref=LSget('sv_lyr','ytm');
+let lyrPref=LSget('sv_lyr','lrclib');   /* WAVE 14 — LRClib is the first-run default (was 'ytm') */
 const idItem={};
 let toastT;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
@@ -589,7 +615,22 @@ function setNav(on){
    in its idle state and every later visit is repainted by the showDyn/goHome wrapper (which calls
    homeLine() in the same tick as this function), so nothing has to blank it any more. */
 function goHome(){curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
-function showDyn(title,sub,html){curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
+/* WAVE 14 — a dyn page can now say HOW to rebuild itself. `list` = {head, cls}: the page's own bar
+   (if it has one) plus the class its listHTML() list was built with. A repaint — a Like, an unlike,
+   anything that calls refreshHearts() — then rebuilds the page the user is actually looking at.
+   Without it, refreshHearts() fell back to a bare listHTML(curList): that is exactly what turned
+   the Quick picks page's grid back into a plain list and dropped its Back / Play all bar. */
+var dynList=null;
+function showDyn(title,sub,html,list){dynList=(list&&typeof list==='object')?list:null;curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
+/* Rebuild the current dyn page from the same recipe it was built with. Returns false when the page
+   never registered one, so the caller keeps the rebuild it had before this wave. */
+function repaintDyn(){
+  if(!dynList||!curList||!curList.length) return false;
+  var h=(typeof dynList.head==='function')?dynList.head():(dynList.head||'');
+  $('#dynSec').innerHTML=h+listHTML(curList,dynList.cls||'');
+  register(curList);
+  return true;
+}
 
 /* ============ sidebar playlists ============ */
 function updatePlRows(){
@@ -608,7 +649,16 @@ function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlis
    the big 544px token (player hero, #mArt, the queue, the 4Z top-result card and the
    artist banner all keep it, unchanged); the list/rail renderers ask for what their own
    box can actually display instead of making every 44-64px row decode a 544x544 bitmap. */
-var THUMB_ROW='w160-h160-l90-rj',THUMB_RAIL='w256-h256-l90-rj',THUMB_BIG='w544-h544-l90-rj';
+var THUMB_ROW='w160-h160-l90-rj',THUMB_RAIL='w256-h256-l90-rj',THUMB_BIG='w544-h544-l90-rj',
+    /* WAVE 13 — the hero card. A Trending card is 458x257 on the user's window, and it was asking
+       for the RAIL token (256x256): a 1.79x upscale, which is the "slightly pixelated" cover in the
+       report. 720x405 is the 16:9 token, and -p-l90-rj is the same flag combination the artist
+       banners already use for their 2.4:1 crop (heroArt, verified 2400x1000). MEASURED on this
+       artwork: =w720-h405-p-l90-rj delivers exactly 720x405, while the square-style token of the
+       same name (=w720-h405-l90-rj) answers 405x405 — hence the -p. 1.57x the displayed box, so it
+       is crisp at DPR 1 and still has headroom at 1.2; measured cost ~88KB per card, cached after
+       the first paint (see #v13artjs). */
+    THUMB_HERO='w720-h405-p-l90-rj';
 function thumb(it,size){
   let u=(it&&it.thumb)||'';
   if(!u)return '';
@@ -629,15 +679,19 @@ function rowHTML(it){
     <button class="dots" data-menu="${esc(it.id)}"><span class="ic">${ic('i-dots')}</span></button></div></div>`;
 }
 function listHTML(items,extraClass){return `<div class="list${extraClass?' '+extraClass:''}">${(items||[]).map(rowHTML).join('')}</div>`}
-function railCard(it,ctx){
+/* WAVE 13: an optional third argument lets a row ask for its OWN artwork size — the Trending hero
+   passes THUMB_HERO, every other row keeps the rail token by default. Optional, so railHTML's
+   existing callers (Listen again, Albums for you, the artist page) are untouched. */
+function railCard(it,ctx,size){
   const cur=nowItem()&&nowItem().id===it.id;
-  const ph=thumb(it,THUMB_RAIL)?'':`<div class="ph"><span class="ic">${ic('i-disc')}</span></div>`;
+  const sz=size||THUMB_RAIL;
+  const ph=thumb(it,sz)?'':`<div class="ph"><span class="ic">${ic('i-disc')}</span></div>`;
   return `<div class="rail" data-rail="${ctx}" data-id="${esc(it.id)}" data-title="${esc(it.title||'')}">
-    <div class="art">${ph}<img loading="lazy" src="${esc(thumb(it,THUMB_RAIL))}" onerror="this.style.display='none'">
+    <div class="art">${ph}<img loading="lazy" src="${esc(thumb(it,sz))}" onerror="this.style.display='none'">
       <div class="ov"><span class="pb">${ic('i-play')}</span></div></div>
     <div class="rname">${esc(it.title)}</div><div class="rsub2">${esc(it.artist||'')}</div></div>`;
 }
-function railHTML(arr,ctx){return `<div class="railwrap">${arr.map(x=>railCard(x,ctx)).join('')}</div>`}
+function railHTML(arr,ctx,size){return `<div class="railwrap">${arr.map(x=>railCard(x,ctx,size)).join('')}</div>`}
 
 /* ============ personalization core ============ */
 function splitArtists(a){return String(a||'').split(/[,&×;]|\bfeat\.?/i).map(s=>s.trim()).filter(s=>s&&!/^feat/i.test(s))}
@@ -665,7 +719,8 @@ function notePlay(it){
 }
 
 /* ============ home sections ============ */
-/* 4AW: renderHome() is async and its post-await writes target #startRail / #albRail, which live
+/* 4AW: renderHome() is async and its post-await writes target the rails it painted (#albRail and the
+   wave-7 discovery rails; the empty-profile starter rail it originally named is now #popRail), which live
    INSIDE #homeSec. A concurrent render (e.g. setClearHist() firing while one is mid-flight)
    replaces sec.innerHTML and those nodes vanish, so the stale render threw "Cannot set properties
    of null". homeGen is a render-generation counter: every call takes a token, and after EVERY
@@ -690,45 +745,402 @@ function chipRowHTML(active){
    title itself and re-render the pills; the filter argument is left undefined so the mood KEEPS
    the chip the user last picked, exactly like a search-box submit. */
 function openMood(label){ doSearch(String(label||'')+' songs', false, undefined, label) }
+
+/* ============ Wave 7 (HOME-1) — rows that stay, and shelves that are actually popular ============
+   TWO COMPLAINTS, ONE ROOT CAUSE. (1) "Popular right now" was painted ONLY in the empty-profile
+   branch, so the first song ever played deleted it, and with it went the only discovery row a new
+   Home had. (2) Every category shelf — the onboarding picks included — asked YouTube for
+   "<category> songs" and took the first twelve rows. That is YouTube's own order for a bare query,
+   and it mixes real hits with cover uploads, long bhajans, meditation tracks and channels with two
+   subscribers. Measured live: "Bengali songs" put a 6-minute "Uttam Kumar Mondal" upload at #1 and
+   "Party songs" opened on a mashup. That is why the picks felt unpopular.
+   WHAT POPULARITY WE CAN ACTUALLY OBSERVE. There is no play count anywhere in the app's Track shape
+   (server.js §6 decision 7 dropped them), so this wave ranks on the two real signals that DO arrive:
+     • an artist row's subtitle carries "N monthly audience" (/api/search?type=artist) — parsed by the
+       app's OWN trAudience(), never a second parser;
+     • /api/artist/songs?id= returns a channel's catalogue in YouTube Music's own popularity order —
+       measured: Karan Aujla page 1 is Ashke, Boyfriend, Aujla Szn, Straight Up, Low Fade.
+   So a category's popular songs = the top songs of that category's BIGGEST artists, interleaved
+   round-robin so no single artist owns the row. Artists under ART_AUD_FLOOR are never used, and that
+   floor is what removes "Various Bengali Artists" (4.19K subscribers) and "Bollywood Christmas" (2).
+   THE FALLBACK IS THE POINT. A vibe has no artist query that works (measured: "Party artists" and
+   "Focus artists" both return 0 rows), so whenever no artist clears the floor the shelf falls back to
+   the category's own song search through junkSong() — the filter that keeps a 58-minute "NONSTOP
+   MEGAMIX" and "40 Hz Memory Recall (Binaural Beats)" out of a music row.
+   WHAT IS CACHED, AND WHY: these lookups are heavier than one search and renderHome() runs on every
+   navigation, play and resize. feedJSON() memoises each URL for FEED_TTL and collapses concurrent
+   callers onto a single request, so repainting Home costs no network at all.
+   WHAT IS NOT TOUCHED: Listen again, Quick picks, Albums for you and Surprise me keep their own
+   builders and their own order, and the picked shelves keep the wave-6b handover on top of them.
+   The only caps that move are the ones asked for: Quick picks 18 → QP_PAGE with a Show more button,
+   Albums for you 3 artists x 4 albums → FEED_ARTISTS x ALB_PER_ARTIST.
+   WAVE 8 moved the SAME caps again, for the same reason (the user asked for more content in the
+   horizontal carousels): one screen of a carousel is now 6 covers and one screen of Quick picks is
+   3 columns x 4 rows, so QP_PAGE=36 is exactly three pick screens, TREND_LIMIT/POP_LIMIT=18 is
+   exactly three cover screens, and ART_SONGS is what keeps an 18-song row round-robin over its four
+   artists instead of running dry at 16. No extra request is made for any of it — the artist route
+   already returns ~100 rows and each search already returns more than a page; these numbers only
+   decide how deep we slice. */
+var QP_PAGE=36,          /* one page of the Quick picks carousel: 9 columns x 4 rows (was 30, and a
+                            hardcoded 18 before that) */
+    TREND_LIMIT=18,      /* Trending songs — three screens of the 6-cover window (was 14) */
+    POP_LIMIT=18,        /* Popular right now — same (was 14) */
+    ART_SONGS=6,         /* songs drawn from each artist's own top-song order (was a hardcoded 4) */
+    FEED_ARTISTS=4,      /* artists a category or Home row may draw from (was 3) */
+    ALB_PER_ARTIST=6,    /* albums per artist (was 4) */
+    ART_AUD_FLOOR=1e6;   /* monthly audience a row must clear to count as a real artist */
+var qpShown=QP_PAGE;     /* WAVE 13: the Home row's own size. It no longer GROWS — Show more opens the
+                            Quick picks page (see openQuickPicks below); only a data clear resets it */
+var trendArr=[], popArr=[];   /* the two discovery rows' current contents, for their own rail clicks */
+
+/* One rule for the junk a bare query drags in. Artist-derived rows never need it — a channel's own
+   top songs ARE songs. `dropTrendWords` is opt-in: a real song may carry the word, but the literal
+   "Trending Version"/"Trend" uploads a q=trending search returns are not songs (measured: a dj edit
+   "Janabai Aali Trending La" and a regional news jingle both sat in its top ten). */
+var JUNK_RE=/\b(non[- ]?stop|megamix|mashup|meditation|binaural|brain power|study music|background music|sleep music|full album|volume ?\d|vol\.? ?\d+|karaoke|cover version|playlist|compilation|slowed|reverb|8d audio|instrumental)\b/i;
+function durSecs(d){
+  var p=String(d==null?'':d).trim().split(':');
+  if(p.length<2||p.length>3) return 0;
+  var n=p.map(Number);
+  if(n.some(function(x){ return !isFinite(x) })) return 0;
+  return p.length===3 ? n[0]*3600+n[1]*60+n[2] : n[0]*60+n[1];
+}
+function junkSong(it, dropTrendWords){
+  if(!it||!it.id||!it.title) return true;
+  if(durSecs(it.duration)>600) return true;                    /* 10 min: a megamix, not a song */
+  if(JUNK_RE.test(it.title)) return true;
+  if(dropTrendWords && /\btrend(ing|s)?\b/i.test(it.title)) return true;
+  return false;
+}
+function dedupeSongs(list){
+  var out=[], seen={};
+  (list||[]).forEach(function(it){ if(!it||!it.id||seen[it.id]) return; seen[it.id]=1; out.push(it) });
+  return out;
+}
+/* Round-robin: every artist's #1, then every artist's #2 … so a row is never one catalogue in a row. */
+function interleave(lists, limit){
+  var out=[], seen={}, i=0, more=true;
+  lists=(lists||[]).filter(function(l){ return l&&l.length });
+  while(more && (!limit||out.length<limit)){
+    more=false;
+    for(var k=0;k<lists.length;k++){
+      var it=lists[k][i];
+      if(!it) continue;
+      more=true;
+      if(seen[it.id]) continue;
+      seen[it.id]=1; out.push(it);
+      if(limit && out.length>=limit) break;
+    }
+    i++;
+  }
+  return out;
+}
+/* ---- session cache: one request per URL per FEED_TTL, and never two at once ---- */
+var feedCache={}, feedPending={}, FEED_TTL=10*60*1000;
+function feedJSON(url, ttl){
+  var hit=feedCache[url];
+  if(hit && Date.now()-hit.at < (ttl||FEED_TTL)) return Promise.resolve(hit.j);
+  if(feedPending[url]) return feedPending[url];                 /* collapse concurrent callers */
+  var p=fetch(url).then(function(r){ return r.json() }).then(function(j){
+    feedCache[url]={at:Date.now(), j:j};
+    delete feedPending[url];
+    return j;
+  }).catch(function(e){ delete feedPending[url]; throw e });
+  feedPending[url]=p;
+  return p;
+}
+/* A data reset has to drop the cache with everything else, or the next Home would rebuild the rows
+   from what the previous run had already fetched. */
+function clearFeedCache(){ feedCache={}; feedPending={}; qpShown=QP_PAGE }
+/* ---- the popularity helpers ---- */
+/* The app's own audience parser (trAudience, in the All-card block) is SCOPED to that block, not a
+   global — measured on the live page: typeof trAudience === 'undefined'. The first version of this
+   wave called it directly, so EVERY artist parsed as 0 audience, no artist cleared the floor, and
+   both category shelves and Popular right now fell back to a bare song search — i.e. exactly the
+   unpopular rows this wave exists to remove (and the fallback was the old q=trending junk: "Trend",
+   "Janabai Aali Trending La", "Ek Number Par Trending Chalto Hamar News"). So the same rule lives
+   here, with the same semantics: a K/M/B multiplier with a word boundary (so the digits inside a
+   @handle like '@…21march32' never masquerade as 21M), or a plain "<n> subscribers". */
+function audOf(sub){
+  if(typeof window.trAudience==='function') return window.trAudience(sub);   /* reuse it if ever exposed */
+  var s=String(sub==null?'':sub).toLowerCase().replace(/,/g,'');
+  var m=s.match(/(\d+(?:\.\d+)?)\s*([kmb])\b/) || s.match(/(\d+(?:\.\d+)?)\s*subscribers?\b/);
+  if(!m) return 0;
+  var n=parseFloat(m[1]); if(!(n>0)) return 0;
+  var u=m[2]||'';
+  return Math.round(n*(u==='k'?1e3:u==='m'?1e6:u==='b'?1e9:1));
+}
+/* Artists for a category, biggest audience first. Two phrasings are merged because one alone is thin
+   for a smaller language (measured: "Bengali artists" → 3 rows incl. junk, "Bengali singers" → 8). */
+async function catArtists(cat, n){
+  var base=String(cat==null?'':cat).trim(); if(!base) return [];
+  var qs=[base+' singers', base+' artists'], rows=[], seen={};
+  for(var i=0;i<qs.length;i++){
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=artist');
+      (j.items||[]).forEach(function(r){
+        if(!r||!r.id||!/^UC/.test(r.id)||seen[r.id]) return;    /* real channels only */
+        var nm=r.title||r.artist||''; if(!nm) return;
+        seen[r.id]=1; rows.push({id:r.id, name:nm, aud:audOf(r.sub)});
+      });
+    }catch(e){}
+  }
+  return rows.filter(function(r){ return r.aud>=ART_AUD_FLOOR })
+             .sort(function(a,b){ return b.aud-a.aud })
+             .slice(0, n||FEED_ARTISTS);
+}
+/* A channel's own top songs, in YouTube Music's popularity order (never re-sorted by us).
+   WAVE 11: `off` is a ROW OFFSET into that same order, so a caller can ask for a LATER WINDOW of the
+   popularity list without changing what the list means (see popWindow()). A window that runs past the
+   end of a short catalogue falls back to its head, so a thin artist can never blank a row. */
+async function artistTopSongs(id, n, off){
+  try{
+    var j=await feedJSON('/api/artist/songs?id='+encodeURIComponent(id));
+    var a=j.songs||[], head=a.slice(0, n||ART_SONGS);
+    if(!off) return head;                                   // the head is the common case: no slice
+    var w=a.slice(off, off+(n||ART_SONGS));
+    return w.length ? w : head;
+  }catch(e){ return [] }
+}
+/* WAVE 11 — "POPULAR RIGHT NOW" MOVES WITHOUT LEAVING THE POPULAR HEAD OF A CATALOGUE.
+   The artist SEEDS cannot rotate: measured live, "trending artists 2026" and "popular artists 2026"
+   return ZERO rows, "top artists 2026" returns two Western acts, and only "biggest artists India"
+   (4 real channels) plus "<language> singers" clear the audience floor. So the row keeps those
+   seeds and rotates the SONGS instead: /api/artist/songs returns a long catalogue in YouTube
+   Music's own popularity order (measured: 147 rows for Shreya Ghoshal — head KALYANI (Remix),
+   Saiyaara Reprise; rows 8-14 Aashiq Banaya Aapne, Tere Hawale; rows 20-26 Dhadhang Dhang,
+   Guli Mata), so moving the window shows different hits, never obscure ones. Three weekly slots
+   never go deeper than row 18 of that order, and the slot is a function of the clock — nothing is
+   stored, so a long-running session rolls into the next window on its own next Home paint. */
+function popWindow(){
+  return (Math.floor(Date.now()/(7*864e5)) % 3) * ART_SONGS;   // 0 / 6 / 12, one step a week
+}
+/* A plain song search, junk removed and deduped — the fallback for anything without an artist query. */
+async function querySongs(qs, limit, dropTrendWords){
+  var list=[];
+  qs=(qs instanceof Array)?qs:[qs];
+  for(var i=0;i<qs.length;i++){
+    try{ var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=song'); if(j.items) list=list.concat(j.items) }catch(e){}
+  }
+  return dedupeSongs(list.filter(function(it){ return !junkSong(it, dropTrendWords) })).slice(0, limit||TREND_LIMIT);
+}
+/* THE CATEGORY SHELF: the most popular songs of a language/vibe/artist pick. */
+async function categorySongs(cat, limit){
+  var arts=await catArtists(cat, FEED_ARTISTS);
+  if(arts.length){
+    var lists=[];
+    for(var i=0;i<arts.length;i++) lists.push(await artistTopSongs(arts[i].id, ART_SONGS));
+    var out=interleave(lists, limit);
+    if(out.length) return out;
+  }
+  return querySongs(String(cat==null?'':cat).trim()+' songs', limit);
+}
+/* TRENDING SONGS — WAVE 11: a DATED query set, ranked by cross-query consensus.
+   What each query returns was measured live (2026-10-13) through this app's own
+   /api/search?type=song, AFTER junkSong():
+     "trending songs"            Heeriye · KALYANI (Remix) · Arz Kiya Hai · Udi Udi
+     "trending songs this week"  Love Like This (Diljit) · Panjeban · DEALER · No Shortcut
+     "bollywood trending songs <y>"  Meri Banogi Kya · Amplifier · DARKHAAST · Aaj Ki Raat
+     "viral songs <y>"           Thodi Si Daaru · Dooron Dooron · Kithe Reh Gaya · Arabic Kuthu
+     "trending songs India"      KALYANI · GUZARISH · Lover (Diljit) · Thoda Thoda Pyaar
+     "top hits <y>"              Shararat (Dhurandhar) · Snooze · Sapphire
+   and the queries that FAILED, which is why none of them is in the pool: a MONTH NAME is matched
+   literally ("trending songs October" ⇒ "we fell in love in october" and Zulu gospel; "new songs
+   October 2026" ⇒ the same), "trending artists 2026" and "popular artists 2026" return ZERO rows,
+   "top artists 2026" returns two Western acts, and "trending hits 2026" is study-beat playlists.
+   So the OLD pair is gone: one of its two halves was that month/year query, which is why the row
+   drifted into whatever a date string happened to match instead of what is actually big.
+   TWO ANCHORS PLUS TWO ROTATING. The anchors are fixed (the two whose results are quoted above);
+   the other two are drawn from the pool by a slot that advances twice a day, so the row asks a
+   different pair of questions tomorrow while never dropping the two that are always right. A track
+   is then ranked by HOW MANY of the four queries returned it — the only cross-query signal
+   available — with ties broken by first appearance, so the top of the row is what several
+   independent "what is big now" questions agree on, not one query's private order. Nothing is
+   stored: the slot is a function of the clock, so a session that spans a slot boundary picks the
+   new queries up on its next Home paint, and feedJSON's 10-minute memo means a repaint costs no
+   network at all. */
+function trendQueries(){
+  var y=(new Date()).getFullYear();
+  var pool=['bollywood trending songs '+y, 'viral songs '+y, 'trending songs India',
+            'top hits '+y, 'popular songs '+y];
+  var slot=Math.floor(Date.now()/(12*3600*1000));        /* two slots a day */
+  var a=slot%pool.length, b=(a+1)%pool.length;
+  var qs=['trending songs', 'trending songs this week', pool[a], pool[b]], out=[];
+  qs.forEach(function(q){ if(out.indexOf(q)<0) out.push(q) });   /* a short pool can repeat a neighbour */
+  return out;
+}
+async function trendSongs(limit){
+  var qs=trendQueries(), seen={}, order=[];
+  for(var i=0;i<qs.length;i++){
+    var clean=[];
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=song');
+      clean=dedupeSongs((j.items||[]).filter(function(it){ return !junkSong(it, true) }));
+    }catch(e){}
+    clean.forEach(function(it){
+      var h=seen[it.id];
+      if(!h){ h=seen[it.id]={it:it, n:0, first:order.length}; order.push(it.id) }
+      h.n++;
+    });
+  }
+  return order.map(function(id){ return seen[id] })
+              .sort(function(x,z){ return (z.n-x.n) || (x.first-z.first) })
+              .slice(0, limit||TREND_LIMIT)
+              .map(function(x){ return x.it });
+}
+/* POPULAR RIGHT NOW: the biggest artists' biggest songs, whatever the profile is. The picks' own
+   language leads when there is one, so the row reads as the user's own market. Falls back to the
+   plain trending query, which is the row this replaced. */
+async function popularitySongs(limit){
+  var qs=['biggest artists India'];
+  try{
+    var p=LSget('sv_profile', null);
+    var lang=p&&(p.langs||[])[0];
+    if(lang) qs.push(lang+' singers');
+  }catch(e){}
+  var rows=[], seen={};
+  for(var i=0;i<qs.length;i++){
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(qs[i])+'&type=artist');
+      (j.items||[]).forEach(function(r){
+        if(!r||!r.id||!/^UC/.test(r.id)||seen[r.id]) return;
+        var nm=r.title||r.artist||''; if(!nm) return;
+        seen[r.id]=1; rows.push({id:r.id, name:nm, aud:audOf(r.sub)});
+      });
+    }catch(e){}
+  }
+  var arts=rows.filter(function(r){ return r.aud>=ART_AUD_FLOOR })
+               .sort(function(a,b){ return b.aud-a.aud })
+               .slice(0, FEED_ARTISTS);
+  if(arts.length){
+    var lists=[], win=popWindow();          /* WAVE 11: this week's window in each artist's own order */
+    for(var k=0;k<arts.length;k++) lists.push(await artistTopSongs(arts[k].id, ART_SONGS, win));
+    var out=interleave(lists, limit);
+    if(out.length) return { items:out, artists:arts.map(function(a){ return a.name }) };
+  }
+  return { items:await querySongs('trending', limit), artists:[] };
+}
+/* ---- painting a Home rail, under the render generation (4AW) ---- */
+function paintRail(gen, id, items, ctx, size){
+  if(gen!==homeGen) return false;
+  var el=document.getElementById(id); if(!el) return false;
+  el.innerHTML = items.length ? railHTML(items, ctx, size)
+    : '<div class="empty">Nothing to show yet — keep listening and this fills up.</div>';
+  if(typeof skReveal==='function'){ try{ skReveal(el) }catch(e){} }
+  return true;
+}
+async function fillTrend(gen){
+  var items=await trendSongs(TREND_LIMIT);
+  if(gen!==homeGen) return;
+  trendArr=items;
+  paintRail(gen, 'trendRail', items, 'trend', THUMB_HERO);   /* WAVE 13: the hero asks for 720x405 */
+}
+async function fillPopular(gen){
+  var r=await popularitySongs(POP_LIMIT);
+  if(gen!==homeGen) return;
+  popArr=r.items;
+  paintRail(gen, 'popRail', r.items, 'pop');
+}
+/* Albums for you — the builder that was already here, now FEED_ARTISTS artists x ALB_PER_ARTIST albums. */
+async function fillAlbums(gen, names){
+  var cards='';
+  for(var i=0;i<names.length && i<FEED_ARTISTS;i++){
+    try{
+      var j=await feedJSON('/api/search?q='+encodeURIComponent(names[i])+'&type=album');
+      if(gen!==homeGen) return;                 // 4AW: a newer render owns the DOM now
+      (j.items||[]).slice(0,ALB_PER_ARTIST).forEach(function(al){ cards+=railCard(al,'al') });
+    }catch(e){/* skip artist */}
+  }
+  if(gen!==homeGen) return;                     // 4AW: checked after the LAST await too
+  var ar=document.getElementById('albRail'); if(!ar) return;
+  ar.innerHTML = cards ? '<div class="railwrap">'+cards+'</div>'
+    : '<div class="empty">No albums found yet — keep listening and this fills with your artists’ albums.</div>';
+  if(typeof skReveal==='function'){ try{ skReveal(ar) }catch(e){} }
+}
+/* An empty profile owns no artists, so its Albums row is built from the same big ones the Popular row
+   is built from — the row exists on a first run instead of only after a few plays. */
+async function fillAlbumsFromPopular(gen){
+  var r=await popularitySongs(POP_LIMIT);       // cached: the Popular fill already asked
+  if(gen!==homeGen) return;
+  if(r.artists.length) fillAlbums(gen, r.artists);
+  else fillAlbums(gen, []);
+}
+/* ============ WAVE 13 — Show more opens the Quick picks PAGE ============
+   The button used to GROW the Home row: qpMore revealed the next page of the same scored list
+   inside the four-row carousel. It now leaves Home for a full page instead, laid out on the
+   reference grid the user measured on Apple Music's own "New Radio Episodes" row: one item is
+   328x127 — a 298x97 horizontal lockup inside 15px of padding — with a 97px square of artwork and a
+   20px gap before the text.
+   The page is the app's OWN dynamic view (showDyn), so it needs no new routing, no second copy of
+   the Quick picks scoring, and it inherits the app's row contract for free: the items ARE
+   listHTML()'s rows (data-play + curList + register), sized by #v13qpcss at the end of the file.
+   The list is one full page of picks (two Home pages), still in the same scored order, still no
+   fetch — the page is a WINDOW on the same list, never a re-rank. */
+var QP_PAGE_FULL=QP_PAGE*2;               /* what the Quick picks page holds */
+function qpAllItems(){ return topScored(Math.max(qpShown, QP_PAGE_FULL)) }
+function qpAllHeadHTML(){
+  return '<div class="qpbar">'+
+    '<button class="art-back" data-qpback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>'+
+    '<button class="gobtn" data-qpall="1">Play all</button></div>';
+}
+function openQuickPicks(){
+  var items=qpAllItems();
+  if(!items.length){ toast('Play a few songs and Quick picks fills up'); return }
+  var head=qpAllHeadHTML();
+  showDyn('Quick picks', items.length+(items.length===1?' song':' songs')+' from your listening',
+    head+listHTML(items,'qpAll'), { head:head, cls:'qpAll' });   /* WAVE 14: how to rebuild it */
+  curList=items; register(items);
+  var sc=document.getElementById('scroll'); if(sc) sc.scrollTop=0;
+}
+window.svaraQuickPicks={ open:openQuickPicks, items:qpAllItems, page:QP_PAGE_FULL };
+/* Exposed for the console (and for this wave's own checks), exactly like the wave-6 hooks. */
+window.svaraFeed={
+  trend:trendSongs, popular:popularitySongs, category:categorySongs, artists:catArtists,
+  junk:junkSong, clear:clearFeedCache,
+  trendQ:trendQueries, win:popWindow,          /* WAVE 11: what the two discovery rows are asking now */
+  state:function(){ return { qpShown:qpShown, page:QP_PAGE, trend:(trendArr||[]).length, pop:(popArr||[]).length, cached:Object.keys(feedCache).length, trendQ:trendQueries(), win:popWindow() } }
+};
 var homeGen=0;
 async function renderHome(){
   var gen=++homeGen;
   const sec=$('#homeSec');
-  const recent=topRecent(12),scored=topScored(18),arts=topArtists(3);
+  const recent=topRecent(12),scored=topScored(qpShown),arts=topArtists(FEED_ARTISTS);
   /* Home shows the row with NO active pill (the shared builder, no second copy of the markup). */
   let h=chipRowHTML(null);
   const none=!Object.keys(hist).length;
   quickList=scored;
+  /* Wave 7: the three discovery rows are built ONCE here and painted into BOTH branches. They are the
+     rows a first play used to take away, and the reason a fresh Home felt empty. */
+  /* WAVE 11: Trending songs is the FIRST row on Home and its cards are WIDE feature cards, not
+     covers — but only the SECTION's class changes (v11trendcss sizes them), so the card markup, its
+     playback handler and skRail's placeholder markup are all untouched, and the wave-10 width fix
+     for the nested skeleton wrapper still applies. Four placeholders is what fills the row at
+     --herocols: three whole cards and the same small peek the cover rows show. */
+  const trendSec=`<div class="sec heroSec" id="trendSec"><h2>Trending songs</h2><div class="railwrap" id="trendRail">${typeof skRail==='function'?skRail(4):'<div class="empty">Loading…</div>'}</div></div>`;
+  const popSec=`<div class="sec"><h2>Popular right now</h2><div class="railwrap" id="popRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
+  const albSec=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading your albums…</div>'}</div></div>`;
+  const more=topScored(qpShown+QP_PAGE).length>scored.length;   /* is there a next page of picks? */
+  /* WAVE 11 ORDER (the user's): Trending songs → Quick picks → Listen again → Popular right now →
+     Albums for you → the picked onboarding shelves → Surprise me. The picked shelves land after
+     Albums for you (see decorateHome, which anchors every one of them to that row), so the app's
+     own rows run first and the personalisation closes the page. */
   if(!none){
+    h+=trendSec;
+    h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button>${more?'<button class="go" data-qpmore="1">Show more</button>':''}</h2>${listHTML(quickList,'qpGrid')}</div>`;
     if(recent.length)h+=`<div class="sec"><h2>Listen again</h2>${railHTML(recent,'la')}</div>`;
-    h+=`<div class="sec"><h2>Quick picks<button class="go" data-qp="1">Play all</button></h2>${listHTML(quickList,'qpGrid')}</div>`;
-    if(arts.length)h+=`<div class="sec"><h2>Albums for you</h2><div class="railwrap" id="albRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading your albums…</div>'}</div></div>`;
+    h+=popSec+albSec;
     h+=`<div class="sec"><h2>Surprise me<button class="go" id="diceBig">🎲 Play a radio from your taste</button></h2><div class="empty" style="padding:6px 2px">Your radio never jumps between languages — it seeds from what you listen to most.</div></div>`;
   }else{
+    h+=trendSec;
     h+=`<div class="sec"><h2>Welcome to Svara</h2><div class="empty">Search any song and press play.<br>After a few songs, Home fills with <b>Listen again</b>, <b>Quick picks</b> and <b>Albums for you</b> — all from your taste.</div></div>`;
-    h+=`<div class="sec"><h2>Popular right now</h2><div id="startRail">${typeof skRail==='function'?skRail(6):'<div class="empty">Loading…</div>'}</div></div>`;
+    h+=popSec+albSec;
   }
   sec.innerHTML=h;
-  // background starter content for empty profile
-  if(none){try{const r=await fetch('/api/search?q=trending');const j=await r.json();const it=(j.items||[]).slice(0,12);if(gen!==homeGen)return;const sr=document.getElementById('startRail');if(sr)sr.innerHTML=railHTML(it,'start');if(typeof skReveal==='function')skReveal(document.getElementById('startRail'));}catch(e){if(gen!==homeGen)return;var sr2=document.getElementById('startRail');if(sr2)sr2.innerHTML=''}}
-  // albums for you
-  if(!none&&arts.length){
-    try{
-      let cards='';
-      for(const a of arts){
-        try{
-          const r=await fetch('/api/search?q='+encodeURIComponent(a)+'&type=album');
-          const j=await r.json();
-          if(gen!==homeGen)return;                 // 4AW: a newer render owns the DOM now
-          (j.items||[]).slice(0,4).forEach(al=>{cards+=railCard(al,'al')});
-        }catch(e){/* skip artist */}
-      }
-      if(gen!==homeGen)return;                   // 4AW: checked after the LAST await too
-      var ar=document.getElementById('albRail');
-      if(ar)ar.innerHTML=cards?`<div class="railwrap">${cards}</div>`:'<div class="empty">No albums found yet — keep listening and this fills with your artists’ albums.</div>';
-      if(typeof skReveal==='function')skReveal(document.getElementById('albRail'));
-    }catch(e){if(gen!==homeGen)return;var ar2=document.getElementById('albRail');if(ar2)ar2.innerHTML='<div class="empty">Could not load albums right now.</div>'}
-  }
+  /* Wave 7 fills. Each one owns one rail, checks the generation after every await, and asks its
+     helpers, which are cached — so a repaint of Home that changes nothing costs no network. */
+  fillTrend(gen);
+  fillPopular(gen);
+  if(arts.length) fillAlbums(gen, arts); else fillAlbumsFromPopular(gen);
 }
 
 /* ============ playback ============ */
@@ -925,7 +1337,11 @@ function toggleFav(it){
 }
 function refreshHearts(){
   if(!$('#homeSec').hidden){renderHome()}
-  else if(!$('#dynSec').hidden&&curList.length){$('#dynSec').innerHTML=listHTML(curList);register(curList)}
+  else if(!$('#dynSec').hidden&&curList.length){
+    /* WAVE 14: a page that knows how to rebuild itself keeps its own look (its grid class, its
+       header bar); every other page keeps the plain-list rebuild it always had. */
+    if(!repaintDyn()){ $('#dynSec').innerHTML=listHTML(curList); register(curList) }
+  }
 }
 function addToPlaylist(name,it){
   if(!pls[name])pls[name]=[];
@@ -1028,7 +1444,9 @@ document.addEventListener('click',e=>{
   if(rail){
     const ctx=rail.dataset.rail,id=rail.dataset.id;
     if(ctx==='al'){openAlbum(id,rail.dataset.title||'');return}
-    const arr=ctx==='la'?topRecent(12):ctx==='start'?starterArr:[];
+    /* Wave 7 adds two contexts of its own: 'pop' (Popular right now) and 'trend' (Trending songs).
+       The legacy 'start' context is untouched — it is the welcome rail's own re-fetch path. */
+    const arr=ctx==='la'?topRecent(12):ctx==='start'?starterArr:ctx==='pop'?popArr:ctx==='trend'?trendArr:[];
     if(!arr.length)return;
     const idx=arr.findIndex(x=>x.id===id);playList(arr,idx>=0?idx:0,true);
   }
@@ -1038,8 +1456,16 @@ document.addEventListener('click',e=>{
      view — same data-chip attribute, same document-level listener. Nothing is written to history. */
   const chip=e.target.closest('[data-chip]');
   if(chip){openMood(chip.dataset.chip)}
+  /* Wave 7: Play all plays exactly the grid that is on screen (it grows with Show more), and Show
+     more reveals the next page of the same scored list. */
+  /* WAVE 13: Show more leaves Home for the Quick picks page; the page's own Play all plays the
+     page's list, and Back is the same .art-back pill the album page uses. The Home row no longer
+     grows in place — qpShown is simply its size — so nothing repaints behind the new view. */
   const qp=e.target.closest('[data-qp]');
-  if(qp){const s=topScored(18);if(s.length)playList(s,0,true)}
+  if(qp){const s=(quickList&&quickList.length)?quickList:topScored(qpShown);if(s.length)playList(s,0,true)}
+  if(e.target.closest('[data-qpmore]')){openQuickPicks();return}
+  if(e.target.closest('[data-qpback]')){goHome();return}
+  if(e.target.closest('[data-qpall]')){const s=qpAllItems();if(s.length)playList(s,0,true);return}
   if(e.target.closest('#diceBig')){diceRadio()}
 });
 /* rail data-i fix: cards in same wrap with same id possible; fine */
@@ -1246,7 +1672,8 @@ $('#queueBtn').onclick=()=>{openPV()};
 function syncFab(){
   const f=$('#pvFab');if(!f)return;
   f.classList.toggle('up',!document.body.classList.contains('pv'));
-  f.style.opacity=queue.length?1:.4;
+  /* WAVE 13: no opacity state is written any more — with nothing loaded the CSS above removes the
+     button outright, and with a track loaded it is always fully opaque. */
 }
 $('#pvFab').onclick=()=>{
   if(document.body.classList.contains('pv')){closePV();return}
@@ -2302,9 +2729,16 @@ if(!$('#homeSec').hidden)renderHome();
 <script id="v2auto">
 /* Auto lyrics source: prefer whichever provider has time-synced lyrics */
 (function(){
+  /* WAVE 14 — this migration used to write 'auto' into EVERY profile that lacked the marker,
+     including one where no provider had ever been chosen, so the app's own default was silently
+     overridden on first run. Now an install that already HAD a stored provider is migrated exactly
+     as before, and a profile with no stored provider keeps the default (LRClib). The one-shot
+     marker is still written either way. */
   if(!localStorage.getItem('sv_lyr_v2')){
-    try{ localStorage.setItem('sv_lyr','"auto"'); localStorage.setItem('sv_lyr_v2','1'); }catch(e){}
-    lyrPref='auto';
+    try{
+      if(localStorage.getItem('sv_lyr') !== null){ localStorage.setItem('sv_lyr','"auto"'); lyrPref='auto' }
+      localStorage.setItem('sv_lyr_v2','1');
+    }catch(e){}
   }
   setInterval(function(){
     var chip=document.getElementById('lyrSeg'); if(!chip)return;
@@ -2667,7 +3101,9 @@ showDyn = function(t,s,h){
      immediately before this call; every other showDyn() caller (liked music, playlists, the
      artist “show all” list) leaves it down, so the chips stay hidden on those views. */
   sView = _sPaint; _sPaint = false;
-  _showDyn(t,s,h);
+  /* WAVE 14: this wrapper used to call through with (t,s,h) only, which silently dropped a page's
+     own rebuild recipe (the 4th argument) and left repaintDyn() with nothing to rebuild from. */
+  _showDyn(t,s,h,arguments[3]);
   hideArtist();
   hideAlbum();                                // 4AL: the album page is its own section
   try{ document.title = String(t).replace(/<[^>]+>/g,'') + ' · Svara' }catch(e){}
@@ -2819,10 +3255,15 @@ rowHTML = function(it){
    "Albums for you", the trending rail) — and by railHTML(). Same markup, the artist
    line under each cover becomes links. Same delegated handler as rows/search/pvA. */
 var _railCard = railCard;
-railCard = function(it, ctx){
-  var ph = thumb(it,THUMB_RAIL) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+/* WAVE 13: this wrapper is the card the Home rails actually use, so it must forward the base
+   layer's new optional SIZE argument — without it the Trending row kept asking for the 256px rail
+   token (the pixelated hero) however the base railCard was called. Undefined still means THUMB_RAIL
+   for every other row. */
+railCard = function(it, ctx, size){
+  var sz = size || THUMB_RAIL;
+  var ph = thumb(it,sz) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
   return '<div class="rail" data-rail="'+esc(ctx)+'" data-id="'+esc(it.id)+'" data-title="'+esc(it.title||'')+'">'+
-    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it,THUMB_RAIL))+'" onerror="this.style.display=\'none\'">'+
+    '<div class="art">'+ph+'<img loading="lazy" src="'+esc(thumb(it,sz))+'" onerror="this.style.display=\'none\'">'+
       '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div>'+
       (ctx==='al' && typeof albHeartHTML==='function' ? albHeartHTML(it) : '')+'</div>'+
     '<div class="rname">'+esc(it.title)+'</div>'+
@@ -3900,7 +4341,7 @@ function setQ(sel){ var p = setPanelEl(); return p ? p.querySelector(sel) : null
    documented default so the new segmented control still renders with a checked option. */
 function setGfxLevel(){
   try{ if(window.svaraGfx && typeof window.svaraGfx.level === 'function') return window.svaraGfx.level() }catch(e){}
-  return 'medium';
+  return 'high';                              /* WAVE 14: the documented first-run default (was 'medium') */
 }
 
 /* the panel always shows the LIVE player state — it never keeps its own copy */
@@ -3911,8 +4352,9 @@ function setLive(key){
   if(key==='autoplay') return !!v3autoOn;
   if(key==='crossfade'){                       // UI-5: the live engine is the single source of truth
     try{ if(window.svaraXfade) return window.svaraXfade.get() }catch(e){}
-    var xf = LS.get('sv_set_crossfade','off');
-    return (xf==='off'||xf==='4'||xf==='8') ? xf : 'off';
+    var xf = LS.get('sv_set_crossfade','2');            // WAVE 14: 2s is the first-run default
+    /* '2' was missing from this list, so anyone on 2s saw 'Off' checked until the engine booted. */
+    return (xf==='off'||xf==='2'||xf==='4'||xf==='8') ? xf : '2';
   }
   if(key==='provider') return (lyrPref==='ytm'||lyrPref==='lrclib') ? lyrPref : 'auto';
   if(key==='gfxLevel') return setGfxLevel();
@@ -4310,7 +4752,7 @@ function setRefresh(){
   var rp = LS.get('sv_set_repeat', null); if(rp==='off'||rp==='all'||rp==='one') repeat = rp;
   var ap = LS.get('sv_set_autoplay', null);
   if(typeof ap==='boolean'){ v3autoOn = ap; LS.set('sv_auto', ap?'on':'off') }
-  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','off')||'off') }catch(e){}   // UI-5: an import can change it
+  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','2')||'2') }catch(e){}   // UI-5: an import can change it
   try{ updatePlRows() }catch(e){}
   try{ paintControls(); paintShuf(); paintAuto(); paintFavs(); renderSHist() }catch(e){}
   try{ refreshHearts() }catch(e){}
@@ -4417,7 +4859,7 @@ document.addEventListener('keydown', function(e){
   var ap = LS.get('sv_set_autoplay', null);
   if(typeof ap==='boolean') v3autoOn = ap;
   LS.set('sv_auto', v3autoOn ? 'on' : 'off');
-  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','off')||'off') }catch(e){}   // UI-5 (engine re-reads it on its own too)
+  try{ if(window.svaraXfade) window.svaraXfade.set(LS.get('sv_set_crossfade','2')||'2') }catch(e){}   // UI-5 (engine re-reads it on its own too)
   try{ paintControls(); paintShuf(); paintAuto() }catch(e){}
 })();
 /* the open panel mirrors the live player (the mini player can change under it) */
@@ -4510,7 +4952,12 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
     var u = '';
     try{ u = artURL(_thumb(it, size)) }catch(e){}
     if(!u && it && /^[A-Za-z0-9_-]{11}$/.test(String(it.id||''))){
-      u = 'https://i.ytimg.com/vi/'+it.id+'/mqdefault.jpg';
+      /* WAVE 13: sddefault (640x480) instead of mqdefault (320x180). A track that reached the app
+         with no artwork URL at all is drawn from YouTube's still, and that still was the SOFTEST
+         thing on the page — a 320px-wide image in a 458px hero card. sddefault is generated for
+         every video (verified 200 on live ids, ~35KB vs maxresdefault's ~95KB, and maxres is only
+         present for HD uploads, so maxres would need a 404 fallback step and sddefault does not). */
+      u = 'https://i.ytimg.com/vi/'+it.id+'/sddefault.jpg';
     }
     return u;
   };
@@ -4523,7 +4970,10 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
      image meanwhile. */
   var RETRY_MS = 900;
   function proxied(u){ return '/api/thumb?url=' + encodeURIComponent(u) }
-  function retryLater(im, url){
+  /* WAVE 13: the delay is now a PARAMETER. 900ms exists only to dodge the host's burst throttle on
+     a retry of the SAME direct request; when the art-cache layer has already recorded that URL as
+     one that must be proxied there is no such request left to dodge, so the proxy step runs now. */
+  function retryLater(im, url, ms){
     var from = im.getAttribute('src');
     setTimeout(function(){
       if(!im.isConnected) return;
@@ -4531,7 +4981,7 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
       if(im.getAttribute('src') !== from) return;      // src changed under us — leave it alone
       im.style.display = '';
       im.setAttribute('src', url);
-    }, RETRY_MS);
+    }, ms == null ? RETRY_MS : ms);
   }
 
   /* 2) Wave 4J failure ladder, per image:
@@ -4555,10 +5005,28 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
     im.dataset.fbsrc = cur;
     if(stage === 0){
       /* step 1 — the SAME URL re-asked through the server proxy, which sends no Referer.
-         This is the step that actually beats the 429/ORB. */
-      im.dataset.fb0 = cur;
+         This is the step that actually beats the 429/ORB.
+         WAVE 13 adds two things to this step, both about not paying for what is already known:
+           (a) `cur` may ALREADY be the proxy URL — the art-cache layer (#v13artjs) hands out the
+               proxy form for artwork it has seen fail, so re-wrapping it would ask /api/thumb for
+               a localhost URL (400 'blocked host'). Unwrap it and move to the smaller token, which
+               is the only step of the ladder still ahead of a proxied src.
+           (b) the art-cache layer's listener is on WINDOW in the capture phase, so it has already
+               recorded this failure by the time we get here: for a URL that is now known-bad the
+               proxy step is taken immediately instead of after RETRY_MS. */
+      var direct = cur, wrapped = false;
+      if(direct.indexOf('/api/thumb?url=') === 0){
+        wrapped = true;
+        try{ direct = decodeURIComponent(direct.slice('/api/thumb?url='.length)) }catch(err){}
+      }
+      var known = false;
+      try{ known = (typeof window.svArtIsBad === 'function') && window.svArtIsBad(direct) }catch(err){}
+      im.dataset.fb0 = direct;
       im.dataset.fbr = '1';
-      retryLater(im, proxied(cur));
+      if(!wrapped){ retryLater(im, proxied(direct), known ? 0 : RETRY_MS); return }
+      var small = smallerToken(direct, im.classList.contains('art-herowide'));
+      if(small){ im.dataset.fbr = '2'; retryLater(im, proxied(small), 0); return }
+      retryLater(im, proxied(direct), 0);
       return;
     }
     if(stage === 1){
@@ -4598,6 +5066,18 @@ setTimeout(function(){ ensureKnob(); homeLine(); paintShuf(); }, 600);
   }
   function enqueue(im){
     if(!im) return;
+    /* WAVE 14 — artwork that has painted ONCE before is in the browser's own cache, so there is
+       nothing left to serialise: it is promoted in THIS tick, and a repeat visit paints the whole
+       view at once. Artwork that has never painted keeps the 80ms queue: that is the part which
+       dodges the host's burst throttle on a first visit.
+       MEASURED on the 40-album Liked albums grid (one scroll that brings a batch of freshly padded
+       covers into view, counting data-src -> src transitions at 10ms): with this bypass DISABLED the
+       batch left the queue in 21 ticks, first 71ms and last 1820ms after the scroll — the ~90ms
+       staircase — and with it ENABLED the same batch left in ONE tick (28 pending -> 10) at 131ms.
+       (The 12 covers already in view at render are emitted with a plain src and never enter this
+       queue at all, which is why a first-load stall there is the retry ladder's business.) */
+    var s0 = im.getAttribute('data-src');
+    if(s0 && typeof window.svArtSeen === 'function'){ try{ if(window.svArtSeen(s0)){ promote(im); return } }catch(e){} }
     if(lazyQ.indexOf(im) < 0) lazyQ.push(im);
     if(!lazyTimer) lazyTimer = setTimeout(drain, 0);
   }
@@ -5349,18 +5829,24 @@ html[data-fx="bal"]  body::after{
   function fastSin(x){ return SIN_TABLE[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
   function fastCos(x){ return COS_TABLE[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
 
-  /* Never multiplies by devicePixelRatio — the ImageData is deliberately small and upscaled. */
+  /* Never multiplies by devicePixelRatio — the ImageData is deliberately small and upscaled.
+     WAVE 14b — same 0-size guard as the worker's size(): keep the last good frame, never throw. */
   function resizeCanvas(){
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    width  = Math.floor(canvas.width  / WAVE.scale);
-    height = Math.floor(canvas.height / WAVE.scale);
+    var w = window.innerWidth, h = window.innerHeight;
+    if(!(w > 0) || !(h > 0)) return;
+    var sw = Math.floor(w / WAVE.scale), sh = Math.floor(h / WAVE.scale);
+    if(sw < 1 || sh < 1) return;
+    canvas.width  = w;
+    canvas.height = h;
+    width  = sw;
+    height = sh;
     imageData = ctx.createImageData(width, height);
     data = imageData.data;
   }
 
   /* Zero allocations per frame: no objects, arrays or closures are created in here. */
   function render(){
+    if(!data || width < 1 || height < 1) return;      /* nothing measured yet — never touch imageData */
     var time = (Date.now() - startTime) * 0.001;
     for(var y = 0; y < height; y++){
       for(var x = 0; x < width; x++){
@@ -5422,11 +5908,19 @@ html[data-fx="bal"]  body::after{
     function fastCos(x){ return COS[Math.floor(((x % (Math.PI*2)) / (Math.PI*2)) * 1024) & 1023] }
     function lc(c){ return Math.min(1, Math.pow(c, 1 / gain) + 0.02 * lift) }
     function size(w, h){
+      /* WAVE 14b — a 0-sized viewport used to reach createImageData(0,0) and throw IndexSizeError
+         in here (the Electron shell creates its window with show:false, so the very first
+         measurement can be 0x0). Keep the LAST GOOD frame instead of writing a dead canvas; the
+         main thread re-measures on load and on every resize. */
+      if(!(w > 0) || !(h > 0)) return;
+      var sw = Math.floor(w / scale), sh = Math.floor(h / scale);
+      if(sw < 1 || sh < 1) return;
       canvas.width = w; canvas.height = h;
-      W = Math.floor(w / scale); H = Math.floor(h / scale);
+      W = sw; H = sh;
       img = ctx.createImageData(W, H); data = img.data;
     }
     function render(){
+      if(!data || W < 1 || H < 1) return;             /* nothing measured yet — never touch img */
       var time = (Date.now() - startTime) * 0.001;
       for(var y = 0; y < H; y++){
         for(var x = 0; x < W; x++){
@@ -5542,7 +6036,16 @@ html[data-fx="bal"]  body::after{
       }
     }catch(e){}
 
-    document.addEventListener('DOMContentLoaded', function(){ syncView() });
+    /* WAVE 14b — RE-MEASURE ON LOAD. The canvas is built during parsing, while the shell window may
+       still be 0-sized (it is created with show:false). This is the frame that heals that first
+       reading, whether or not the user ever resizes the window. */
+    document.addEventListener('DOMContentLoaded', function(){
+      resizeCanvas(); syncView();
+      /* non-worker + reduced motion paints ONE static frame and never loops, so it needs this
+         explicit repaint to come back from a 0-sized first measurement. (Worker mode repaints
+         its own paused frame on the resize message.) */
+      if(REDUCED && !workerMode) render();
+    });
     setTimeout(function(){ syncView() }, 450);        /* the 400ms v3hist Home re-render */
 
     /* Never leave a loop running off-view. */
@@ -7660,7 +8163,8 @@ void main() {
     if(si === 'off') return 'low';
     if(si === 'low') return 'low';
     if(si === 'high') return 'high';
-    return 'medium';
+    if(si === 'medium') return 'medium';   /* a legacy explicit choice still wins over the default */
+    return 'high';                          /* WAVE 14: the first-run default (was 'medium') */
   }
   function gfxReduced(){
     try{ if(lsVal('sv_set_reduceMotion') === true) return true }catch(e){}
@@ -8440,7 +8944,8 @@ html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
 (function(){
   var XF_KEY='sv_set_crossfade';
   var XF_STEPS={off:0,'2':2,'4':4,'8':8};
-  function xfModeNow(){ try{ var v=JSON.parse(localStorage.getItem(XF_KEY)||'"off"'); return (v in XF_STEPS)?v:'off' }catch(e){ return 'off' } }
+  /* WAVE 14: the unset default is 2s (first-run), so the engine agrees with the Settings row. */
+  function xfModeNow(){ try{ var v=JSON.parse(localStorage.getItem(XF_KEY)||'"2"'); return (v in XF_STEPS)?v:'2' }catch(e){ return '2' } }
   var xfMode=xfModeNow();
   function xfSecs(){ return XF_STEPS[xfMode]||0 }
   function volNow(){ return Math.max(0,Math.min(1,(typeof volume==='number'?volume:80)/100)) }
@@ -8906,5 +9411,1755 @@ if(typeof pc === 'function') window.paintControls = function(){ var r = pc.apply
 sync();
 })();
 </script>
+<style id="v6onccss">
+/* ===== Wave 6 — first-run personalisation (the port of the Stitch onboarding) =====
+   WHAT: three screens that run once, on a profile with nothing in it — languages + vibes, then
+   artists, then a short "Great picks!" build. What they collect is a PROFILE, and the profile does
+   two separate jobs on Home: it seeds the EXISTING taste engine (hist entries, so Listen again /
+   Quick picks / Albums for you / the dice radio fill themselves with no change to how those rows
+   work) and it renders its own shelves from the same picks.
+
+   PORT NOTES — what the Stitch export was, and what had to change to live in this app:
+     • Tailwind CDN + a generated config → none of it. Every rule below is plain CSS against the
+       tokens this file already has. The design's mint (#1FCF9B / #4DECB5) IS --acc / --acc2 and its
+       near-black on-accent (#050505) is --on-acc, so no new colour is introduced.
+     • Google Fonts (Plus Jakarta Sans) → the app's own stack. Nothing here fetches a font at
+       runtime; the display sizes/weights/tracking from the design are kept.
+     • Material Symbols → the two glyphs already in the sprite (i-search, i-disc) plus a few small
+       inline SVGs in this block. No icon font, no network.
+     • The export's artist photos are Stitch's generated aida-public URLs (they rot, and they are
+       not the artists) → REAL rows: names, browse ids and thumbnails come from
+       /api/search?type=artist and /api/artist/songs, which is also what makes the "Great picks!"
+       avatars the actual picks.
+     • The export's ⌘K hint was dropped: this app has no such shortcut, and a fake key badge is
+       worse than no key badge.
+   The design's own states are honoured as written: selected pills are SOLID mint with near-black
+   text (DESIGN.md "Selected State"), avatars take a 3px mint ring + halo + check badge, and the
+   footer is a hairline-topped dock with a ghost action left and the primary CTA right.
+
+   LAYERS: the shell is z 100, above Settings (96) and About (98), and it is fully opaque, so the
+   app behind it is never half-visible. Blur and the dot pulse drop at graphics level low/reduced and
+   under prefers-reduced-motion, exactly like the rest of the app. All type is calc(Npx * var(--fss))
+   so Settings → Text size grows this screen with everything else. */
+#onc{position:fixed;inset:0;z-index:100;display:none;background:var(--bg);color:var(--tx);overscroll-behavior:none}
+#onc.on{display:flex;flex-direction:column;align-items:center}
+#onc::before{content:"";position:absolute;inset:0;pointer-events:none;background:
+  radial-gradient(42% 38% at 22% 16%, rgba(var(--amb),.16), transparent 70%),
+  radial-gradient(38% 34% at 78% 24%, rgba(84,72,190,.13), transparent 72%),
+  radial-gradient(46% 40% at 60% 90%, rgba(150,80,160,.10), transparent 75%)}
+.oncStage{position:relative;z-index:1;display:flex;flex-direction:column;width:100%;max-width:900px;height:100%;padding:24px 22px 20px;margin:0 auto}
+.oncTop{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto}
+.oncStep{font-size:calc(11.5px * var(--fss));font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.oncBars{display:flex;align-items:center;gap:6px}
+.oncBars i{display:block;height:6px;border-radius:9999px;background:var(--panel2);transition:width .3s ease}
+.oncBars i.on{width:32px;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.45)}
+.oncBars i:not(.on){width:12px}
+.oncHead{flex:0 0 auto;margin:min(4vh,30px) auto 0;text-align:center;max-width:660px}
+.oncHead h1{margin:0;font-size:calc(38px * var(--fss));line-height:1.14;font-weight:800;letter-spacing:-.03em;color:#fff}
+.oncHead p{margin:10px auto 0;max-width:540px;font-size:calc(15.5px * var(--fss));line-height:1.5;color:var(--dim)}
+/* the stage never scrolls as a whole: step 1's panel and step 2's grid each scroll INSIDE
+   themselves, so the header tier, the search field and the dock are always where the design puts
+   them. (Measured before this: entering step 2 restored a scroll offset and the search bar was
+   gone above the fold.) */
+.oncBody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:20px 2px;overflow:hidden}
+.oncGlass{max-height:100%;overflow-y:auto;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:24px;padding:24px 26px 28px;display:flex;flex-direction:column;gap:26px}
+.oncGridScroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:6px;padding-right:2px}
+html[data-gfx="full"] .oncGlass,html[data-gfx="medium"] .oncGlass{-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.oncGrp{display:flex;flex-direction:column;gap:12px;min-width:0}
+.oncGrpH{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.oncGrpH .t{display:flex;align-items:center;gap:9px;font-size:calc(17px * var(--fss));font-weight:700;color:#fff}
+.oncGrpH .t svg{width:20px;height:20px;color:var(--acc)}
+.oncGrpH .h{font-size:calc(12px * var(--fss));color:var(--dim)}
+.oncPills{display:flex;flex-wrap:wrap;gap:10px}
+.oncPill{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:8px 18px;border-radius:9999px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);color:var(--dim);
+  font-family:inherit;font-size:calc(13.5px * var(--fss));font-weight:600;cursor:pointer;
+  transition:background .18s,border-color .18s,color .18s,box-shadow .18s}
+.oncPill:hover{border-color:rgba(255,255,255,.25);color:#fff}
+.oncPill[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:rgb(var(--on-acc));font-weight:700;box-shadow:0 0 14px rgba(var(--amb),.30)}
+.oncPill .ck{display:none}
+.oncPill[aria-pressed="true"] .ck{display:block}
+.oncPill .ck svg{display:block;width:15px;height:15px}
+.oncSearch{display:flex;align-items:center;gap:10px;height:48px;padding:0 20px;border-radius:9999px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10)}
+.oncSearch:focus-within{border-color:rgba(255,255,255,.35);box-shadow:0 0 0 3px rgba(var(--amb),.10)}
+/* the app's .ic class styles the WRAPPER only — the sprite <svg> inside carries no intrinsic size,
+   so every use of it in this overlay states its own box (measured: an unsized magnifier painted at
+   ~100px and pushed the field's placeholder off centre). */
+.oncSearch .ic{color:var(--dim);flex:0 0 auto;width:18px;height:18px}
+.oncSearch .ic svg{width:18px;height:18px;display:block}
+.oncSearch input{flex:1 1 auto;min-width:0;background:none;border:0;outline:0;color:var(--tx);font-family:inherit;font-size:calc(14px * var(--fss))}
+.oncSearch input::placeholder{color:var(--dim)}
+.oncGridNote{min-height:18px;margin-top:14px;font-size:calc(12.5px * var(--fss));color:var(--dim)}
+.oncGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:20px;margin-top:6px}
+.oncTile{display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:0;padding:4px 2px;cursor:pointer;font-family:inherit;text-align:center;min-width:0}
+.oncAv{position:relative;width:104px;height:104px;border-radius:50%;overflow:visible;background:linear-gradient(145deg,#232330,#101016);
+  border:3px solid transparent;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.oncAv .im{position:absolute;inset:-1px;border-radius:50%;overflow:hidden;background:linear-gradient(145deg,#232330,#101016)}
+.oncTile:hover .oncAv{transform:scale(1.03);box-shadow:0 8px 24px rgba(var(--amb),.20)}
+.oncTile[aria-pressed="true"] .oncAv{border-color:var(--acc);box-shadow:0 0 24px rgba(var(--amb),.35)}
+.oncAv .im img{width:100%;height:100%;object-fit:cover;display:block}
+.oncAv .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim)}
+.oncAv .ph .ic{width:34px;height:34px;color:var(--dim)}
+.oncAv .ph .ic svg{width:34px;height:34px;display:block}
+.oncFace .ph .ic{width:32px;height:32px}
+.oncFace .ph .ic svg{width:32px;height:32px;display:block}
+.oncBdg{position:absolute;right:-3px;bottom:-3px;width:22px;height:22px;border-radius:50%;background:var(--acc);color:rgb(var(--on-acc));
+  display:none;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.55)}
+.oncBdg svg{display:block;width:13px;height:13px}
+.oncTile[aria-pressed="true"] .oncBdg{display:flex}
+.oncNm{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(14px * var(--fss));font-weight:600;color:var(--dim)}
+.oncTile[aria-pressed="true"] .oncNm{color:#fff}
+.oncCap{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(11.5px * var(--fss));color:var(--dim);opacity:.75}
+.oncFoot{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:16px;border-top:1px solid rgba(255,255,255,.10)}
+.oncGh{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:9999px;background:none;border:0;
+  color:var(--dim);font-family:inherit;font-size:calc(13.5px * var(--fss));font-weight:600;cursor:pointer;transition:color .18s}
+.oncGh:hover{color:#fff}
+.oncCnt{font-size:calc(12.5px * var(--fss));color:var(--dim)}
+.oncRight{display:flex;align-items:center;gap:12px;min-width:0}
+.oncCta{display:inline-flex;align-items:center;gap:9px;height:46px;padding:0 30px;border:0;border-radius:9999px;
+  background:var(--acc);color:rgb(var(--on-acc));font-family:inherit;font-size:calc(13.5px * var(--fss));font-weight:700;
+  cursor:pointer;box-shadow:0 8px 22px rgba(var(--amb),.28);transition:background .18s,transform .12s}
+.oncCta:hover{background:var(--acc2)}
+.oncCta:active{transform:scale(.98)}
+.oncCta[disabled]{opacity:.35;pointer-events:none;box-shadow:none}
+.oncGh .ic,.oncCta .ic{width:17px;height:17px}
+/* my own inline SVGs are NOT the app's sprite ones, so they carry no size of their own: without
+   these two rules the arrow fills the flex row (measured: a 40px arrow that wrapped the CTA onto
+   three lines). Sized here, and the labels are never allowed to wrap. */
+.oncGh>svg,.oncCta>svg{width:17px;height:17px;flex:0 0 auto}
+.oncGh span,.oncCta span{white-space:nowrap}
+.oncPicks{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;text-align:center;min-height:min(56vh,420px)}
+.oncFaces{display:flex;align-items:center;justify-content:center}
+.oncFace{position:relative;width:80px;height:80px;border-radius:50%;padding:2.5px;margin-left:-14px;
+  background:linear-gradient(140deg,var(--acc),var(--acc2));transition:transform .3s ease}
+.oncFace:first-child{margin-left:0}
+.oncFace:hover{transform:scale(1.05)}
+.oncFace>span{display:block;width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b0b0f}
+.oncFace img{width:100%;height:100%;object-fit:cover;display:block}
+.oncFace .ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--dim)}
+.oncPicks h2{margin:0;font-size:calc(30px * var(--fss));font-weight:700;letter-spacing:-.02em;color:#fff}
+.oncDots{display:flex;align-items:center;gap:14px;height:22px}
+.oncDots i{width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(var(--amb),.5);opacity:.35}
+.oncDots i.beat{animation:oncbeat 1.3s cubic-bezier(.4,0,.6,1) infinite}
+.oncDots i.beat:nth-child(2){animation-delay:.22s}
+.oncDots i.beat:nth-child(3){animation-delay:.44s}
+@keyframes oncbeat{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.35);opacity:1}}
+.oncNote{font-size:calc(12.5px * var(--fss));color:var(--dim)}
+/* Home: the one-time offer for a profile that already has history — REMOVED in wave 8 (the flow is a
+   first-run gate now, so there is nothing left to offer a user who already has history). The whole
+   .oncBan block went with the markup it styled. */
+/* ---------- Wave 6b: the picked shelves graduate out ----------
+   --oncOp is a row's dim level (transitioned, so it eases as listening accumulates);
+   .oncRetiring is the one-shot exit — fade, then collapse the row out of the flow. Only rows THIS
+   block built ever carry .oncSec, so nothing the app itself renders can be caught by either rule. */
+.oncSec{transition:opacity .55s ease,transform .55s ease}
+.oncSec.oncRetiring{animation:oncRetire .6s cubic-bezier(.4,0,.2,1) forwards;overflow:hidden;pointer-events:none}
+@keyframes oncRetire{
+  0%{opacity:var(--oncOp,1);max-height:640px}
+  55%{opacity:.18}
+  100%{opacity:0;max-height:0;margin:0;padding:0;transform:translateY(-8px)}
+}
+@media (prefers-reduced-motion:reduce){
+  .oncDots i.beat{animation:none;opacity:.85}
+  .oncSec.oncRetiring{animation-duration:.16s}
+  .oncAv,.oncTile:hover .oncAv,.oncFace{transition:none;transform:none}
+}
+html[data-gfx="low"] .oncGlass,html[data-gfx="reduced"] .oncGlass{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(255,255,255,.03)}
+html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
+</style>
+
+<script id="v6oncjs">
+/* ===== Wave 6 — first-run personalisation: the flow, the profile, and what it seeds =====
+   STORAGE (two keys, both JSON through the app's own LSget/LSset):
+     sv_profile          {v:1, langs:[], genres:[], artists:[{id,name,thumb}], at}
+     sv_onboard_seen     1 once the flow was completed OR skipped — "skippable, once only"
+   (A third key, sv_onboard_banner, belonged to the one-time Home offer wave 8 deleted. An old install
+   may still carry it; nothing reads or writes it any more.)
+   WHEN IT RUNS — WAVE 8: ONCE PER INSTALL, AS A GATE. Nothing in hist and no profile and not seen ⇒
+   it opens during parsing, i.e. before the first paint, and covers the window at z 100 until the user
+   leaves it by one of its OWN two buttons: Step 1's "Skip for now" (skipFlow) or "Continue to
+   Artists" → "Finish Setup" (saveAndSeed). Both exits write sv_onboard_seen, so it cannot come back
+   on a later launch — and there is now no OTHER door in: the Home banner ("Want better picks?") and
+   the Settings row ("Personalise my taste / Redo") are both gone. A real data reset clears the
+   profile and the seen flag, which is what brings the first-run path back.
+
+   THE SEED, AND WHY IT IS TAGGED: the picks are written into `ml_history` — the store Listen again,
+   Quick picks, Albums for you and the dice radio already read — because that is the only way Home
+   fills without teaching those rows a second source of truth. Each seeded entry carries `seed:1`,
+   and that tag is DROPPED the moment the track is really played (notePlay is wrapped below), so:
+     • seeded picks feed taste scoring and the rails immediately;
+     • the History page never claims you played something you did not (_4asHistItems is wrapped);
+     • a re-run replaces only still-unplayed seeds, and a track you have genuinely played is never
+       touched by the seeder (it skips any id already in hist).
+   THREE WRAPPERS, all in this block: renderHome (append the picked shelves), notePlay (drop a seed
+   tag on a real play) and _4asHistItems (hide only still-tagged seeds). Nothing outside this block is
+   edited — wave 8 also dropped the Settings-row injection it used to need, which was the only code
+   here that touched a node it did not own.
+
+   WAVE 6b gave the picked shelves a HANDOVER; WAVE 12 RE-CLOCKS IT ON TIME. A shelf is a STARTING
+   POINT, so its OWN inactivity retires it — 14 days idle dims it, 21 days idle collapses it out and
+   filters it for good — and any use of it (playing one of its tracks, from anywhere) resets its
+   clock and puts it straight back to full opacity. The app's own rows are NEVER dimmed, collapsed or
+   unmounted: `blendFeed()` builds no verdict for them at all and `applyBlend()` refuses any node that
+   is not one of this block's shelves. `window.svaraPersonalise.state()` reports both halves.
+
+   NOTE: the rails this wave adds are keyed by `data-oncq` on the WRAP, and these cards are played by
+   this block's own listener rather than by the app's rail handler (which answers only 'al' / 'la' /
+   'start' / the wave-7 'pop' / 'trend' and returns silently for anything else — an unknown ctx would
+   be a dead click). The cards themselves are built by the app's own railCard(), so they carry the same
+   `data-rail="onc"` the base layer writes: 'onc' matches no branch of the app's handler, on purpose.
+   Building them by hand instead is what silently lost the clickable artist names on these rows. */
+(function(){
+  var LANGS = ['English','Hindi','Punjabi','Tamil','Spanish','Korean','Japanese','French','German'];
+  var VIBES = ['Lo-Fi Chill','Indie Pop','Hip Hop','Synthwave','Deep House','Acoustic','R&B','Techno',
+               'Classical','Jazz','Metal','Neo-Soul','Ambient','Bollywood','EDM'];
+  /* Three keys, all JSON through the app's own LSget/LSset. sv_onboard_banner is no longer read or
+     written (wave 8 removed the Home offer that set it); an old install may still carry the key, and
+     nothing reads it any more. */
+  var KP='sv_profile', KS='sv_onboard_seen';
+  var MIN_ARTISTS=3, MAX_SEED_ARTISTS=6, SONGS_PER_ARTIST=5;
+
+  var ICON = {
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.6l5.4 5.4L20 6.6"/></svg>',
+    arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5"/></svg>',
+    back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 5.5L4.5 12l6.5 6.5"/></svg>',
+    langs:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M8 3v2c0 4.6-2.3 7.7-5 9.2"/><path d="M6 8.2c0 3.2 2.8 5.6 7 6.5"/><path d="M12.6 21l4-10 4 10M14.3 17.6h4.6"/></svg>',
+    eq:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 21V9.5M5 5.5v1M12 21v-8M12 9.5V3M19 21v-4M19 13.5V3"/></svg>'
+  };
+
+  /* live selection for the run in progress (prefilled when reopened from Settings) */
+  var sel = { langs:[], genres:[], artists:[] };
+  var tilesById = {};              // id -> {id,name,thumb,cap} for everything currently painted
+  var rails = {};                  // shelf key -> items, for this block's own rail playback
+  var railSeq = 0;
+  var step = 1, open = false, busy = false, gridGen = 0, homeGen6 = 0, searchTimer = null;
+  var root = null;
+
+  /* ---------- Wave 12: the time-based handover (the long note sits above fillShelves) ---------- */
+  var KG='sv_onboard_graduated', KR='sv_onboard_retired', KT='sv_onboard_touch';
+  /* ONE DAY AND FOUR NUMBERS. A shelf is stamped when it is created and re-stamped on every
+     interaction; DIM_DAYS and GONE_DAYS are the ages at which it dims and at which it leaves;
+     DIM_TOP is the opacity it drops to ON the dim day — a visible step, so the threshold does
+     something the moment it is crossed — and DIM_FLOOR is what it has reached by the removal age, so
+     the collapse is never a jump from full brightness. No play count appears anywhere below: the
+     clock is the whole policy. */
+  var DECAY = { DIM_DAYS:14, GONE_DAYS:21, DAY:864e5, DIM_TOP:0.72, DIM_FLOOR:0.45 };
+  var PICKED = '#svara-picks';      // the token blendFeed() uses for the picked block itself
+  var ONC_SEL = '.oncSec[data-onckey]';   // THE ONLY KIND OF NODE THIS BLOCK MAY EVER DECAY
+  var rowsNow = [];                 // the picked shelves painted by the CURRENT Home render
+
+  /* ===== WAVE 12 — THE SHELF CLOCK: Date math, not play counts =====
+     sv_onboard_touch is {shelfTitle: ms} — ONE STAMP PER SHELF, keyed by the same stable title that
+     sv_onboard_retired uses, so it survives the per-render rail keys. Everything below is pure Date
+     math on that stamp: no play history, no session state, no DOM. */
+  function touchMap(){ var m=LSget(KT,null); return (m && typeof m==='object')?m:{} }
+  function touchedAt(key){ var m=touchMap(), v=m[key]; return (typeof v==='number' && v>0)?v:0 }
+  /* Stamp a shelf. `at` is the overwrite, used by the console hook to back-date a shelf — the only
+     way to see the 14/21-day thresholds without waiting three weeks for them. */
+  function touch(key, at){
+    if(!key) return 0;
+    var m=touchMap(), ts=(typeof at==='number' && at>0)?at:Date.now();
+    m[key]=ts;
+    try{ LSset(KT,m) }catch(e){}
+    return ts;
+  }
+  /* Whole days (fractional) since the shelf was last used = (NOW - stamp) / ONE DAY. An UNSTAMPED
+     shelf reports 0, i.e. brand new — and that fallback is load-bearing: an install that predates
+     this wave has no stamps at all, and reading a missing stamp as "infinitely old" would retire
+     every shelf it owns on the first paint after the update. fillShelves stamps such a shelf with
+     NOW (never with profile.at) so its clock starts when this wave first sees it. */
+  function daysIdle(key, now){
+    var at=touchedAt(key); if(!at) return 0;
+    var d=((typeof now==='number')?now:Date.now())-at;
+    d = d/DECAY.DAY;
+    return d>0 ? d : 0;
+  }
+  /* THE WHOLE LIFECYCLE FOR ONE SHELF, in one place:
+       keep    < 14 days idle  → full opacity (1)
+       dim    >= 14 days       → dimmed: 0.72 on the day, ramping down to 0.45 by the removal age
+       retire >= 21 days       → collapses out of the feed and is filtered for good
+     The ramp runs between two real levels rather than from full brightness: the row must LOOK
+     different on the day it crosses 14 days (otherwise the threshold does nothing a user could see),
+     and it must not be at full brightness on the day it is due to leave. `dim` is the ramp position
+     (0 on the dim day, 1 at the removal age) and `opacity` is what applyBlend() writes. A shelf that
+     is already in sv_onboard_retired never gets a verdict at all — blendFeed() drops it before
+     asking, because retirement is permanent. */
+  function verdictOf(key, now){
+    var d=daysIdle(key, now), days=+d.toFixed(3);
+    if(d >= DECAY.GONE_DAYS) return {key:key, days:days, verdict:'retire', dim:1, opacity:0};
+    if(d >= DECAY.DIM_DAYS){
+      var k=(d-DECAY.DIM_DAYS)/Math.max(1, DECAY.GONE_DAYS-DECAY.DIM_DAYS);
+      return {key:key, days:days, verdict:'dim', dim:+k.toFixed(3),
+              opacity:+(DECAY.DIM_TOP+(DECAY.DIM_FLOOR-DECAY.DIM_TOP)*k).toFixed(3)};
+    }
+    return {key:key, days:days, verdict:'keep', dim:0, opacity:1};
+  }
+  /* The shelf titles a profile produces — the SAME list fillShelves paints, so the stamps written at
+     the moment the picks are made are exactly the rows that are about to appear. */
+  function shelfKeys(p){
+    var out=[];
+    ((p&&p.genres)||[]).slice(0,2).forEach(function(g){ if(g) out.push(g) });
+    ((p&&p.langs)||[]).slice(0,1).forEach(function(L){ if(L) out.push(L+' music') });
+    if(p && (p.artists||[]).length) out.push('More like '+p.artists[0].name);
+    return out;
+  }
+  function retiredMap(){ var m=LSget(KR,null); return (m && typeof m==='object')?m:{} }
+  function setRetired(key){ var m=retiredMap(); if(m[key]) return; m[key]=1; try{ LSset(KR,m) }catch(e){} }
+  function graduated(){ return !!LSget(KG,0) }
+  /* THE FIXED ROWS, BY TITLE — every row on Home that is NOT one of this block's shelves (dynRows()
+     already excludes .oncSec). Read-only, and exactly the list the console hook reports as protected:
+     nothing in this block ever writes an opacity, a class or a removal to any node in it. */
+  function fixedTitles(){
+    return dynRows().map(function(n){
+      var h=n.querySelector('h2');
+      return h ? h.textContent.replace(/Play all|Show more/g,'').replace(/🎲[\s\S]*/,'').trim() : '';
+    });
+  }
+  /* ---------- the console hook's state: every shelf's age and verdict, and the protected rows ---------- */
+  function feedState(){
+    var now=Date.now(), ret=retiredMap();
+    return { now:now, day:DECAY.DAY,
+             thresholds:{dim:DECAY.DIM_DAYS, gone:DECAY.GONE_DAYS, top:DECAY.DIM_TOP, floor:DECAY.DIM_FLOOR},
+             graduated:graduated(), fixed:fixedTitles(),
+             rows:rowsNow.map(function(r){
+               var v=verdictOf(r.key, now);
+               return {key:r.key, items:(r.items||[]).length, touchedAt:touchedAt(r.key), days:v.days,
+                       verdict:ret[r.key]?'retired':v.verdict, opacity:v.opacity};
+             }) };
+  }
+
+  /* ===== THE BLENDING FUNCTION — pure: no DOM, no fetch, no writes =====
+     dynamic : the app's OWN rows, as opaque tokens in the order the app rendered them.
+     rows    : this block's picked shelves, [{key,title,items,node}].
+     st      : {now (ms, defaulted to now), retired ({key:1})} — the clock and nothing else.
+     Returns every picked shelf's verdict, keyed to the request the user made:
+       keep    → painted at `opacity` (1 until the shelf is DIM_DAYS old, dimmed after that)
+       retire  → painted once with the exit animation, then unmounted for good
+       dropped → not painted at all (it retired on an earlier pass — retirement is permanent)
+     ABSOLUTELY PROTECTED FIXED ROWS. `dynamic` comes back as `guard`, and that is structural rather
+     than conditional: no keep/retire/dropped entry is ever built for a row in it, so there is no code
+     path below that could dim, collapse or unmount one — Listen again, Quick picks, Trending songs,
+     Popular right now, Albums for you and Surprise me are not "skipped by a check", they are never
+     inputs to one. The only keys verdictOf() is ever asked about are the picked shelves' own titles,
+     and a picked node that somehow arrived inside `dynamic` is reported in `misplaced` and left
+     ALONE rather than judged. Nothing here reads storage or the clock twice, so the same inputs
+     always give the same plan. */
+  function blendFeed(dynamic, rows, st){
+    dynamic = dynamic || []; rows = rows || []; st = st || {};
+    var keep=[], retire=[], dropped=[], guard=[], misplaced=[];
+    dynamic.forEach(function(r){                    // the app's rows: pass-through, never judged
+      if(r && r.classList && r.classList.contains('oncSec')) misplaced.push(r);
+      else guard.push(r);
+    });
+    var ret = st.retired || {}, now = st.now;
+    rows.forEach(function(r){
+      if(ret[r.key]){ dropped.push({row:r, key:r.key, reason:'retired'}); return }   // permanent
+      var v = verdictOf(r.key, now);
+      if(v.verdict==='retire') retire.push({row:r, key:r.key, days:v.days, verdict:'retire', deg:1, opacity:0});
+      else keep.push({row:r, key:r.key, days:v.days, verdict:v.verdict, deg:v.dim, opacity:v.opacity});
+    });
+    var picked = keep.concat(retire);               // whatever is leaving, leaves last
+    return { order:dynamic.slice().concat([PICKED]), keep:keep, retire:retire, dropped:dropped,
+             guard:guard, misplaced:misplaced, fixedCount:guard.length, refusedCount:0,
+             dynamicCount:dynamic.length, pickedCount:picked.length };
+  }
+
+  var profile = LSget(KP, null) || null;
+  function seen(){ return !!LSget(KS, 0) }
+  function setSeen(v){ LSset(KS, v?1:0) }
+  function histEmpty(){ try{ return !Object.keys(hist||{}).length }catch(e){ return true } }
+
+  /* ---------- shell ---------- */
+  function mount(){
+    if(root) return root;
+    root = document.createElement('aside');
+    root.id = 'onc';
+    root.setAttribute('role','dialog');
+    root.setAttribute('aria-modal','true');
+    root.setAttribute('aria-labelledby','oncTitle');
+    root.setAttribute('aria-hidden','true');
+    root.innerHTML = '<div class="oncStage">'+
+      '<div class="oncTop"><span class="oncStep" id="oncStepLbl"></span><div class="oncBars"><i></i><i></i></div></div>'+
+      '<div class="oncHead"><h1 id="oncTitle"></h1><p id="oncSub"></p></div>'+
+      '<div class="oncBody" id="oncBody"></div>'+
+      '<div class="oncFoot" id="oncFoot"></div>'+
+    '</div>';
+    document.body.appendChild(root);
+    return root;
+  }
+  function el(id){ return root ? root.querySelector('#'+id) : null }
+
+  function pill(label, kind){
+    var on = (kind==='lang' ? sel.langs : sel.genres).indexOf(label) >= 0;
+    return '<button class="oncPill" type="button" data-oncpill="'+kind+'" data-v="'+esc(label)+'" aria-pressed="'+(on?'true':'false')+'">'+
+      '<span>'+esc(label)+'</span><span class="ck">'+ICON.check+'</span></button>';
+  }
+  function tileHTML(t){
+    var on = sel.artists.some(function(a){ return a.id===t.id });
+    var ph = t.thumb ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
+    var img = t.thumb ? '<img loading="lazy" src="'+esc(t.thumb)+'" alt="" onerror="this.style.display=\'none\'">' : '';
+    return '<button class="oncTile" type="button" data-oncart="1" data-v="'+esc(t.id)+'" data-name="'+esc(t.name)+'" aria-pressed="'+(on?'true':'false')+'" title="'+esc(t.name)+'">'+
+      '<span class="oncAv"><span class="im">'+ph+img+'</span>'+
+      '<span class="oncBdg">'+ICON.check+'</span></span>'+
+      '<span class="oncNm">'+esc(t.name)+'</span><span class="oncCap">'+esc(t.cap||'')+'</span></button>';
+  }
+  function faceHTML(a){
+    var inner = a.thumb ? '<img src="'+esc(a.thumb)+'" alt="">'
+                        : '<span class="ph"><span class="ic">'+ic('i-disc')+'</span></span>';
+    return '<span class="oncFace" title="'+esc(a.name)+'"><span>'+inner+'</span></span>';
+  }
+  function gridNote(msg){ var n=el('oncGridNote'); if(n) n.textContent = msg || '' }
+
+  function paint(){
+    var stepLbl=el('oncStepLbl'), title=el('oncTitle'), sub=el('oncSub'), body=el('oncBody'), foot=el('oncFoot');
+    if(!body) return;
+    var bars = root.querySelectorAll('.oncBars i');
+    bars[0].className = step===1 ? 'on' : '';
+    bars[1].className = step===2 ? 'on' : '';
+    /* every state is REBUILT below, so any scroll offset dies with the old nodes: step 1's panel
+       scrolls inside .oncGlass, step 2's grid inside .oncGridScroll (both fresh on every paint) */
+    stepLbl.textContent = 'Step '+(step===1?1:2)+' of 2';
+    if(busy){
+      /* Screen 3 — the build. The avatars are the REAL picks (their thumbnails came from the grid),
+         which is why this screen needs no fetch of its own. The header tier is left EMPTY on
+         purpose: the design's processing screen is one centred block whose own heading is
+         "Great picks!", and filling the tier too printed that headline twice (measured). */
+      title.textContent = '';
+      sub.textContent = '';
+      body.innerHTML = '<div class="oncPicks"><div class="oncFaces">'+sel.artists.slice(0,5).map(faceHTML).join('')+'</div>'+
+        '<h2>Great picks!</h2><div class="oncDots"><i class="beat"></i><i class="beat"></i><i class="beat"></i></div>'+
+        '<div class="oncNote" id="oncBuildNote">Reading top songs and tuning your taste…</div></div>';
+      foot.innerHTML = '';
+      return;
+    }
+    if(step===1){
+      title.textContent = "Let's tune your Svara.";
+      sub.textContent = "Pick the languages and vibes you listen to. We'll synthesize your personalized daily flow.";
+      body.innerHTML = '<div class="oncGlass">'+
+        '<div class="oncGrp"><div class="oncGrpH"><span class="t">'+ICON.langs+'Languages</span>'+
+          '<span class="h">Select 1 or more</span></div><div class="oncPills" id="oncLangs">'+LANGS.map(function(l){return pill(l,'lang')}).join('')+'</div></div>'+
+        '<div class="oncGrp"><div class="oncGrpH"><span class="t">'+ICON.eq+'Vibes &amp; Genres</span>'+
+          '<span class="h" id="oncVibeCount">'+sel.genres.length+' selected</span></div><div class="oncPills" id="oncVibes">'+VIBES.map(function(v){return pill(v,'vibe')}).join('')+'</div></div>'+
+      '</div>';
+      foot.innerHTML = '<button class="oncGh" type="button" data-oncskip="1"><span>Skip for now</span>'+ICON.arrow+'</button>'+
+        '<div class="oncRight"><span class="oncCnt" id="oncCount1"></span>'+
+        '<button class="oncCta" type="button" data-oncnext="1"><span>Continue to Artists</span>'+ICON.arrow+'</button></div>';
+      syncCounts();
+      return;
+    }
+    title.textContent = 'Who are your favorites?';
+    sub.textContent = 'Pick 3 or more artists to calibrate your personal frequency and home feed.';
+    body.innerHTML = '<div class="oncSearch"><span class="ic">'+ic('i-search')+'</span>'+
+      '<input id="oncQ" type="text" autocomplete="off" placeholder="Search artists or musical creators..." aria-label="Search artists"></div>'+
+      '<div class="oncGridNote" id="oncGridNote"></div><div class="oncGridScroll"><div class="oncGrid" id="oncGrid"></div></div>';
+    foot.innerHTML = '<button class="oncGh" type="button" data-oncback="1">'+ICON.back+'<span>Back</span></button>'+
+      '<div class="oncRight"><span class="oncCnt" id="oncCount2"></span>'+
+      '<button class="oncCta" type="button" data-oncfinish="1" id="oncFinish"><span>Finish Setup</span>'+ICON.arrow+'</button></div>';
+    syncCounts();
+    var grid=el('oncGrid');
+    /* already-known picks paint immediately (a reopen from Settings shows what you chose) */
+    var known = sel.artists.map(function(a){ return {id:a.id,name:a.name,thumb:a.thumb,cap:'Your pick'} });
+    known.forEach(function(t){ tilesById[t.id]=t });
+    grid.innerHTML = known.map(tileHTML).join('');
+    seedGrid();
+  }
+
+  function syncCounts(){
+    var c1=el('oncCount1');
+    if(c1) c1.textContent = (sel.langs.length+sel.genres.length) ? (sel.langs.length+sel.genres.length)+' selected' : '';
+    var vc=el('oncVibeCount'); if(vc) vc.textContent = sel.genres.length+' selected';
+    var c2=el('oncCount2'); if(c2) c2.textContent = sel.artists.length+' '+(sel.artists.length===1?'artist':'artists')+' selected';
+    var fin=el('oncFinish'); if(fin) fin.disabled = sel.artists.length < MIN_ARTISTS;
+  }
+
+  /* ---------- step 2 data: real artists only ---------- */
+  function normArtists(items, cap){
+    var out=[];
+    (items||[]).forEach(function(it){
+      if(!it || !it.id || !/^UC/.test(it.id)) return;          // real artist channels only
+      var nm = it.title || it.artist || '';
+      if(!nm) return;
+      out.push({id:it.id, name:nm, thumb:it.thumb||'', cap:cap});
+    });
+    return out;
+  }
+  function searchArtists(q, cap){
+    return fetch('/api/search?q='+encodeURIComponent(q)+'&type=artist')
+      .then(function(r){ return r.json() })
+      .then(function(j){ return normArtists(j.items, cap) });
+  }
+  /* ===== WAVE 8 — the grid is RANKED, and the junk is filtered out =====
+     The old version asked "<Genre> artists" / "<Lang> music artists" and painted the first 24 hits in
+     QUERY ORDER, which is exactly how an Indian-language pick came back as "Rakhi sharma [21
+     subscribers]", "singer muskan [141]" and "Desi Flow Nation [4]", with "Bollywood Christmas [2]",
+     "Lo Fi Hip Hop [15.3K]" and "Spanish Guitar Cafe Music [57]" in the same grid (all measured).
+     A search for artists is a relevance search, not a popularity one, so the order is the only thing
+     wrong with it — and the app already knows how to read an artist's audience: audOf() is the same
+     parser wave 7 ranks the picked shelves with, so the picker and the feed can never disagree about
+     who a real artist is.
+     WHAT A ROW IS, MEASURED — the route serves exactly two shapes:
+       "Artist • 39.1M monthly audience"  ← a REAL artist entity (girl in red, Brian Eno, Arijit
+                                            Singh, Udit Narayan, Fujii Kaze, Diana Krall…), and
+       "Artist • 85 subscribers"          ← a user-made channel wearing the Artist profile: the same
+                                            shape as every junk row measured ("Synthwave 7
+                                            subscribers", "Jazz Music for Studying 1 subscriber",
+                                            "Lo Fi Hip Hop 15.3K", "Bollywood Christmas 2").
+     So the grid is TIERED ON THAT WORDING, not on size: every "monthly audience" row is in — sorted by
+     audience — and a "subscribers" row is only a FILLER past GRID_AUD_FLOOR = 1e5, ten times lower
+     than wave 7's 1e6 because those thresholds do opposite jobs. A ROW must not be filled by a
+     channel nobody has heard of, so it wants 1e6; a PICKER must not hide the artists the user came to
+     pick, and 1e6 evicted Kishore Kumar (781K), Mohammed Rafi (240K) and R. D. Burman (105K) from a
+     Hindi grid while keeping nothing the user would recognise.
+     THE PHRASINGS WERE MEASURED PER PICK, because one query is thin for some picks and EMPTY for
+     others — "<g> artists" returned zero rows for Synthwave, and "biggest artists India" (the whole
+     old no-pick fallback) returned 1 row, then 1, then 0, on a screen the user cannot leave without
+     three picks:
+       language ⇒ "<L> music" + "<L> singers" + "<L> artists"
+       vibe     ⇒ "<g> music" + "<g> singers" + "<g> band"
+     Each one earns its place. "<L> music" is what carries the big names (Hindi: Udit Narayan 705M,
+     Arijit Singh 643M, A. R. Rahman 557M, Himesh 429M, Kishore Kumar; Punjabi 20 of 20 rows; Tamil 15;
+     Korean 9), and the other two carry the picks where "music" only returns channels — Jazz: Diana
+     Krall and Samara Joy arrive from "Jazz singers" when "Jazz music" kept NONE; Synthwave: The
+     Midnight and Gunship arrive from "Synthwave band" when "Synthwave music" kept none; Acoustic:
+     Anuv Jain (185M) arrives from "Acoustic singers".
+     AND THE LISTS ARE INTERLEAVED, not concatenated: the old loop let the first query own all 24
+     tiles, so a Punjabi pick buried the second and third ones entirely — and each pick's own merge is
+     re-sorted (entity first, then audience) BEFORE the round-robin, so a pick's best artist can never
+     land past the 24-tile cut. A five-pick user sees all five picks whatever order they chose them
+     in. */
+  var GRID_AUD_FLOOR = 1e5;
+  var GRID_ENTITY = /monthly\s*audience/i;
+  /* entity first, then audience — the one comparison everything in this grid is ordered by */
+  function gridRank(a, b){
+    if(!!a.entity !== !!b.entity) return a.entity ? -1 : 1;
+    return b.aud - a.aud;
+  }
+  function gridPicks(){
+    var jobs = [];
+    sel.langs.slice(0,2).forEach(function(L){ jobs.push({cap:L, qs:[L+' music', L+' singers', L+' artists']}) });
+    sel.genres.slice(0,3).forEach(function(g){ jobs.push({cap:g, qs:[g+' music', g+' singers', g+' band']}) });
+    /* A pick-free Continue lands here (step 1's Continue is never disabled). Three broad queries,
+       because one can come back empty and this screen needs three picks to be finishable: measured
+       Indian music 15 rows, English music 8, Hindi music 6. */
+    if(!jobs.length) jobs.push({cap:'Popular', qs:['Indian music', 'English music', 'Hindi music']});
+    return jobs;
+  }
+  async function gridList(cap, q){
+    var url = '/api/search?q='+encodeURIComponent(q)+'&type=artist';
+    try{
+      /* the app's own session cache, so going Back and forward again costs no network */
+      var j = (typeof feedJSON==='function') ? await feedJSON(url)
+                                             : await fetch(url).then(function(r){ return r.json() });
+      var rows = (j && j.items ? j.items : []).map(function(it){
+        if(!it || !it.id || !/^UC/.test(it.id)) return null;              // real channels only
+        var nm = it.title || it.artist || ''; if(!nm) return null;
+        var aud = (typeof audOf==='function') ? audOf(it.sub) : 0;
+        var entity = GRID_ENTITY.test(String(it.sub || ''));       // a real artist, not a channel
+        if(!entity && aud < GRID_AUD_FLOOR) return null;
+        return {id:it.id, name:nm, thumb:it.thumb||'', cap:cap, aud:aud, entity:entity};
+      }).filter(Boolean);
+      rows.sort(gridRank);
+      return rows;
+    }catch(e){ return [] }
+  }
+  async function seedGrid(){
+    var mine = ++gridGen;
+    var jobs = gridPicks(), lists = [];
+    gridNote('Finding artists for your picks…');
+    for(var i=0;i<jobs.length;i++){
+      var cap = jobs[i].cap;
+      /* A pick's own lookups are independent, so they go out TOGETHER and the pick costs one
+         round-trip instead of three. Measured on the same five picks (15 requests): 10.3s one after
+         another against 3.7s this way. The app's feedJSON collapses duplicate URLs and every URL
+         here is distinct, so nothing is fetched twice. (The route itself is not deterministic from
+         run to run — that is a property of the search, not of the parallelism.) */
+      var got = await Promise.all(jobs[i].qs.map(function(q){ return gridList(cap, q) }));
+      if(mine!==gridGen) return;                                       // a newer seed owns the grid
+      var acc = [];
+      got.forEach(function(rows){ acc = acc.concat(rows) });
+      acc.sort(gridRank);                                          // this pick's own best first
+      lists.push(acc);
+    }
+    if(mine!==gridGen) return;
+    var out = (typeof interleave==='function') ? interleave(lists, 24) : lists[0].slice(0,24);
+    paintGrid(out, out.length ? '' : 'No artists came back for those picks — search for one by name.');
+  }
+  function paintGrid(list, note){
+    var grid=el('oncGrid'); if(!grid) return;
+    var keep = [];
+    sel.artists.forEach(function(a){ if(tilesById[a.id]) keep.push(tilesById[a.id]) });
+    var merged = [], seenIds = {};
+    list.forEach(function(t){ if(!seenIds[t.id]){ seenIds[t.id]=1; merged.push(t) } });
+    keep.forEach(function(t){ if(!seenIds[t.id]){ seenIds[t.id]=1; merged.push(t) } });
+    merged.forEach(function(t){ tilesById[t.id]=t });
+    grid.innerHTML = merged.map(tileHTML).join('');
+    if(note !== undefined) gridNote(note);
+  }
+
+  /* ---------- the seed ---------- */
+  function clearSeeds(){
+    var n=0;
+    try{
+      Object.keys(hist||{}).forEach(function(k){ if(hist[k] && hist[k].seed){ delete hist[k]; n++ } });
+      if(n) LSset('ml_history',hist);
+    }catch(e){}
+    return n;
+  }
+  async function seed(p){
+    clearSeeds();                                   // a re-run replaces the previous picks, never stacks
+    var now=Date.now(), added=0, i=0;
+    for(; i<(p.artists||[]).length && i<MAX_SEED_ARTISTS; i++){
+      var a=p.artists[i];
+      try{
+        var r=await fetch('/api/artist/songs?id='+encodeURIComponent(a.id));
+        var j=await r.json();
+        var songs=(j.songs||[]).slice(0,SONGS_PER_ARTIST);
+        songs.forEach(function(s,k){
+          if(!s || !s.id) return;
+          if(hist[s.id]) return;                    // a real play always outranks a seed — never touched
+          hist[s.id] = {id:s.id, title:s.title||'', artist:s.artist||a.name, thumb:s.thumb||a.thumb||'',
+                        count:Math.max(2, 7-i), last:now - (i*36e5) - (k*6e4), seed:1};
+          added++;
+        });
+      }catch(e){}
+    }
+    if(added) try{ LSset('ml_history',hist) }catch(e){}
+    return added;
+  }
+
+  /* ---------- close / open ---------- */
+  function show(on){
+    mount();
+    open = !!on;
+    root.classList.toggle('on', open);
+    if(open) root.removeAttribute('aria-hidden'); else root.setAttribute('aria-hidden','true');
+  }
+  function openFlow(prefill){
+    mount();
+    sel = {langs:[], genres:[], artists:[]};
+    tilesById = {};
+    if(prefill && profile){
+      sel.langs = (profile.langs||[]).slice();
+      sel.genres = (profile.genres||[]).slice();
+      sel.artists = (profile.artists||[]).slice();
+    }
+    busy=false; step=1; show(true); paint();
+    try{ var f=root.querySelector('.oncCta'); if(f) f.focus() }catch(e){}
+  }
+  function closeFlow(){ busy=false; show(false) }
+
+  function saveAndSeed(){
+    if(busy) return;
+    busy = true; step = 2; paint();
+    profile = {v:1, langs:sel.langs.slice(), genres:sel.genres.slice(), artists:sel.artists.slice(), at:Date.now()};
+    try{ LSset(KP, profile) }catch(e){}
+    setSeen(1);
+    /* wave 6b: NEW picks ⇒ a fresh picked block, for the full three stages. WAVE 12: the shelf clocks
+       are restarted with it — every key this profile will produce is stamped at the moment the picks
+       are made (which IS the install moment), and any stamp left by an older profile is dropped. */
+    try{ LSset(KG,0); LSset(KR,null); LSset(KT,null) }catch(e){}
+    shelfKeys(profile).forEach(function(k){ touch(k, profile.at) });
+    rowsNow = [];
+    var note=el('oncBuildNote');
+    if(note && !sel.artists.length) note.textContent = 'Saving your languages and vibes…';
+    var minShow = new Promise(function(res){ setTimeout(res, 1500) });   // the screen is the point; never flash past it
+    Promise.all([seed(profile).catch(function(){ return 0 }), minShow]).then(function(res){
+      var added = res[0]|0;
+      closeFlow();
+      if(typeof renderHome==='function' && typeof curPage!=='undefined' && curPage==='home'){ try{ renderHome() }catch(e){} }
+      else if(typeof goHome==='function'){ try{ goHome() }catch(e){} }
+      try{ toast(added ? 'Home is tuned to your picks' : 'Your picks are saved') }catch(e){}
+    });
+  }
+  function skipFlow(){
+    if(busy) return;
+    setSeen(1);                                   // "skippable, once only" — it never returns on its own
+    closeFlow();
+    if(typeof renderHome==='function' && typeof curPage!=='undefined' && curPage==='home'){ try{ renderHome() }catch(e){} }
+  }
+
+  /* ---------- Home: the picked shelves ----------
+     WAVE 8 REMOVED THE "PERSONALISE MY TASTE" REOPEN PATHS FROM HERE: the Home banner ("Want better
+     picks?") and the Settings row both opened this flow again, and the user asked for it to be a
+     FIRST-RUN ONLY screen. The flow itself, its steps and its own close/skip behaviour are untouched;
+     what is gone is every way back into it, so the overlay can only ever be its first run. The console
+     hook below (svaraPersonalise.open()) is deliberately kept — it is how this wave tested the flow
+     without wiping a profile. */
+  /* ===== WAVE 6b's HANDOVER, RE-CLOCKED IN WAVE 12 =====
+     A picked shelf is a STARTING POINT: it exists to put something on Home before any listening has
+     happened, so the thing that finally removes it is its OWN inactivity — not the app's activity.
+     That is the whole change. The old clock was a running count of genuine plays (sincePlays(): 4 to
+     start dimming, 18 to retire, plus 2 plays of a shelf's own tracks to retire it early), and plays
+     are the wrong clock for this: a user who listened daily but never touched the shelf kept it alive
+     forever, one busy evening killed every shelf at once, and the "2 of its own tracks" rule retired
+     rows on search variance rather than on use (measured).
+     THE CLOCK: every shelf carries a `last_interacted_timestamp` — sv_onboard_touch, keyed by the
+     shelf title, the same stable key sv_onboard_retired uses. saveAndSeed stamps every key a new
+     profile will produce at the moment the picks are made (the install moment), and fillShelves
+     lazily stamps any shelf it paints that has no stamp yet, with NOW.
+     THREE STAGES, derived from that stamp and nothing else — nothing anywhere stores a stage:
+       < 14 days (DIM_DAYS)    full opacity;
+       >= 14 days              dimmed: 0.72 on the day, ramping to DIM_FLOOR (0.45) by the removal age;
+       >= 21 days (GONE_DAYS)  retires: fade, collapse, unmounted, and filtered for good.
+     RESET ON USE: playing a track that lives in a shelf's own list — from anywhere: the shelf's card,
+     search, a playlist, the queue — re-stamps that shelf and re-blends it in place, so a dimmed row
+     is back to 100% opacity the moment it is used. A retired shelf is NOT revived: retired is
+     permanent, and such a shelf is dropped before any verdict is even computed for it.
+     WHAT REMEMBERS WHAT: `sv_onboard_touch` (key→ms) is the clock; `sv_onboard_retired` (key→1) keeps
+     a retired shelf out of every later session; `sv_onboard_graduated` stops the block being fetched
+     at all once every shelf has gone. All three are cleared when the picks are made again
+     (saveAndSeed) or reset (clear()).
+     WHAT CAN NEVER AGE: the app's own rows. Listen again, Quick picks, Trending songs, Popular right
+     now, Albums for you and Surprise me are never dimmed, collapsed or unmounted — blendFeed() builds
+     no entry for them at all, and applyBlend() refuses any node that is not `.oncSec[data-onckey]`
+     even if a plan named it (see the notes on both).
+     THE SEEDS IN ml_history ARE DELIBERATELY KEPT: they are the taste evidence Quick picks and the
+     radio score from, and they age out of Listen again on their own. The handover removes the
+     duplicate SURFACE, not the signal behind it. */
+
+  /* The app's OWN Home rows, in the order the app rendered them (read-only). */
+  function dynRows(){
+    var sec=document.getElementById('homeSec'); if(!sec) return [];
+    return Array.prototype.filter.call(sec.children, function(n){
+      return n && n.classList && n.classList.contains('sec') && !n.classList.contains('oncSec');
+    });
+  }
+  /* WAVE 9, RE-ANCHORED IN WAVE 11 — WHERE A PICKED SHELF GOES. The picked shelves used to be ONE
+     block that sat above every app row or below all of them, and in wave 9 each shelf sat at its own
+     anchor. Home now reads the way the user asked for it:
+       Trending songs → Quick picks → Listen again → Popular right now → Albums for you →
+       <vibes> → <language> → <artist> → Surprise me
+     so every picked shelf shares ONE anchor — the "Albums for you" row — and the picked shelves
+     therefore sit together AFTER the app's own rows, in the order they were picked (a vibe, the
+     other vibe, the language, the artist). Sharing the anchor KEY is what makes that order hold:
+     `parked` chains shelves that name the same anchor one after another, so two shelves pointing at
+     one row keep their pick order instead of stacking up in reverse. The anchor is found by the
+     row's own <h2> text: the section carries no id of its own — the ids (#albRail, #popRail) live on
+     the rail INSIDE it — and that text is exactly what renderHome writes. */
+  function rowByTitle(title){
+    var sec=document.getElementById('homeSec'); if(!sec) return null;
+    var kids=sec.children;
+    for(var i=0;i<kids.length;i++){
+      var n=kids[i];
+      if(!n || !n.classList || !n.classList.contains('sec') || n.classList.contains('oncSec')) continue;
+      var h=n.querySelector('h2'); if(!h) continue;
+      if(h.textContent.replace(/Play all|Show more/g,'').trim().indexOf(title)===0) return n;
+    }
+    return null;
+  }
+  async function fillShelves(sec, p){
+    var mine = ++homeGen6;
+    var qs = [];
+    var parked = {};      // anchor key -> the LAST shelf parked there, so two vibe shelves keep the
+                          // order they were picked in instead of stacking up in reverse
+    (p.genres||[]).slice(0,2).forEach(function(g){ qs.push({t:g, cat:g, a:'alb'}) });   /* wave 11: every shelf lands after Albums for you */
+    (p.langs||[]).slice(0,1).forEach(function(L){ qs.push({t:L+' music', cat:L, a:'alb'}) });
+    if((p.artists||[]).length){ var A=p.artists[0]; qs.push({t:'More like '+A.name, cat:A.name, aid:A.id, a:'alb'}) }
+    for(var i=0;i<qs.length;i++){
+      if(graduated()) return;                                     // the picked feed is over: stop asking
+      /* WAVE 12: a RETIRED shelf is not even fetched now. It used to be fetched, painted and then
+         removed by the plan — a search spent on a row that could never be shown again. */
+      if(retiredMap()[qs[i].t]) continue;
+      if(rowsNow.some(function(r){ return r.key===qs[i].t })) continue;
+      try{
+        /* WAVE 7: a picked category is its MOST POPULAR songs, never the head of a bare
+           "<category> songs" query (which is what served covers, bhajans and two-subscriber
+           channels). An artist pick asks that channel's own catalogue in YouTube Music's popularity
+           order; a language or vibe asks wave 7's category route, which ranks the category's biggest
+           artists by monthly audience and falls back to a junk-filtered song search when a vibe has
+           no artist query at all. Both are cached, so this costs nothing on a later render. */
+        var items = (qs[i].aid && /^UC/.test(qs[i].aid))
+          ? await artistTopSongs(qs[i].aid, 12)
+          : await categorySongs(qs[i].cat, 12);
+        if(mine!==homeGen6) return;
+        items = (items||[]).filter(function(x){ return x && x.id }).slice(0,12);
+        if(!items.length) continue;
+        var key = 'r'+(++railSeq);
+        rails[key] = items;
+        var node = document.createElement('div');
+        node.className = 'sec oncSec';
+        /* data-onckey is the STABLE identity (the shelf's own title), which is what lets a shelf be
+           retired for good; data-oncq stays the per-render playback key (see the header note on the
+           app's rail handler). */
+        node.setAttribute('data-onckey', qs[i].t);
+        node.innerHTML = '<h2>'+esc(qs[i].t)+'</h2>'+
+          '<div class="railwrap" data-oncq="'+key+'">'+items.map(function(it){
+            /* THE APP'S OWN CARD, NOT A COPY OF IT. `railCard` is reassigned in the v3 layer to the
+               version whose artist line is artistLinksHTML() — clickable <span class="alink"> spans
+               carrying data-artist-id / data-artist-name. Hand-rolling that markup (as this block first
+               did, copying the BASE layer's card) shipped the base layer's PLAIN-TEXT artist line, so
+               these were the only rows on Home whose artist names could not be clicked — every other
+               rail picked up the v3 card for free by going through railHTML().
+               The ctx is 'onc': no branch of the app's rail handler answers to it, so that handler
+               returns without playing and the [data-oncq] handler below plays this shelf's own list.
+               A click on an artist NAME never reaches either — the artist layer takes .alink in the
+               CAPTURE phase and calls preventDefault + stopPropagation (measured: a synthetic click on
+               an .alink never arrives at a document bubble listener), so a name click opens the artist
+               page and can never start the shelf. */
+            return railCard(it, 'onc');
+          }).join('')+'</div>';
+        /* the ANCHOR, or the end of the feed when Home has no such row (a variant without Quick
+           picks, or a future reorder) — a shelf is never dropped for want of an anchor */
+        var anchor = parked[qs[i].a] || rowByTitle('Albums for you') ||
+                     rowByTitle('Popular right now') || rowByTitle('Trending songs');
+        if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(node, anchor.nextSibling);
+        else sec.appendChild(node);
+        parked[qs[i].a] = node;
+        /* WAVE 12: THE SHELF'S CLOCK STARTS HERE. saveAndSeed already stamped every key a fresh
+           profile produces; this line covers an install that predates the stamps (and any key it did
+           not predict), and it stamps with NOW — never with profile.at — so updating can never make
+           an existing shelf look weeks old and vanish on its first paint. */
+        if(!touchedAt(qs[i].t)) touch(qs[i].t, Date.now());
+        rowsNow.push({key:qs[i].t, items:items, node:node});
+        applyBlend();                                              // keep / dim / retire on THIS age
+        if(typeof skReveal==='function'){ try{ skReveal(node) }catch(e){} }
+      }catch(e){}
+    }
+  }
+  /* One retirement, all of it: the row fades and collapses, then is unmounted and remembered. When
+     the LAST picked shelf leaves, the block itself goes and `sv_onboard_graduated` is written, so a
+     later Home render does not even fetch it. */
+  function retireRow(node, key){
+    if(!node || node.getAttribute('data-oncretiring')) return;
+    node.setAttribute('data-oncretiring','1');
+    node.style.removeProperty('opacity');            // the keyframes own the fade, from --oncOp on
+    node.classList.add('oncRetiring');
+    var done=false;
+    function fin(ev){
+      if(ev && ev.target!==node) return;             // the row's own animation only, never a child's
+      if(done) return; done=true;
+      node.removeEventListener('animationend', fin);
+      setRetired(key);                               // never painted again, in any later session
+      if(node.parentNode) node.parentNode.removeChild(node);
+      var sec=document.getElementById('homeSec');
+      if(sec && !sec.querySelector('.oncSec')){      // the last one just left
+        try{ LSset(KG,1) }catch(e){}
+        rowsNow = [];                                // nothing is painted, so nothing is tracked
+      }
+    }
+    node.addEventListener('animationend', fin);
+    setTimeout(fin, 900);                            // a throttled/background window may never fire it
+  }
+  /* Apply the plan: each kept shelf gets its dim level, retiring ones are told to go, and shelves that
+     retired on an earlier pass are simply not in the DOM. Placement is NOT part of this (wave 11): a
+     shelf is placed once, at its anchor, and never moves again.
+     THE PERMISSION CHECK IS THE POINT. Every node this writes to must match .oncSec[data-onckey] AND
+     be a shelf THIS render actually painted (rowsNow) — the class and attribute only fillShelves()
+     ever writes, and the only markup the wave-6b CSS names. Anything else is REFUSED, counted, and
+     left exactly as it was, so even a corrupted plan cannot dim, collapse or unmount a fixed row:
+     the app's own rows are not merely missing from the verdicts, they are un-writable from here. */
+  function applyBlend(){
+    var sec=document.getElementById('homeSec'); if(!sec) return {fixed:0, judged:0, refused:0};
+    var mine = rowsNow.filter(function(r){ return r && r.node });
+    var plan = blendFeed(dynRows(), rowsNow, {now:Date.now(), retired:retiredMap()});
+    var judged=0, refused=0;
+    function own(nd){                                  // may this node be touched at all?
+      judged++;
+      var ok = !!(nd && nd.classList && nd.classList.contains('oncSec') && nd.getAttribute('data-onckey')
+                  && mine.some(function(r){ return r.node===nd }));
+      if(!ok) refused++;
+      return ok;
+    }
+    plan.keep.forEach(function(v){
+      var nd=v.row.node; if(!own(nd)) return;
+      nd.style.setProperty('--oncOp', String(v.opacity));
+      nd.style.opacity = String(v.opacity);        // 1 until it is 14 days old, then dimmed
+    });
+    plan.retire.forEach(function(v){ var nd=v.row.node; if(own(nd)) retireRow(nd, v.row.key) });
+    plan.dropped.forEach(function(r){ var nd=r.row.node; if(own(nd) && nd.parentNode) nd.parentNode.removeChild(nd) });
+    if(rowsNow.length && !plan.pickedCount){                           // everything has already gone
+      try{ LSset(KG,1) }catch(e){}
+      rowsNow = [];
+    }
+    return {fixed:plan.fixedCount, judged:judged, refused:refused, plan:plan};
+  }
+  function decorateHome(){
+    if(typeof curPage==='undefined' || curPage!=='home') return;
+    var sec = document.getElementById('homeSec'); if(!sec) return;
+    if(!profile) return;                             // no profile, no picked shelves
+    if(graduated()) return;                          // wave 6b: the picked feed has served its purpose
+    if(sec.querySelector('.oncSec')) return;         // one set of shelves per Home render, never two
+    rowsNow = [];
+    fillShelves(sec, profile);                       // every shelf lands at its own anchor
+  }
+  /* ---------- RESET ON INTERACTION: a genuine play re-stamps every shelf that serves that track ---------- */
+  /* Called from the wrapped notePlay, i.e. from a REAL play and nothing else. A track that lives in a
+     picked shelf's own list is the clearest possible "this shelf is still useful" signal, and it
+     counts wherever the play came FROM — the shelf's own card, search results, a playlist, the queue
+     — which is why the test is the track's id against each shelf's items rather than "was this click
+     on the row". The shelf is re-stamped and the block re-blended IN PLACE (style writes only: no
+     innerHTML is rebuilt, so scroll position, the open player and the shelf list itself all stay put).
+     A play that belongs to no shelf does nothing at all. */
+  function afterPlay(it){
+    if(!it || !it.id || !rowsNow.length) return 0;
+    var hit=0;
+    rowsNow.forEach(function(r){
+      if((r.items||[]).some(function(x){ return x && x.id===it.id })){ touch(r.key, Date.now()); hit++ }
+    });
+    if(hit) applyBlend();
+    return hit;
+  }
+  /* A CLICK STRAIGHT ON A SHELF'S CARD is an interaction even if the stream never starts, so the reset
+     never depends on notePlay having fired. The node carries the stable shelf title. */
+  function touchShelf(nd){
+    var key = (nd && nd.getAttribute) ? nd.getAttribute('data-onckey') : '';
+    if(!key) return 0;
+    var ts = touch(key, Date.now());
+    try{ applyBlend() }catch(e){}        // a dimmed shelf is back at 100% opacity right away
+    return ts;
+  }
+
+  /* ---------- the four wrappers ---------- */
+  var _renderHome = renderHome;
+  renderHome = function(){
+    var r = _renderHome.apply(this, arguments);
+    try{ decorateHome() }catch(e){}
+    return r;
+  };
+  var _notePlay = notePlay;
+  notePlay = function(it){
+    var r = _notePlay.apply(this, arguments);
+    try{ if(it && it.id && hist[it.id] && hist[it.id].seed){ delete hist[it.id].seed; LSset('ml_history', hist) } }catch(e){}
+    /* wave 12: the play has been recorded, so reset the clock of any shelf that serves this track */
+    try{ afterPlay(it) }catch(e){}
+    return r;
+  };
+  var _histItems = _4asHistItems;
+  _4asHistItems = function(){
+    try{ return _histItems.apply(this, arguments).filter(function(e){ return !(e && e.seed) }) }
+    catch(e){ return _histItems.apply(this, arguments) }
+  };
+  /* THE SETTINGS ROW IS GONE (wave 8) — "Personalise my taste / Redo" was the second way back into
+     the flow. It was never a row this block could render from its own scope: setRender()/setRow() live
+     inside another block's closure, so the row had to be injected into #setBody by a body observer and
+     its markup copied by hand. Removing it therefore removes four things that existed only for it —
+     the row builder, the injector, the coalescing scheduler and the observer that watched for Settings
+     repaints — which also means Settings no longer runs any mutation callback from this block at all. */
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function(e){
+    var t=e.target; if(!t||!t.closest) return;
+    var pillEl=t.closest('[data-oncpill]');
+    if(pillEl){
+      var kind=pillEl.getAttribute('data-oncpill'), v=pillEl.getAttribute('data-v');
+      var arr = kind==='lang' ? sel.langs : sel.genres;
+      var i = arr.indexOf(v);
+      if(i>=0) arr.splice(i,1); else arr.push(v);
+      pillEl.setAttribute('aria-pressed', i>=0 ? 'false' : 'true');
+      syncCounts();
+      return;
+    }
+    var tile=t.closest('[data-oncart]');
+    if(tile){
+      var id=tile.getAttribute('data-v');
+      var k = sel.artists.map(function(a){ return a.id }).indexOf(id);
+      if(k>=0) sel.artists.splice(k,1);
+      else{
+        var t2=tilesById[id]||{id:id,name:tile.getAttribute('data-name')||'',thumb:''};
+        sel.artists.push({id:t2.id, name:t2.name, thumb:t2.thumb||''});
+      }
+      tile.setAttribute('aria-pressed', k>=0 ? 'false' : 'true');
+      syncCounts();
+      return;
+    }
+    if(t.closest('[data-oncnext]')){ step=2; paint(); return }
+    if(t.closest('[data-oncback]')){ step=1; paint(); return }
+    if(t.closest('[data-oncfinish]')){ saveAndSeed(); return }
+    if(t.closest('[data-oncskip]')){ skipFlow(); return }
+    var wrap=t.closest('[data-oncq]');
+    if(wrap){
+      var arr2=rails[wrap.getAttribute('data-oncq')]; if(!arr2||!arr2.length) return;
+      var card=t.closest('.rail'); var cid=card?card.getAttribute('data-id'):'';
+      var idx=arr2.map(function(x){ return x.id }).indexOf(cid);
+      try{ playList(arr2, idx>=0?idx:0, true) }catch(e){}
+      /* WAVE 12: PLAYING OUT OF THIS SHELF IS USING IT — the row's own stamp is reset here as well as
+         through notePlay, so a card whose stream fails to start still counts as an interaction. */
+      touchShelf(wrap.closest(ONC_SEL) || wrap);
+      return;
+    }
+  });
+  document.addEventListener('input', function(e){
+    if(!e.target || e.target.id!=='oncQ') return;
+    var q=e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(function(){
+      var mine=++gridGen, v=q.trim();
+      if(v.length<2){ seedGrid(); return }
+      gridNote('Searching…');
+      searchArtists(v, 'Search').then(function(list){
+        if(mine!==gridGen) return;
+        paintGrid(list, list.length ? list.length+' artists' : 'Nothing found for "'+v+'"');
+      }).catch(function(){ if(mine===gridGen) gridNote('Search failed — try again') });
+    }, 320);
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape' && open && !busy){ e.preventDefault(); skipFlow() }
+  });
+
+  /* ---------- boot: the one and only door into this flow ----------
+     WAVE 8: the flow is a FRESH-INSTALL GATE, so it opens during parsing — mount() appends the opaque
+     overlay to <body> from the last script in the document, i.e. BEFORE the first paint. The old
+     setTimeout(900) let a first-run Home build behind it, so the very first thing a new user saw was
+     the wrong screen, briefly. Nothing else in this file opens the flow, and `seen()` is written by
+     both exits (Finish Setup in saveAndSeed, Skip in skipFlow), so this runs exactly once per install:
+     the two ways out are the two buttons, and until one is pressed the app is behind an overlay that
+     covers the window at z-index 100. */
+  function boot(){
+    if(!histEmpty() || profile || seen()) return;      // a fresh install only
+    openFlow(false);
+  }
+  boot();
+
+  /* exposed for the console (and for this block's own checks) */
+  window.svaraPersonalise = {
+    open: openFlow,
+    seed: function(){ return seed(profile || {artists:[]}) },
+    profile: function(){ return profile },
+    clear: function(){
+      clearSeeds(); LSset(KP,null); setSeen(0);
+      /* wave 6b: a reset revives the picked feed too — no retirement and no graduation left behind */
+      try{ LSset(KG,0); LSset(KR,null); LSset(KT,null) }catch(e){}
+      rowsNow = [];
+    },
+    /* ---------- wave 12 hooks: the shelf clock ---------- */
+    state: feedState,          // every shelf's age in days + verdict, and the protected rows by title
+    blend: blendFeed,          // pure: (dynamicRows, pickedRows, {now, retired}) -> layout plan
+    days: daysIdle,            // (shelfTitle[, now]) -> days since its last interaction
+    touch: touch,              // (shelfTitle[, at]) -> stamp it; `at` back-dates, which is how the
+                               //   14/21-day thresholds are testable without waiting three weeks
+    verdict: verdictOf,        // (shelfTitle[, now]) -> {verdict, days, dim, opacity}
+    shelfKeys: shelfKeys,      // the titles a profile produces — the keys the clock is kept under
+    fixed: fixedTitles,        // the app's own rows, by title: the ones that can never decay
+    apply: applyBlend          // re-apply the plan now; returns {fixed, judged, refused}
+  };
+})();
+</script>
+<style id="v8homecss">
+/* ================= Wave 8 — Home's rhythm: six covers a carousel, four rows of picks =================
+   Every number below was measured on the user's own window — 1784x950, which is a 1548px content
+   box, the same box their screenshots were taken in — before and after the change.
+
+   1) A CAROUSEL IS SIX COVERS WIDE, NOT NINE. A .rail was a flat 150px, so 1548px of content showed
+      9.56 covers at once and read as one contact sheet. The width is now a SHARE of its own
+      carousel, so the count holds at any window width, and the .4 is a real card edge peeking in
+      from the right — the only scroll cue this app can give, because ::-webkit-scrollbar{width:0}
+      hides every scrollbar in it. clamp() keeps the old 150px card on a narrow window and refuses a
+      300px one on an ultrawide. Measured: 228x269 per card instead of 150x198, with exactly 6
+      covers fully in view.
+      The two grid views stay out of it: .railwrap.algrid and .libgrid both set .rail{width:auto}
+      with TWO classes, so a single-class .rail rule can never reach them.
+
+   2) QUICK PICKS IS A FOUR-ROW CAROUSEL, NOT A THIRTY-ROW LADDER. grid-auto-flow:column with four
+      fixed rows fills COLUMN-major — ranks 1-4 down the first column, 5-8 in the next — so a column
+      is the reading unit and scrolling right walks DOWN the ranking. The cards keep their present
+      dimensions exactly: grid-auto-columns is the same one-third share the 3-column grid used (3.1
+      of them, for the same right-edge peek), so nothing about a card changes — the grid is simply
+      cut at four rows and unrolled sideways, and 1500x903 of ladder becomes 1500x360.
+      `grid-template-columns:none` is not decoration: without it the base layer's
+      @media(max-width:1000px) rule would still create two EXPLICIT half-width columns, which
+      column-flow fills FIRST, leaving the rest of the first row on an auto-sized track.
+      `overflow-x:auto` is the same declaration .railwrap carries, and it is load-bearing twice over:
+      with the box left visible (this rule's first version had no overflow at all) the nine columns
+      simply PAINT past the section — past the window edge, with 1500px of content unreachable — and,
+      measured, #scroll (whose other axis is auto) becomes horizontally scrollable itself, so the
+      whole page can be dragged sideways. Only the x axis is declared, exactly like .railwrap, so this
+      grid never becomes a vertical scroll container and the wheel chains on to #scroll as it always
+      has.
+
+   3) BREATHING ROOM. Section gap 24 → 40px, title gap 12 → 16px, card gap 12 → 16px, cover-to-title
+      8 → 10px. Every row is now separated from its neighbours by more than it is separated from its
+      own contents, which is what makes the eye read "rows" instead of one long sheet. */
+.railwrap{--railgap:16px;--railcols:6.4;gap:var(--railgap)}
+.rail{width:clamp(150px,calc((100% - (var(--railcols) - 1) * var(--railgap)) / var(--railcols)),300px)}
+.rail .rname{margin-top:10px}
+.list.qpGrid{--qpgap:12px;--qpcols:3.1;
+  display:grid;grid-auto-flow:column;grid-template-columns:none;grid-template-rows:repeat(4,auto);
+  grid-auto-columns:calc((100% - (var(--qpcols) - 1) * var(--qpgap)) / var(--qpcols));
+  gap:var(--qpgap);overflow-x:auto;padding-bottom:6px}
+@media(max-width:1000px){.list.qpGrid{--qpcols:2.2}}
+@media(max-width:660px){.list.qpGrid{--qpcols:1.2}}
+.sec{margin-top:40px}
+.sec h2{margin-bottom:16px}
+/* 4) THE SKELETON MUST MEASURE LIKE THE ROW IT STANDS IN. skRail() wraps its placeholders in a
+      second .railwrap (the skeleton region needs a block context for its shimmer band) and that
+      nested wrapper is a FLEX ITEM of the row's own .railwrap. A skeleton card has no intrinsic
+      width — its .art is empty and its bars are percentage widths — so the nested wrapper's
+      max-content is just the five 16px gaps, and being `overflow-x:auto` its automatic minimum is
+      0 as well: the whole region collapsed to 80px and every placeholder fell back to the clamp's
+      150px floor, clipped to that 80px sliver by the region's own overflow:hidden. Measured on the
+      same Home: skeleton cards 150x194 in an 80px region, real cards 221x260. One 80px placeholder
+      is all a user saw of "Albums for you" for the entire album fetch — exactly the single dark
+      box in the report. The region now takes the row's full width and the nested wrapper is 100%
+      of it, so a placeholder is born at the width the real card will land on (221px, not 150).
+      The two grid views are untouched: no skeleton is ever built inside .railwrap.algrid/.libgrid. */
+.railwrap>.sk-region{flex:1 1 auto;min-width:0}
+.railwrap>.sk-region>.railwrap{width:100%}
+</style>
+<style id="v11trendcss">
+/* ================= Wave 11 — Trending songs as wide feature cards =================
+   THE ROW CHANGED SHAPE, NOT ITS MARKUP. A Trending card is the SAME .rail card every other row
+   renders — same .art / .rname / .rsub2 children, same data-rail/data-id hooks, same railCard() —
+   because everything below is scoped to the SECTION class renderHome now puts on that row
+   (.heroSec). Nothing was copied, so the card keeps its click-to-play, its hover play button, its
+   artist links and its lazy image without a single line of new JS. The skeleton reuses skRail()
+   for the same reason: its placeholder cards take their width and aspect from these same rules.
+
+   1) THE CARD IS A 16:9 FEATURE, NOT A SQUARE COVER. --herocols is the card COUNT, exactly like
+      --railcols on the cover rows, so the shape holds at any window width rather than being a fixed
+      pixel size that only looks right on one screen. Measured on the user's own window (1784x950,
+      a 1500px rail): a card is 458x257 — the same proportions as the Apple Music card in their
+      reference — where a cover card in the row below it is 221x271. Three whole cards fit with the
+      fourth peeking, and the responsive steps keep that promise down the sizes: 900px window →
+      2.2 columns, 271x153 per card; 600px → 1.2 columns, 261x147.
+   2) THE TEXT SITS IN THE ART, OVER A BOTTOM FADE. The title and artist are absolutely positioned in
+      the card's lower-left corner — .rail is the positioning context, so the two lines cost no
+      height and the card is exactly as tall as its cover — and a black gradient rising from the
+      bottom edge (.art::after) is what keeps them legible over any artwork, which is the whole
+      reason a feature card can carry text inside the image at all. The gradient is a child of .art
+      and the text is a sibling that paints after it, so no z-index trick is needed (2 is insurance).
+   3) NOTHING ELSE MOVES. The docked .ov hover button keeps its behaviour and only gains padding so
+      it does not sit on top of the title at the card's new height.
+   The two GRID views are untouched: no .heroSec ever wraps .railwrap.algrid or .libgrid, and a
+   single-class .rail rule can never reach them anyway. */
+.heroSec .railwrap{--railgap:16px;--herocols:3.2;gap:var(--railgap)}
+.heroSec .rail{position:relative;width:clamp(240px,calc((100% - (var(--herocols) - 1) * var(--railgap)) / var(--herocols)),660px)}
+.heroSec .rail .art{aspect-ratio:16/9;border-radius:16px}
+.heroSec .rail .art::after{content:'';position:absolute;left:0;right:0;bottom:0;height:68%;pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.28) 42%,rgba(0,0,0,.78) 100%)}
+.heroSec .rail .rname,.heroSec .rail .rsub2{position:absolute;left:16px;right:16px;margin:0;z-index:2;
+  text-shadow:0 1px 10px rgba(0,0,0,.55)}
+.heroSec .rail .rname{bottom:31px;font-size:17px;font-weight:750}
+.heroSec .rail .rsub2{bottom:14px;font-size:12.5px;color:rgba(255,255,255,.72)}
+.heroSec .rail .ov{padding:12px}
+.heroSec .rail .ov .pb{width:40px;height:40px}
+@media(max-width:1000px){.heroSec .railwrap{--herocols:2.2}}
+@media(max-width:660px){.heroSec .railwrap{--herocols:1.2}}
+</style>
+<style id="v13qpcss">
+/* ================= WAVE 13 — the Quick picks PAGE (Show more) =================
+   GEOMETRY, TAKEN FROM THE REFERENCE. The user read these numbers off Apple Music's own "New Radio
+   Episodes" grid in devtools: the list item (li.shelf-grid__list-item) is 328x127, and the
+   horizontal lockup inside it (div.horizontal-lockup) is 298x97 with a 20px column gap — i.e. 15px
+   of padding around the lockup. Apple cancels that padding with -15px margins so the CONTENT pitch
+   is exactly 298px; here the item keeps its padding and a 30px grid gap does the same job, so the
+   visible pitch is 298 (four items per row on the app's ~1500px content width, as in the reference)
+   while the item box itself is the 328x127 that was measured.
+   AND NOTHING IS REBUILT. These items are the app's own .list rows — listHTML()/rowHTML(), the same
+   markup Home's Quick picks line uses — so click-to-play, the hover play button, the heart, the ⋮
+   menu, the current-track highlight and the lazy artwork all come along with no new JS. Only the
+   box changes: 97px of artwork, 13px text, one line each, ellipsised. Scoped to #dynSec .list.qpAll
+   so Home's .list.qpGrid line (3 columns), the Library grid and the album grids cannot be reached —
+   and the class is new, so no existing rule of theirs can match it either. */
+#dynSec .qpbar{display:flex;align-items:center;gap:10px;margin:2px 2px 16px}
+#dynSec .list.qpAll{display:grid;grid-template-columns:repeat(auto-fill,328px);gap:30px;
+  align-items:start;justify-content:start}
+#dynSec .list.qpAll .row{width:328px;height:127px;padding:15px;gap:20px;border-radius:14px;
+  background:linear-gradient(180deg,var(--gf5),var(--gb50));border:1px solid var(--gf12);
+  box-shadow:inset 0 1px 0 var(--gf5);transition:background .18s ease,border-color .18s ease}
+#dynSec .list.qpAll .row:hover{background:linear-gradient(180deg,var(--gf10),var(--gb75));border-color:var(--gf20)}
+#dynSec .list.qpAll .row.cur{background:linear-gradient(180deg,var(--gf15),var(--gf5));border-color:var(--gf20)}
+#dynSec .list.qpAll .row .rt{width:97px;height:97px;border-radius:10px}
+#dynSec .list.qpAll .row .rm{flex:1 1 auto;min-width:0}
+/* the reference's own lockup has NO heart and no ⋮ (Apple's row carries a single ⋮ at the far
+   right), so this app's two buttons have to fit inside the same 298px. They are compacted to
+   25px each and the internal column gap goes 20 -> 16: measured, that leaves the text block 117px
+   of the lockup's 298 (art 97 + 16 + 117 + 16 + 52), where the shared 20px gap left it 90px. The
+   heart is hover-only in the app anyway (.favh, opacity 0 until the row is hovered), so nothing
+   about the resting look is lost. */
+#dynSec .list.qpAll .row{gap:16px}
+#dynSec .list.qpAll .row .rr .favh,#dynSec .list.qpAll .row .rr .dots{padding:4px}
+#dynSec .list.qpAll .row .rr .dots .ic{width:16px;height:16px}
+#dynSec .list.qpAll .row .rr .favh .ic{width:16px;height:16px}
+#dynSec .list.qpAll .row .rtitle{font-size:13px;line-height:17px}
+#dynSec .list.qpAll .row .rsub{font-size:12.5px;line-height:16px}
+/* one column when 328px can no longer be honoured (the same responsive promise the .libgrid keeps) */
+@media(max-width:760px){#dynSec .list.qpAll{grid-template-columns:minmax(0,1fr);gap:16px}
+  #dynSec .list.qpAll .row{width:auto}}
+</style>
+<script id="v13artjs">
+/* ================= WAVE 13 — remember which artwork must go through the proxy =================
+   THE PROBLEM, MEASURED. The Liked albums covers painted in ~0.55-0.9s on EVERY visit — the same
+   four URLs, re-measured three visits in a row (556ms / 887ms / 907ms for one of them), while
+   Home's covers painted in 0ms from the browser's own cache. The pre-existing 4J finding explains
+   it: the artwork host answers the renderer's DIRECT request (one that carries a Referer) with
+   429 + text/html, which surfaces as net::ERR_BLOCKED_BY_ORB. Chromium keeps that failure in its
+   memory cache, so the direct attempt fails again on the next render, and the failure ladder then
+   waits its full 900ms RETRY_MS before asking /api/thumb — the request that actually returns
+   artwork, and one that IS cacheable (the route sends Cache-Control: public, max-age=86400).
+   Neither the network nor the browser cache was the problem: the doomed direct attempt and the
+   900ms that waited on it were.
+   WHAT THIS LAYER DOES. It records artwork URLs that failed DIRECT, keyed WITHOUT the size token
+   (so one artwork is one entry whatever size each row asks for) and without the still's resolution,
+   in localStorage 'sv_artbad'. From then on thumb() hands out the proxy form at RENDER time for
+   that artwork: the doomed direct attempt is never made again, and the first paint of every later
+   view is served from the browser's cache of the proxy response — no error, no 900ms, no blank box.
+   MEASURED AFTER: Liked albums 907ms -> 3ms across three visits, with no new image request at all.
+   THE LADDER IS NOT REPLACED, only told what is already known: this listener is on WINDOW in the
+   CAPTURE phase, so it runs before the ladder's own document-level listener and the ladder can take
+   its proxy step immediately instead of 900ms later (see the stage-0 branch in #v3artjs).
+   The store is bounded (400 keys, oldest dropped) and only ever grows on a REAL failure, so a URL
+   that loads directly is never recorded. */
+(function(){
+'use strict';
+var KEY='sv_artbad', MAX=400, P='/api/thumb?url=';
+var bad={}, order=[];
+try{ var raw=JSON.parse(localStorage.getItem(KEY)||'{}');
+  if(raw&&typeof raw==='object') Object.keys(raw).forEach(function(k){ bad[k]=1; order.push(k) });
+}catch(e){}
+function keyOf(u){
+  u=String(u==null?'':u);
+  if(u.indexOf(P)===0){ try{ u=decodeURIComponent(u.slice(P.length)) }catch(e){} }
+  if(!/^https?:\/\//i.test(u)) return '';              // data:, blob:, an empty src: never proxied
+  var w=u.indexOf('=w'); if(w>0) u=u.slice(0,w);       // the size token is not part of the artwork
+  var m=u.match(/^(https?:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11})\//);
+  if(m) return m[1];                                   // a still is one artwork at any resolution
+  return u;
+}
+function isBad(u){
+  if(!u||String(u).indexOf(P)===0) return false;
+  var k=keyOf(u); return !!(k&&bad[k]);
+}
+function markBad(u){
+  var k=keyOf(u); if(!k||bad[k]) return;
+  bad[k]=1; order.push(k);
+  while(order.length>MAX) delete bad[order.shift()];
+  try{ localStorage.setItem(KEY, JSON.stringify(bad)) }catch(e){}
+}
+window.svArtIsBad=isBad;
+window.svArtMarkBad=markBad;
+window.svArtBad=function(){ return { keys:Object.keys(bad), proxied:order.length } };
+/* ---- WAVE 14: artwork that has ALREADY painted -----------------------------------------------
+   The other half of the same idea. `sv_artbad` decides HOW an artwork is asked for; `sv_artseen`
+   records that it HAS been painted, which is what lets the lazy layer (#v3artjs) skip its 80ms
+   per-image queue on every later view. Keys are the same size-token-free form as above, so one
+   artwork is one entry whatever size a row asks for. A paint is the only proof: the load listener
+   below fires for the URL that finally WORKED, whatever step of the ladder it was. The write is
+   debounced (a grid paints ~24 covers at once) and the store is bounded to 500 artworks. */
+var SKEY='sv_artseen', SMAX=500;
+var seen={}, sorder=[];
+try{ var rawS=JSON.parse(localStorage.getItem(SKEY)||'{}');
+  if(rawS&&typeof rawS==='object') Object.keys(rawS).forEach(function(k){ seen[k]=1; sorder.push(k) });
+}catch(e){}
+var sSaveT=null;
+function saveSeen(){
+  if(sSaveT) return;
+  sSaveT=setTimeout(function(){ sSaveT=null; try{ localStorage.setItem(SKEY, JSON.stringify(seen)) }catch(e){} }, 400);
+}
+function markSeen(u){
+  var k=keyOf(u); if(!k||seen[k]) return;
+  seen[k]=1; sorder.push(k);
+  while(sorder.length>SMAX) delete seen[sorder.shift()];
+  saveSeen();
+}
+window.svArtSeen=function(u){ if(!u) return false; var k=keyOf(u); return !!(k&&seen[k]) };
+window.svArtMarkSeen=markSeen;
+window.svArtSeenDB=function(){ return { keys:Object.keys(seen).length } };
+/* On DOCUMENT, not window — MEASURED: an image's own load event is capture-delivered to document
+   listeners (46 events in one render) and to NO window listener at all, so the same listener on
+   window silently recorded nothing. (The failure ladder's `error` listener sits on document too.) */
+document.addEventListener('load', function(e){
+  var im=e.target;
+  if(!im||im.tagName!=='IMG'||!im.naturalWidth) return;
+  markSeen(im.getAttribute('data-fb0')||im.getAttribute('src')||im.currentSrc);
+}, true);
+/* 1) A DIRECT FAILURE IS REMEMBERED FIRST. data-fb0 is the ORIGINAL url once the ladder is in
+      motion, so a failure that arrives for a proxy src still names the artwork, not the proxy. */
+window.addEventListener('error', function(e){
+  var im=e.target;
+  if(!im||im.tagName!=='IMG') return;
+  markBad(im.getAttribute('data-fb0')||im.getAttribute('src'));
+}, true);
+/* 2) EVERY RENDERED ARTWORK URL passes through here (all the app's renderers call thumb()), so
+      artwork already known to need the proxy is asked for in its proxy form from the first paint. */
+var _thumb=thumb;
+thumb=function(it,size){
+  var u=_thumb(it,size);
+  return (u&&isBad(u)) ? P+encodeURIComponent(u) : u;
+};
+/* 3) setTheme() (the album-colour wash) builds its OWN proxy URL from the artwork URL it is handed —
+      which is now sometimes already the proxy form, and /api/thumb refuses a localhost url (400
+      'blocked host'), so the wash would silently stop updating for exactly the covers that needed
+      the proxy. Unwrap it back to the direct URL: the function then re-wraps it itself, exactly as
+      it always did. */
+var _setTheme=window.setTheme;
+window.setTheme=function(u){
+  if(typeof u==='string'&&u.indexOf(P)===0){ try{ u=decodeURIComponent(u.slice(P.length)) }catch(e){} }
+  return _setTheme(u);
+};
+})();
+</script>
+<style id="v15slidecss">
+/* ===== WAVE 15 + 16 — horizontal page slide (EVERY page change, not just Home ⇄ page) ========
+   FORWARD (Home → Liked music / Liked albums / a playlist / Library / search results / an artist
+   page / an album page): the incoming page ARRIVES FROM THE LEFT. So does EVERY LATERAL MOVE —
+   Liked music ⇄ Liked albums ⇄ a playlist ⇄ Library, artist → artist, album → album (Wave 16).
+   BACK — anything one level OUT of the current page, which in this app is always Home (and an
+   artist/album page's own Back, which reads as the same move): Home ARRIVES FROM THE RIGHT.
+   The pair is mirrored on purpose — the two signs live in ONE place (NAV in #v15slidejs), so
+   flipping to the iOS convention (forward from the right, back from the left) is a two-character
+   edit there and nothing else changes.
+
+   WHY EXACTLY THESE FOUR CONTAINERS: #scroll only ever toggles #homeSec, #dynSec, #artSec and
+   #albSec — Liked music, Liked albums, playlists, Library, search results and the Quick picks page
+   are ALL #dynSec (they go through showDyn), the artist page is #artSec, the album page #albSec.
+   Everything that must not move — #waveCv, #theme, #menu, #toast, #pvFab, #shist, #setPanel,
+   #aboutCard and the onboarding gate — is a DIRECT CHILD OF BODY, never inside a page container,
+   so a transform here can never become the containing block for a fixed overlay. That is the one
+   real hazard of animating a page container; this layer is built to avoid it.
+
+   ONE-SHOT: #v15slidejs removes the class on animationend (with a fallback timer), so no transform
+   and no stacking context outlives the 260ms. Opacity rides along so the slide reads as motion of
+   the page rather than of the layout; nothing here touches position, size or scroll. */
+@keyframes svSlideInL{from{transform:translateX(calc(-1 * var(--sv-nav-dx,46px)));opacity:.001}to{transform:none;opacity:1}}
+@keyframes svSlideInR{from{transform:translateX(var(--sv-nav-dx,46px));opacity:.001}to{transform:none;opacity:1}}
+#homeSec.svSlideL,#dynSec.svSlideL,#artSec.svSlideL,#albSec.svSlideL{animation:svSlideInL var(--sv-nav-ms,260ms) cubic-bezier(.22,.61,.36,1) both}
+#homeSec.svSlideR,#dynSec.svSlideR,#artSec.svSlideR,#albSec.svSlideR{animation:svSlideInR var(--sv-nav-ms,260ms) cubic-bezier(.22,.61,.36,1) both}
+/* REST (the OS reduced-motion switch or the saved sv_set_reduceMotion) takes the whole effect away.
+   html[data-gfx="reduced"] is written by the app's own gfxReduced(), which is EXACTLY those two
+   tests, and #v15slidejs skips adding the class in the same case — belt and braces, since the
+   attribute is refreshed by the Settings panel but the JS check happens per navigation. */
+html[data-gfx="reduced"] #homeSec.svSlideL,html[data-gfx="reduced"] #dynSec.svSlideL,html[data-gfx="reduced"] #artSec.svSlideL,html[data-gfx="reduced"] #albSec.svSlideL,
+html[data-gfx="reduced"] #homeSec.svSlideR,html[data-gfx="reduced"] #dynSec.svSlideR,html[data-gfx="reduced"] #artSec.svSlideR,html[data-gfx="reduced"] #albSec.svSlideR{animation:none}
+</style>
+<script id="v15slidejs">
+/* ===== WAVE 15 + 16 — horizontal page slide, the JS half ======================================
+   ADDITIVE: it observes the DOM the app ALREADY writes on its page containers (the `hidden` flip,
+   and the in-place rebuild) and plays a class. No renderer, no navigate function and no CSS above
+   is modified — goHome(), showDyn(), openArtist(), openAlbumPage(), restoreView() and
+   albRestoreView() all keep working exactly as they did.
+
+   WHY AN OBSERVER AND NOT A WRAPPED FUNCTION: the app's page switch is a single `hidden` flip that
+   several layers already rely on (Wave 4BC's ambient wash and the wave's own syncView both observe
+   #homeSec for the same reason). A wrapper would miss restoreView() / albRestoreView() and the
+   artist/album paths, which write their containers directly inside the v3js scope.
+
+   THE TRIGGER IS THE PAGE'S IDENTITY, NOT THE `hidden` ATTRIBUTE (Wave 16). The first version
+   listened for the attribute flip alone, so only Home ⇄ page ever moved: every lateral move —
+   Liked music → Liked albums → a playlist → Library — rebuilds the SAME container (#dynSec) in
+   place, and artist → artist rebuilds #artSec in place, so the attribute never changes and
+   nothing played (reported). The trigger is now a KEY read from what is actually rendered:
+   'home' for #homeSec, 'dyn:<#pgTitle>|<active Library chip>' for #dynSec, and '<sec>:<hero
+   .art-name>' for #artSec / #albSec. A real page change always moves it, in whichever container
+   it happens; a REPAINT always keeps it — a Like rebuilds Liked music under the same title and
+   the same chip, so the slide stays silent on a heart click.
+
+   DIRECTION IS LEVEL BASED. Home is the floor (0), the Library-style lists are one step in (1),
+   artist and album pages are the deepest (2). A move to a SHALLOWER page is a Back and enters
+   from the RIGHT; forward moves and lateral moves inside one level enter from the LEFT. That is
+   the reported shape: Home → anything from the left, anything → Home from the right, and
+   Liked music ⇄ Liked albums ⇄ a playlist all from the left, both ways.
+
+   AN EMPTY KEY MEANS "THIS CONTAINER HAS NO PAGE YET" and is never adopted: the artist and album
+   pages paint a skeleton first (no .art-name) and the real page when the fetch lands, so
+   artist → artist resolves ONCE, on the real render, instead of sliding for the skeleton and
+   again for the page. */
+(function(){
+'use strict';
+/* ONE config object — every knob is a single edit right here. */
+var NAV = { ms:260, dx:46, back:1, fwd:-1 };
+/* back:+1 => a page one level OUT of the current one — always Home, or an artist/album page's own
+              Back — enters from the RIGHT
+   fwd:-1  => every forward step AND every lateral step inside one level enters from the LEFT */
+var root = document.documentElement;
+try{ root.style.setProperty('--sv-nav-ms', NAV.ms + 'ms'); root.style.setProperty('--sv-nav-dx', NAV.dx + 'px') }catch(e){}
+
+/* the app's OWN rest test (window.svaraGfx.reduced() === OS matchMedia OR the saved preference),
+   with a local copy for the hypothetical case where the gfx layer has not booted yet */
+function reduced(){
+  try{ if(window.svaraGfx && typeof window.svaraGfx.reduced === 'function') return !!window.svaraGfx.reduced() }catch(e){}
+  try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true }catch(e){}
+  try{ if(localStorage.getItem('sv_set_reduceMotion') === 'true') return true }catch(e){}
+  return false;
+}
+
+/* depth of every page container: Home is the floor, the Library-style lists are one step in,
+   artist and album pages are the deepest thing the app has */
+var LEVEL = { homeSec:0, dynSec:1, artSec:2, albSec:2 };
+var ORDER = ['homeSec','dynSec','artSec','albSec'];
+
+function byId(id){ return document.getElementById(id) }
+function textOf(node){ return node ? String(node.textContent || '').replace(/\s+/g,' ').trim() : '' }
+
+function play(node, dir){
+  if(!node || reduced()) return;
+  var cls = dir > 0 ? 'svSlideR' : 'svSlideL';
+  if(node.__svNavEnd) node.removeEventListener('animationend', node.__svNavEnd);
+  var again = node.classList.contains(cls);      /* a second nav in the same direction: restart it */
+  node.classList.remove('svSlideL','svSlideR');
+  if(again) void node.offsetWidth;               /* only re-read layout when the animation must restart */
+  node.classList.add(cls);
+  function done(){
+    if(node.__svNavT){ clearTimeout(node.__svNavT); node.__svNavT = 0 }
+    if(node.__svNavEnd){ node.removeEventListener('animationend', node.__svNavEnd); node.__svNavEnd = null }
+    node.classList.remove('svSlideL','svSlideR');
+  }
+  /* animationend BUBBLES, and these pages are full of animations (skeletons, the onboarding dots,
+     a coin flip). Only the node's OWN slide animation may end the state. */
+  node.__svNavEnd = function(e){
+    if(e.target !== node) return;
+    if(e.animationName !== 'svSlideInL' && e.animationName !== 'svSlideInR') return;
+    done();
+  };
+  node.addEventListener('animationend', node.__svNavEnd);
+  /* fallback: the CSS switched the animation off (reduced motion turned on mid-session), or the
+     tab was throttled so long that animationend never arrived */
+  node.__svNavT = setTimeout(done, NAV.ms + 140);
+}
+
+/* the ONE page container on screen. #artSec/#albSec do not exist until their first visit
+   (artSection()/albSection() insert them lazily), so nothing here assumes all four are present. */
+function active(){
+  for(var i = 0; i < ORDER.length; i++){ var n = byId(ORDER[i]); if(n && !n.hidden) return n }
+  return null;
+}
+/* THE PAGE'S IDENTITY, in one string. A real page change always moves it, in whichever container
+   it happens; a repaint always keeps it. '' means "this container has no page yet". */
+function keyOf(sec){
+  if(!sec) return '';
+  if(sec.id === 'homeSec') return 'home';
+  if(sec.id === 'dynSec'){
+    var t = textOf(byId('pgTitle'));
+    if(!t) return '';
+    var chip = sec.querySelector('[data-libtab].on');       /* the Library's own tab strip */
+    return 'dyn:' + t + (chip ? '|' + chip.getAttribute('data-libtab') : '');
+  }
+  /* #artSec AND #albSec paint the same hero — <div class="art-name"> is the artist's name on one
+     page and the album's title on the other, so ONE reader covers both. */
+  var name = textOf(sec.querySelector('.art-name'));
+  return name ? sec.id + ':' + name : '';
+}
+var last = null, lastLevel = -1;      /* the page on screen, and how deep that page is */
+
+function sync(){
+  var sec = active(); if(!sec) return;
+  var key = keyOf(sec);
+  /* NOT RENDERED YET (a skeleton, or a page still mounted empty): wait for the next mutation
+     rather than adopting a half-built page — this is what stops artist → artist sliding twice. */
+  if(!key) return;
+  var lvl = LEVEL[sec.id];
+  if(last === null){ last = key; lastLevel = lvl; return }   /* the page we booted on: adopt it */
+  if(key === last) return;                                   /* a repaint of the page already here */
+  var dir = lvl < lastLevel ? NAV.back : NAV.fwd;
+  last = key; lastLevel = lvl;
+  play(sec, dir);
+}
+
+function watch(node){
+  if(!node || !window.MutationObserver || node.__svNavW) return;
+  node.__svNavW = 1;
+  try{
+    new MutationObserver(sync).observe(node, {
+      attributes:true, attributeFilter:['hidden'],   /* the container is swapped: Home ⇄ a page */
+      childList:true, subtree:true                   /* the page is rebuilt in place: lateral move */
+    });
+  }catch(e){}
+}
+function scan(){
+  for(var i = 0; i < ORDER.length; i++) watch(byId(ORDER[i]));
+  /* the boot page is ADOPTED silently — only a change away from it animates */
+  if(last === null){ var sec = active(); if(sec){ var k = keyOf(sec); if(k){ last = k; lastLevel = LEVEL[sec.id] } } }
+}
+scan();
+var sc = byId('scroll');
+if(sc && window.MutationObserver){ try{ new MutationObserver(scan).observe(sc, { childList:true }) }catch(e){} }
+})();
+</script>
+<style id="v16pancss">
+/* ===== WAVE 16 — the player panel: an Up next ⇄ Lyrics slide, and the fullscreen crossfade ====
+   (1) THE PANEL SLIDE. The two tab LABELS are untouched — they are the affordance, and the request
+   was to leave them exactly as they are. What moves is what sits UNDER them: the Up next trio
+   (#pvCtx "Playing from …", #pvHead "Autoplay similar / Clear", #pvQueue the list) on one side and
+   #pvLyrics on the other. #v16panjs reads the side from `#pvLyrics.hidden`, which the app's own tab
+   handler has already flipped by the time its observer runs.
+   DIRECTION: Lyrics is the RIGHT-hand tab, so it arrives from the RIGHT and Up next arrives from the
+   LEFT — the content follows the tab that was clicked. The pair is mirrored and both signs live in
+   ONE place (PANEL in #v16panjs), so flipping the convention is a two-character edit there.
+   The Up next side is THREE sibling blocks and they carry the SAME animation on purpose: identical
+   duration and easing reads as one surface sliding in, not three. Opacity rides along so it reads as
+   motion of the panel, and nothing here touches position, size, scroll or hit-testing.
+   ONE-SHOT, exactly like the page slide: #v16panjs drops the class on animationend — filtered to the
+   node's OWN animation, because animationend bubbles out of the rows inside #pvQueue — with a
+   fallback timer, so no transform outlives the 240ms.
+   REST (the OS switch or the saved sv_set_reduceMotion) takes the whole effect away: #v16panjs skips
+   the class in the same case, and the rule below covers a level change mid-session. */
+@keyframes svPanInL{from{transform:translateX(calc(-1 * var(--sv-pan-dx,44px)));opacity:.001}to{transform:none;opacity:1}}
+@keyframes svPanInR{from{transform:translateX(var(--sv-pan-dx,44px));opacity:.001}to{transform:none;opacity:1}}
+#pvQueue.svPanL,#pvCtx.svPanL,#pvHead.svPanL,#pvLyrics.svPanL{animation:svPanInL var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+#pvQueue.svPanR,#pvCtx.svPanR,#pvHead.svPanR,#pvLyrics.svPanR{animation:svPanInR var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+html[data-gfx="reduced"] #pvQueue.svPanL,html[data-gfx="reduced"] #pvCtx.svPanL,html[data-gfx="reduced"] #pvHead.svPanL,html[data-gfx="reduced"] #pvLyrics.svPanL,
+html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvCtx.svPanR,html[data-gfx="reduced"] #pvHead.svPanR,html[data-gfx="reduced"] #pvLyrics.svPanR{animation:none}
+
+/* (2) THE FULLSCREEN CROSSFADE — the mini player's "Up next" while the fullscreen lyrics overlay
+   is open. The reported bug is "it just switches", and the cause is a cascade accident, not a
+   missing animation: that button has always driven the app's own collapse (#lyrFull →
+   toggleLyrFull → lyrFullClose, a 380ms retract + fade), but the SAME click also flipped the tabs,
+   and `[hidden]{display:none!important}` (bug #7's fix) hid #pvLyrics on the spot — so the retract
+   was never seen and the Up next list appeared in one frame, 380ms before the overlay was gone.
+   `.svxcross` is added for that ramp only and does exactly two things:
+   (a) keeps #pvLyrics on screen while lyrFullClose() fades it. Both rules are !important, so
+       specificity decides and this layer's (1 id + 2 classes) wins over plain [hidden];
+   (b) reveals the Up next trio — which `body.lyrfull …{display:none!important}` hides for the WHOLE
+       ramp — with a fade-in that finishes BEFORE the ramp does, so the list crossfades in UNDER the
+       retracting overlay (still dimming and blurring it) instead of snapping in at the end.
+   The mini player bar is deliberately NOT touched: on this path its own 340ms fade
+   (`body.lyrfull.lyrreveal #mini`) runs WITH the retract, and the player page underneath hides it
+   anyway, so holding it on screen would only add a second fade after the transition was over.
+   The retract, the `lyrreveal` page restore, LF.open, the collapse icon and the inline-style cleanup
+   all stay the app's own (v2js) path — #v16panjs only clicks #lyrFull, exactly as the 4AV handler
+   did. Reduced motion never adds the class at all: lyrFullClose() then finishes in one step. */
+@keyframes svXfadeIn{from{opacity:0}to{opacity:1}}
+body.lyrfull.svxcross #pvLyrics{display:flex!important}
+body.lyrfull.svxcross .pvctx,body.lyrfull.svxcross #pvQueue{display:block!important;animation:svXfadeIn .3s ease both}
+body.lyrfull.svxcross .pvhead{display:flex!important;animation:svXfadeIn .3s ease both}
+</style>
+
+<script id="v16panjs">
+/* ===== WAVE 16 — the panel's slide + the fullscreen crossfade, the JS half =====================
+   ADDITIVE, in the same shape as #v15slidejs: it observes what the app already writes (the `hidden`
+   flip the tab handler performs on #pvLyrics) and plays a class. The tab handler, the lyrics layer
+   and the fullscreen layer are untouched.
+   The ONE thing it takes over is the mini player's "Up next" button inside fullscreen lyrics, and it
+   does that by WRAPPING the handler already there (qb.onclick), never by replacing the node or its
+   listeners — so the 4BA wave's own click listener on that button (the three-line icon animation)
+   keeps working, and the non-fullscreen behaviour stays the 4AV handler's. */
+(function(){
+'use strict';
+/* ONE config object for the panel slide. lyr:+1 => Lyrics arrives from the RIGHT (it is the
+   right-hand tab), up:-1 => Up next arrives from the LEFT. */
+var PANEL = { ms:240, dx:44, lyr:1, up:-1 };
+var XMS = 520;      /* how long the fullscreen crossfade owns the tab switch (the ramp is 380ms) */
+var root = document.documentElement;
+try{ root.style.setProperty('--sv-pan-ms', PANEL.ms + 'ms'); root.style.setProperty('--sv-pan-dx', PANEL.dx + 'px') }catch(e){}
+
+/* the app's OWN rest test, same three steps as #v15slidejs (OS matchMedia, the saved preference,
+   and window.svaraGfx.reduced() which is exactly those two) */
+function reduced(){
+  try{ if(window.svaraGfx && typeof window.svaraGfx.reduced === 'function') return !!window.svaraGfx.reduced() }catch(e){}
+  try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true }catch(e){}
+  try{ if(localStorage.getItem('sv_set_reduceMotion') === 'true') return true }catch(e){}
+  return false;
+}
+function byId(id){ return document.getElementById(id) }
+
+/* the two views: Lyrics is ONE box, Up next is THREE sibling blocks that the tab handler shows and
+   hides together (the "Playing from …" line, the Clear bar, the list) */
+var UP = ['pvCtx','pvHead','pvQueue'];
+
+function oneShot(node, cls){
+  if(!node) return;
+  if(node.__svPanEnd) node.removeEventListener('animationend', node.__svPanEnd);
+  var again = node.classList.contains(cls);       /* a second switch the same way: restart it */
+  node.classList.remove('svPanL','svPanR');
+  if(again) void node.offsetWidth;                /* only re-read layout when it must restart */
+  node.classList.add(cls);
+  function done(){
+    if(node.__svPanT){ clearTimeout(node.__svPanT); node.__svPanT = 0 }
+    if(node.__svPanEnd){ node.removeEventListener('animationend', node.__svPanEnd); node.__svPanEnd = null }
+    node.classList.remove('svPanL','svPanR');
+  }
+  /* animationend BUBBLES, and #pvQueue is full of rows with animations of their own: only this
+     node's OWN slide may end the state. */
+  node.__svPanEnd = function(e){
+    if(e.target !== node) return;
+    if(e.animationName !== 'svPanInL' && e.animationName !== 'svPanInR') return;
+    done();
+  };
+  node.addEventListener('animationend', node.__svPanEnd);
+  /* fallback: the CSS switched the animation off (reduced motion turned on mid-session), or the
+     window was throttled so long that animationend never arrived */
+  node.__svPanT = setTimeout(done, PANEL.ms + 140);
+}
+
+var XLOCK = false;      /* the fullscreen crossfade is driving the tab switch itself */
+
+function play(){
+  if(reduced() || XLOCK) return;
+  var l = byId('pvLyrics'), q = byId('pvQueue');
+  if(!l || !q) return;
+  /* fullscreen owns its own transitions: a transform there would also become the containing block
+     of the overlay's fixed .lyrbar, and XLOCK already covers this layer's own switch */
+  if(document.body.classList.contains('lyrfull')) return;
+  if(!document.body.classList.contains('pv')) return;    /* the player page is not open */
+  var toLyrics = !l.hidden;                              /* the tab handler has already flipped it */
+  var cls = (toLyrics ? PANEL.lyr : PANEL.up) > 0 ? 'svPanR' : 'svPanL';
+  var ids = toLyrics ? ['pvLyrics'] : UP;
+  for(var i = 0; i < ids.length; i++) oneShot(byId(ids[i]), cls);
+}
+
+/* the app's own .tab handler flips the `hidden` flags; that flip is the trigger, so nothing here
+   has to know about #queueBtn, lyrFullOpen() or the keyboard path — every one of them ends up in
+   the same handler and is therefore covered. */
+(function watchTabs(){
+  var l = byId('pvLyrics'); if(!l || l.__svPanW) return;
+  l.__svPanW = 1;
+  try{ new MutationObserver(play).observe(l, { attributes:true, attributeFilter:['hidden'] }) }catch(e){}
+})();
+
+/* ===== (2) the fullscreen crossfade ===========================================================
+   The mini player's "Up next" while `body.lyrfull` is on. XLOCK makes a SECOND click during the
+   ramp fall through to the 4AV handler — which is what the app did before (4AO retargets a reopen
+   without snapping) — so no new state machine is introduced here. */
+function crossfade(){
+  var b = document.body, f = byId('lyrFull'), up = document.querySelector('.tab[data-tab="up"]');
+  XLOCK = true;
+  b.classList.add('svxcross');        /* (a)+(b)+(c) from #v16pancss, for the whole ramp */
+  /* the app's OWN collapse: LF.open, `lyrreveal`, the retract/fade of #pvLyrics and the collapse
+     icon all live inside the v2js layer. #lyrFull is its public handle — the same click this
+     button made before this wave. */
+  if(f) f.click(); else b.classList.remove('lyrfull');
+  if(typeof openPV === 'function') openPV();            /* the page under the overlay (it already is) */
+  if(up) up.click();                                    /* the arriving tab's flags flip in the same tick */
+  setTimeout(function(){ b.classList.remove('svxcross'); XLOCK = false }, XMS);
+}
+var qb = byId('queueBtn');
+if(qb){
+  var _q = qb.onclick;                 /* the 4AV handler: openPV() + the Up next tab */
+  qb.onclick = function(e){
+    if(!XLOCK && !reduced() && document.body.classList.contains('lyrfull')){ crossfade(); return }
+    return (typeof _q === 'function') ? _q.call(this, e) : undefined;
+  };
+}
+})();
+</script>
+<style id="v17lyrcss">
+/* ===== WAVE 17 — leaving fullscreen lyrics has no blank beat =================================
+   THE REPORT: "from fullscreen lyrics back to the player page the lyrics tab was empty for half a
+   second and then filled back in". Two things on the way OUT, and this block + #v17lyrjs fix both.
+
+   (1) THE BLANK RAIL. 4AO's collapse retracts and fades the fullscreen overlay over 380ms, and
+   `body.lyrfull …{display:none!important}` (line 1815) hides the whole Up next trio for that entire
+   window. With the LYRICS tab on screen the rail is therefore empty from the moment the overlay has
+   retracted to nothing until `finish()` drops lyrfull at 380ms: the rail showed its tab row and
+   nothing else, then the panel appeared in a single frame. MEASURED: overlay opacity 0.75 at 100ms,
+   0.20 at 200ms, panel still absent until 380ms — and the screenshot the report came with is
+   exactly one of those frames (the mini bar is still mid-fade at the bottom of it).
+   `.svhand` hands the panel BACK early: ~200ms in, with the overlay already ~85% gone, #v17lyrjs
+   drops lyrfull/lyrreveal (precisely what finish() does 180ms later) and fades the panel in from 0
+   where it belongs. The overlaying lyrics dissolve out while the rail's own panel dissolves in, so
+   the rail is never blank. The app's own timer still runs and still cleans up; it just finds the
+   classes already gone.
+   The fade is an ANIMATION and not an inline opacity for a reason: the app's `lfClear(el)` clears
+   inline transition/opacity at 380ms, which would cut a transition short mid-flight but cannot
+   touch a running animation. REST drops the fade (the handoff itself still happens, because the
+   retract does not exist to begin with when motion is reduced). */
+#pvLyrics.svhand{animation:svHandIn .22s ease both}
+/* NOT from 0: the handoff lands when the retracting overlay is still ~15% opaque, so the incoming
+   panel starts from that same ~15% — the two cross-dissolve through each other and the trace never
+   dips to nothing (from 0 measured one frame under 0.04, which is the dip this avoids; with it the
+   lowest sample of the whole collapse is 0.11 and no sample is under 0.10). */
+@keyframes svHandIn{from{opacity:.18}to{opacity:1}}
+html[data-gfx="reduced"] #pvLyrics.svhand{animation:none}
+</style>
+
+<script id="v17lyrjs">
+/* ===== WAVE 17 — the fullscreen-lyrics collapse: hand the panel back early, then re-anchor =====
+   ADDITIVE and timing-only: no app function is wrapped and no rule of the app's is overridden. The
+   trigger is the body's own class list, because nothing else signals the collapse:
+   `lyrreveal` is added by lyrFullClose() for the close ramp and by nothing else.
+
+   (2) THE RE-ANCHOR. `finish()` calls sizeLyrPad() but never lyrRecenter(), so the rail keeps the
+   FULLSCREEN scroll offset. MEASURED: scrollTop 323 where the rail rests at 638, which leaves the
+   active line 316px below the rail's own centre (23px below the fold, so the panel showed the
+   lines around it rather than the line being sung) until the next lyric line happens to recentre
+   it — the tail of the "filled back in shortly". It is also why the reduced-motion close (where finish() runs while
+   the overlay is STILL full-screen) leaves the padding half a full screen too tall.
+   The app already owns the exact helper for this — `ensureLyricsUI()` → `lyrReopen()` → sizeLyrPad +
+   lyrRecenter + updateLyrJump, which is the same call the Lyrics TAB makes when it opens the panel
+   — so this layer calls that instead of re-deriving the anchored-target maths (which lives in a
+   private scope). It is called twice, once early and once after the app's own 380ms finish(), so the
+   second call wins whatever the geometry did in between. Every step is guarded, so a close with no
+   ramp at all (reduced motion, closePV) simply skips the handoff and still gets the re-anchor. */
+(function(){
+'use strict';
+var HOLD = 200;                 /* hand over ~85% into the 340ms retract (the ramp is 380ms) */
+var HAND = 240;                 /* a hair longer than the .22s hand-in animation */
+var REDO = [215, 520];          /* re-anchor twice: while the panel is still fading in (so the glide
+                                   is mostly over when it is fully visible), and again after the
+                                   app's own 380ms finish() has re-padded it for the rail */
+var armed = false, handed = false, cooling = false, wasFull = false, handT = 0;
+
+function byId(id){ return document.getElementById(id) }
+/* the app's OWN ramp test (lfReduced()): the OS query alone. Only then is there no retract to
+   re-time — the in-app Reduce-motion setting still gets 4AO's ramp, so it still gets the handoff. */
+function osReduced(){
+  try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) }catch(e){ return false }
+}
+
+/* (1) the handoff */
+function handoff(){
+  var b = document.body, el = byId('pvLyrics');
+  if(!el) return;
+  /* a ramp that is still running, and the arriving view IS the lyrics panel. The mini player's
+     "Up next" in fullscreen (#v16panjs) flips the tab to Up next instead and crossfades the trio
+     in under the retracting overlay — that path must not be disturbed. */
+  if(!b.classList.contains('lyrfull') || !b.classList.contains('lyrreveal') || el.hidden) return;
+  if(osReduced()) return;                     /* no ramp to re-time: lyrFullClose() already finished */
+  /* self-contained: the retract's clip would hide the panel, and its in-flight inline opacity
+     would win again the moment the hand-in animation ended, so both go now — finish() clearing
+     them later is then just a no-op. */
+  el.style.removeProperty('clip-path');
+  el.style.removeProperty('transition');
+  el.style.removeProperty('opacity');
+  b.classList.remove('lyrfull','lyrreveal');  /* the panel is a rail panel again, from right now */
+  el.classList.add('svhand');                 /* ...and it fades in where it belongs */
+  handed = true;
+  clearTimeout(handT);
+  handT = setTimeout(function(){ el.classList.remove('svhand'); handed = false }, HAND);
+}
+
+/* (2) the re-anchor */
+function reanchor(){
+  var b = document.body, el = byId('pvLyrics');
+  if(b.classList.contains('lyrfull')) return;   /* still fullscreen: the app recentres on open */
+  if(!el || el.hidden) return;                  /* the lyrics panel is not the arriving view */
+  if(!b.classList.contains('pv')) return;       /* the player page is not on screen */
+  try{ if(typeof window.ensureLyricsUI === 'function') window.ensureLyricsUI() }catch(e){}
+}
+function reanchorLater(){
+  if(cooling) return;
+  cooling = true;
+  for(var i = 0; i < REDO.length; i++) setTimeout(reanchor, REDO[i]);
+  setTimeout(function(){ cooling = false }, REDO[REDO.length - 1] + 240);
+}
+
+function tick(){
+  var b = document.body, el = byId('pvLyrics'), full = b.classList.contains('lyrfull');
+  if(full){
+    /* reopened during the hand-in: give the overlay its own entrance back */
+    if(handed){ clearTimeout(handT); handed = false; if(el) el.classList.remove('svhand') }
+    if(b.classList.contains('lyrreveal') && !armed){
+      armed = true;
+      setTimeout(handoff, HOLD);
+      reanchorLater();
+    }
+  } else {
+    armed = false;
+    if(wasFull && !handed) reanchorLater();     /* a collapse with no ramp at all */
+  }
+  wasFull = full;
+}
+var body = document.body;
+wasFull = body.classList.contains('lyrfull');
+if(window.MutationObserver){ try{ new MutationObserver(tick).observe(body, { attributes:true, attributeFilter:['class'] }) }catch(e){} }
+})();
+</script>
+<style id="v18lyrnostrip">
+/* ===== WAVE 18 — no dark strip across the top of the fullscreen lyrics ========================
+   `body.lyrfull .lyrbar` (line 1816) is the only chrome the fullscreen view keeps — positioned
+   `fixed;top:0;left:6vw;right:6vw`, holding the collapse chevron — and it painted a
+   `linear-gradient(to bottom,rgba(6,6,10,.92),transparent)` behind itself: a full-width dark band
+   over the TOP of the lyrics (reported; the screenshot is that band over the first two lines).
+   The bar keeps its place, its height and its padding — it still owns the chevron — and loses only
+   the paint, so the lyrics start clean at the very top instead of through 70px of gradient.
+   Two details come with it rather than being left behind:
+   (a) the chevron relied on that dark band for contrast, so it now carries a drop shadow — it is
+       the only way out of fullscreen and has to stay readable over 44px of white lyric text;
+   (b) an invisible full-width bar would still swallow every click in that top strip (the lyrics'
+       own line-seek handler is delegated from #lyrBody), so the bar stops taking pointer events
+       and the chevron takes them back. The strip behaves like the lyrics under it again. */
+body.lyrfull .lyrbar{background:none;pointer-events:none}
+body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,0,.85))}
+</style>
 </body>
 </html>

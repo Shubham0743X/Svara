@@ -665,7 +665,11 @@ function byline(it){
   return '';
 }
 // last-resort still: 16:9, so a square cover-crop shows no letterbox bars
-function ytStill(id){ return 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg'; }
+/* WAVE 13: sddefault (640x480), not mqdefault (320x180). This still is the artwork for a row the
+   API shipped without one, and it is drawn in boxes up to 458px wide (a Trending hero card) —
+   320px of image upscaled 1.4x was the softest artwork on the page. sddefault exists for every
+   video, so no new failure path is introduced (verified: 200 on live ids, ~35KB). */
+function ytStill(id){ return 'https://i.ytimg.com/vi/' + id + '/sddefault.jpg'; }
 
 app.get('/api/radio', async (req, res) => {
   cacheHeaders(res, '/api/radio');
