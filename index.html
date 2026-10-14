@@ -11144,5 +11144,22 @@ wasFull = body.classList.contains('lyrfull');
 if(window.MutationObserver){ try{ new MutationObserver(tick).observe(body, { attributes:true, attributeFilter:['class'] }) }catch(e){} }
 })();
 </script>
+<style id="v18lyrnostrip">
+/* ===== WAVE 18 — no dark strip across the top of the fullscreen lyrics ========================
+   `body.lyrfull .lyrbar` (line 1816) is the only chrome the fullscreen view keeps — positioned
+   `fixed;top:0;left:6vw;right:6vw`, holding the collapse chevron — and it painted a
+   `linear-gradient(to bottom,rgba(6,6,10,.92),transparent)` behind itself: a full-width dark band
+   over the TOP of the lyrics (reported; the screenshot is that band over the first two lines).
+   The bar keeps its place, its height and its padding — it still owns the chevron — and loses only
+   the paint, so the lyrics start clean at the very top instead of through 70px of gradient.
+   Two details come with it rather than being left behind:
+   (a) the chevron relied on that dark band for contrast, so it now carries a drop shadow — it is
+       the only way out of fullscreen and has to stay readable over 44px of white lyric text;
+   (b) an invisible full-width bar would still swallow every click in that top strip (the lyrics'
+       own line-seek handler is delegated from #lyrBody), so the bar stops taking pointer events
+       and the chevron takes them back. The strip behaves like the lyrics under it again. */
+body.lyrfull .lyrbar{background:none;pointer-events:none}
+body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,0,.85))}
+</style>
 </body>
 </html>
