@@ -287,6 +287,48 @@ body:not(.svtrack) #pvFab{display:none}
 <body>
 <div id="theme"></div>
 
+<style id="v19gatecss">
+/* ===== WAVE 19 — the first-run gate has to be decided BEFORE the first paint ==================
+   WHAT WAS WRONG (reported on the packaged 1.2.0 build): a brand-new install flashed the HOME page
+   — sidebar, hero, rails — for about half a second and only then showed the personalisation
+   screen. The gate itself was never wrong: the v6onc block's boot() tests the same three things
+   (no history, no profile, not seen). It just ran ~10,000 lines into the document, while the app's
+   shell is real markup in <body> and the v3js init (renderHome + goHome, ~line 1740) had already
+   built a complete Home behind it. Chromium paints incrementally, so that finished page was on
+   screen for the whole rest of the parse.
+   THE FIX: the same three tests run HERE, at the very top of <body>, and put `svoncg` on <html>
+   before a single shell node exists, so no frame is ever composited with a Home page behind the
+   gate. Everything the shell would paint is `visibility:hidden` — not display:none: no node is
+   unmounted and no layout changes when the class comes off, so the app behind the overlay is
+   byte-for-byte as it was. `#onc` is put back on purpose (it is appended to <body> by the gate's
+   own mount(), and it has to be able to fade itself in). Same slot, same idiom as v5typeboot and
+   v4fxboot above: stored state resolved before the first paint.
+   WHO TAKES IT OFF: boot() (in v6onc) removes it in the SAME tick it mounts and shows the overlay,
+   so the browser can never composite a frame in between — and a 2.5s failsafe right here means a
+   script that dies before that can never leave the window blank. */
+html.svoncg body>*{visibility:hidden}
+html.svoncg #onc{visibility:visible}
+</style>
+
+<script id="v19gatejs">
+/* The three reads below are LSget's own semantics, copied (v ? JSON.parse(v) : d): sv_profile is
+   written as JSON null when it is cleared, and that must read as "no profile", not as a value. */
+(function(){
+  var fresh = false;
+  try{
+    var read = function(k, d){ try{ var v = localStorage.getItem(k); return v ? JSON.parse(v) : d }catch(e){ return d } };
+    var hist = read('ml_history', null);
+    var profile = read('sv_profile', null);
+    var seen = read('sv_onboard_seen', 0);
+    fresh = !(hist && typeof hist === 'object' && Object.keys(hist).length) && !profile && !seen;
+  }catch(e){}
+  var html = document.documentElement;
+  var release = function(){ try{ html.classList.remove('svoncg') }catch(e){} };
+  window.__svOncGate = { fresh: fresh, release: release };
+  if(fresh){ html.classList.add('svoncg'); setTimeout(release, 2500) }
+})();
+</script>
+
 <style id="v5typecss">
 /* ===== Wave 5 (UI-7) — the app-wide TYPE SCALE =====
    Every size in this app is an absolute px value, so there is no root font size to turn up and no
@@ -3495,6 +3537,18 @@ async function openArtist(id, name){
     var j = await r.json();
     if(gen !== artGen) return;    // user navigated away while this was loading
     if(!j || !j.id){ el.innerHTML = '<div class="empty">No artist page found for “'+esc(name||'')+'”.</div>'; return }
+    /* WAVE 19 — A HEADER WITH NO CATALOGUE IS NOT AN ARTIST PAGE. Reported: playing a re-upload
+       whose credit reads "Honey Singh" opened an artist page whose hero said "Honey Singh" and whose
+       body was completely empty (the credit resolves to a 13-subscriber channel that publishes no
+       songs, no albums and no related artists — measured). /api/artist now resolves a name to a
+       real entity before it ever gets here, so this is the guard for the OTHER door: a track that
+       carries that channel's id as its artist id. An empty body is worse than an honest line, and
+       the artist's own name is still not lost — it stays in the panel that linked here. */
+    if(!(j.topSongs||[]).length && !(j.albums||[]).length && !(j.related||[]).length && !String(j.description||'').trim()){
+      el.innerHTML = '<div class="empty">No artist page found for “'+esc(j.name||name||'')+'”.<br>That credit points at a channel with no music catalogue.</div>';
+      try{ document.title = (j.name||name||'Artist')+' · Svara' }catch(e){}
+      return;
+    }
     renderArtist(j);
     if(typeof skReveal==='function')skReveal(el);   // 4AJ: ~140ms reveal of the real page
     loadArtistSongs();            // prefetch the whole catalogue (up to 150) for Play all / Mix
@@ -10406,8 +10460,16 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
      the two ways out are the two buttons, and until one is pressed the app is behind an overlay that
      covers the window at z-index 100. */
   function boot(){
-    if(!histEmpty() || profile || seen()) return;      // a fresh install only
+    /* WAVE 19 — the veil v19gatejs put on <html> at the top of <body> comes off HERE, in the same
+       synchronous tick that mounts + shows the overlay (mount() → .on → paint()), so the browser is
+       handed both changes inside one frame: it can never composite the Home page (which used to be
+       up for the rest of the parse) and it can never composite a blank window either. A returning
+       user takes it off on the first line, where there is nothing to hide. */
+    var gate = window.__svOncGate;
+    var release = function(){ if(gate) try{ gate.release() }catch(e){} };
+    if(!histEmpty() || profile || seen()){ release(); return }   // a fresh install only
     openFlow(false);
+    release();
   }
   boot();
 
@@ -11161,5 +11223,107 @@ if(window.MutationObserver){ try{ new MutationObserver(tick).observe(body, { att
 body.lyrfull .lyrbar{background:none;pointer-events:none}
 body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,0,.85))}
 </style>
+<style id="v19onccss">
+/* ===== WAVE 19 — what a SELECTED onboarding chip looks like ====================================
+   Was: a SOLID accent pill (background:var(--acc) — #1FCF9B — with near-black text: the fill was the
+   whole signal, and on a screen that is otherwise near-black it read as a row of bright rectangles)
+   plus a 14px glow. Now it is the reference the user sent: the pill keeps its dark surface, the
+   accent moves into the EDGE and the TYPE, and the check mark (which the v6onc markup already had,
+   in the accent’s own colour) carries the state. Same box, same padding, same height — only the
+   paint changes, so nothing on the screen reflows and no measurement in the v6onc block is
+   invalidated. Unselected pills are untouched (this rule only ever matches aria-pressed="true").
+   The transition (background/border/color/box-shadow, 0.18s — set by .oncPill itself) still runs,
+   so the state change fades rather than popping.
+   SPECIFICITY NOTE: this rule and .oncPill:hover are both (0,2,0), so being later in the document
+   is what makes it win on a hovered selected pill — which is why the hover state is re-stated below
+   instead of left to inherit the unselected hover (white edge + white text). */
+.oncPill[aria-pressed="true"]{
+  background:rgba(var(--amb),.13);
+  border-color:var(--acc);
+  color:var(--acc);
+  font-weight:700;
+  box-shadow:0 0 0 1px rgba(var(--amb),.18) inset,0 0 16px rgba(var(--amb),.16)}
+.oncPill[aria-pressed="true"]:hover{background:rgba(var(--amb),.20);border-color:var(--acc2);color:var(--acc2)}
+</style>
+
+<script id="v19oncui">
+/* ================================================================================================
+   WAVE 19 — AND THE OTHER THING A LIKE DOES: it must not throw the user back to the start of a rail.
+   Reported: scrolling a long way into the Quick picks carousel on Home, tapping ♥ on a song, and
+   landing back at the FIRST card with the whole carousel reset — every time. Root cause: liking is a
+   GLOBAL state change (the same track can sit in Listen again, a picked shelf and the queue at once),
+   so refreshHearts() rebuilds the current page, and on Home that is renderHome(), whose first write
+   is sec.innerHTML = h: #homeSec is replaced wholesale, and a fresh grid/rail starts at scrollLeft 0
+   by definition — which is exactly where the user found themselves, every time.
+   THE FIX — put the offsets back, not the markup back. Before the rebuild this reads every scrolled
+   or scrollable node (.railwrap, .list, .chiprow) in each section, keyed by the section’s own <h2>
+   text, which survives a rebuild because it is what renderHome writes; after it, the same nodes are
+   found again by that key and their offsets are written back. renderHome paints its synchronous half
+   (the Quick picks grid among it) before it returns, so one restore call covers the reported case,
+   and the three discovery rails — which fill AFTER their fetch settles — are covered by the two
+   follow-ups below. Nothing is keyed by index alone: a section whose scrollers changed shape is
+   simply skipped (its node is missing) rather than restoring an unrelated offset.
+   ONLY the like/unlike path is wrapped: a repaint the user ASKED for (a chip, a sort) is still free
+   to start its rows where it likes, because it is the same wrapper renderHome()/goHome() call. */
+(function(){
+  var SCROLLERS = ".railwrap,.list,.chiprow";
+  function textKey(sec){
+    var h = sec.querySelector("h2"); if(!h) return "";
+    var first = h.firstChild;                                   /* skips the Play all / Show more buttons */
+    var t = (first && first.nodeType === 3) ? first.textContent : h.textContent;
+    return String(t || "").replace(/s+/g, " ").trim();
+  }
+  function scrollers(sec){
+    var out = [];
+    Array.prototype.forEach.call(sec.querySelectorAll(SCROLLERS), function(n){
+      if(n.scrollWidth - n.clientWidth > 2 || n.scrollTop) out.push(n);
+    });
+    return out;
+  }
+  function snapshot(rootEl){
+    var snap = [];
+    if(!rootEl) return snap;
+    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
+      var key = textKey(sec); if(!key) return;
+      var list = scrollers(sec); if(!list.length) return;
+      snap.push({ key:key, at:list.map(function(n){ return { l:n.scrollLeft, t:n.scrollTop } }) });
+    });
+    return snap;
+  }
+  function restore(rootEl, snap){
+    if(!rootEl || !snap || !snap.length) return 0;
+    var byKey = {};
+    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
+      var k = textKey(sec); if(k && !byKey[k]) byKey[k] = sec;
+    });
+    var n = 0;
+    snap.forEach(function(s){
+      var sec = byKey[s.key]; if(!sec) return;
+      var list = scrollers(sec);
+      s.at.forEach(function(p, i){
+        var node = list[i]; if(!node) return;
+        if(node.scrollLeft !== p.l){ node.scrollLeft = p.l; n++ }
+        if(p.t && node.scrollTop !== p.t) node.scrollTop = p.t;
+      });
+    });
+    return n;
+  }
+  var inner = (typeof refreshHearts === "function") ? refreshHearts : null;
+  if(!inner) return;
+  refreshHearts = function(){
+    var home = document.getElementById("homeSec");
+    if(!home || home.hidden || typeof renderHome !== "function") return inner.apply(this, arguments);
+    var snap = snapshot(home);
+    var out = renderHome();
+    restore(home, snap);
+    var again = function(){ restore(home, snap) };
+    if(out && typeof out.then === "function") out.then(again, again);
+    setTimeout(again, 60); setTimeout(again, 260);
+    return out;
+  };
+  window.svaraRailScroll = { keep: function(){ var h=document.getElementById("homeSec"); return snapshot(h) },
+                             put: function(s){ return restore(document.getElementById("homeSec"), s) } };
+})();
+</script>
 </body>
 </html>
