@@ -1,28 +1,50 @@
 # Svara
 
-**A YouTube-Music-style desktop player for Windows — no account, no login, nothing to install.**
+**A YouTube-Music-style desktop player for Windows — no account, no login.**
 
 Search, play and queue music, keep a library of liked songs, albums and playlists, follow
-karaoke-style synced lyrics, and save tracks for offline listening — all from one portable app that
-keeps your library on your own PC.
+karaoke-style synced lyrics, and save tracks for offline listening — all from one app that keeps
+your library on your own PC.
 
 ## Download
 
-### ▶ [Download Svara 1.2.0 for Windows (64-bit)](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara.1.2.0.exe)
+Svara ships two ways. Same app, same music — pick whichever suits you.
 
-Clicking it downloads the current build straight away. Prefer to browse first? Every version, with
-its notes, lives under [**Releases**](https://github.com/Shubham0743X/Svara/releases).
+### ▶ [Download the Svara installer](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara-Setup-1.2.0.exe)
 
-**Getting it running**
+A normal Windows install: a Start Menu entry, a desktop shortcut, and an uninstaller, so Svara
+updates and leaves like anything else on your PC. **This is the one to pick** unless you want a
+file you can carry around.
 
-1. Click the link above — you get one file, `Svara.1.2.0.exe` (about 114 MB).
+1. Click the link above — you get `Svara-Setup-1.2.0.exe` (about 128 MB).
+2. Run it. It asks where to put Svara, installs in a few seconds, and can open the app for you when
+   it finishes.
+3. Start playing.
+
+To remove it later: **Settings → Apps → Installed apps → Svara → Uninstall**.
+
+### ▶ [Download Svara portable](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara.1.2.0.exe)
+
+One file, no installer, no admin prompt — handy for a USB stick or a PC you don't want to change.
+
+1. Click the link above — you get `Svara.1.2.0.exe` (about 114 MB).
 2. Put it wherever you like (Desktop, a folder, a USB stick) and double-click it.
-   There is no installer, no admin prompt, and nothing else to set up.
-3. Start playing. The app carries everything it needs, including the media engine it uses for audio.
+3. Start playing.
+
+Every version, with its notes, lives under [**Releases**](https://github.com/Shubham0743X/Svara/releases).
 
 **The first time you open it**, Windows may show a blue *"Windows protected your PC"* box. That is
 SmartScreen flagging an app that isn't code-signed (a yearly certificate the project doesn't buy),
-not a warning about anything Svara does — click **More info → Run anyway**.
+not a warning about anything Svara does — click **More info → Run anyway**. It applies to both
+downloads, and only to the first launch.
+
+**Where your library lives.** Liked songs, liked albums, playlists, your listening history, the
+theme, the graphics level and the text size are kept in `%APPDATA%\Svara`, never inside the app
+itself. Installing, updating, reinstalling or uninstalling Svara never touches them — and the
+portable copy reads the same folder, so the two are interchangeable.
+
+**Run one copy at a time.** The installed and portable versions both serve the app on port 3000, so
+close one before opening the other.
 
 **Needs:** Windows 10 or 11 (64-bit) and an internet connection.
 
@@ -53,9 +75,12 @@ folder.
 | What you see | What to do |
 | --- | --- |
 | *"Windows protected your PC"* on first launch | **More info → Run anyway** — the app just isn't code-signed. |
-| *"Port 3000 is being used by another program"* | Close the other program (often a second copy of Svara) and open the app again. |
+| *"Port 3000 is being used by another program"* | Close the other program (often a second copy of Svara — installed *and* portable, say) and open the app again. |
 | A track won't play, or search comes back empty | YouTube changes things on its side now and then. Grab the newest build from [Releases](https://github.com/Shubham0743X/Svara/releases/latest) — fixes land there. |
 | Music plays but downloads fail | Same as above: update to the newest release, then try again. |
+
+Updating: install the newer `Svara-Setup-<version>.exe` over the top and your library, theme and
+settings all carry across.
 
 ## About
 

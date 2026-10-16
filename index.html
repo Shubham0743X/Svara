@@ -287,6 +287,48 @@ body:not(.svtrack) #pvFab{display:none}
 <body>
 <div id="theme"></div>
 
+<style id="v19gatecss">
+/* ===== WAVE 19 — the first-run gate has to be decided BEFORE the first paint ==================
+   WHAT WAS WRONG (reported on the packaged 1.2.0 build): a brand-new install flashed the HOME page
+   — sidebar, hero, rails — for about half a second and only then showed the personalisation
+   screen. The gate itself was never wrong: the v6onc block's boot() tests the same three things
+   (no history, no profile, not seen). It just ran ~10,000 lines into the document, while the app's
+   shell is real markup in <body> and the v3js init (renderHome + goHome, ~line 1740) had already
+   built a complete Home behind it. Chromium paints incrementally, so that finished page was on
+   screen for the whole rest of the parse.
+   THE FIX: the same three tests run HERE, at the very top of <body>, and put `svoncg` on <html>
+   before a single shell node exists, so no frame is ever composited with a Home page behind the
+   gate. Everything the shell would paint is `visibility:hidden` — not display:none: no node is
+   unmounted and no layout changes when the class comes off, so the app behind the overlay is
+   byte-for-byte as it was. `#onc` is put back on purpose (it is appended to <body> by the gate's
+   own mount(), and it has to be able to fade itself in). Same slot, same idiom as v5typeboot and
+   v4fxboot above: stored state resolved before the first paint.
+   WHO TAKES IT OFF: boot() (in v6onc) removes it in the SAME tick it mounts and shows the overlay,
+   so the browser can never composite a frame in between — and a 2.5s failsafe right here means a
+   script that dies before that can never leave the window blank. */
+html.svoncg body>*{visibility:hidden}
+html.svoncg #onc{visibility:visible}
+</style>
+
+<script id="v19gatejs">
+/* The three reads below are LSget's own semantics, copied (v ? JSON.parse(v) : d): sv_profile is
+   written as JSON null when it is cleared, and that must read as "no profile", not as a value. */
+(function(){
+  var fresh = false;
+  try{
+    var read = function(k, d){ try{ var v = localStorage.getItem(k); return v ? JSON.parse(v) : d }catch(e){ return d } };
+    var hist = read('ml_history', null);
+    var profile = read('sv_profile', null);
+    var seen = read('sv_onboard_seen', 0);
+    fresh = !(hist && typeof hist === 'object' && Object.keys(hist).length) && !profile && !seen;
+  }catch(e){}
+  var html = document.documentElement;
+  var release = function(){ try{ html.classList.remove('svoncg') }catch(e){} };
+  window.__svOncGate = { fresh: fresh, release: release };
+  if(fresh){ html.classList.add('svoncg'); setTimeout(release, 2500) }
+})();
+</script>
+
 <style id="v5typecss">
 /* ===== Wave 5 (UI-7) — the app-wide TYPE SCALE =====
    Every size in this app is an absolute px value, so there is no root font size to turn up and no
@@ -415,6 +457,36 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
 <symbol id="i-note" viewBox="0 0 24 24"><path class="f" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></symbol>
 <symbol id="i-heart" viewBox="0 0 24 24"><path class="f" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></symbol>
 <symbol id="i-heart-o" viewBox="0 0 24 24"><path d="M12 20.3l-1.3-1.2C5.7 14.7 2.5 11.9 2.5 8.7 2.5 6 4.6 4 7.3 4c1.6 0 3.1.8 4.2 2 1.1-1.2 2.6-2 4.2-2 2.7 0 4.8 2 4.8 4.7 0 3.2-3.2 6-8.2 10.4L12 20.3z"/></symbol>
+<!-- Wave 24 — the slashed-heart "unlike" glyph: THE USER'S SUPPLIED FILE, INVARIANT (filled, no
+     stroke), with its paint written INTO THE MARKUP.
+     Every earlier attempt styled this path from outside it — `class="f"` (fill only), Wave 23's
+     `class="fs"` (fill + the app's 1.8px stroke) — and the report kept coming back that the icon
+     was unchanged. Both of those depend on a CLASS on a path that only exists inside a <use>
+     shadow tree: the decoration is applied only where the app's `.ic svg …` rules reach that
+     clone, and a stroke also has to be taken back off the path again, so the same markup can
+     paint differently between a dev browser, an older packaged Chromium, and any context whose
+     icon CSS differs. A presentation ATTRIBUTE on the path has no such dependency: it travels
+     with the clone, it beats the `.ic svg{fill:none;stroke:currentColor}` declarations that would
+     otherwise be inherited into it, and it is exactly what the supplied file says — `fill`
+     currentColor, no stroke. So the glyph now paints as a solid mark (like #i-heart, i-play, the
+     i-list dots) anywhere the sprite is used, at any size, with no rule to lose.
+     `currentColor` deliberately, not the file's literal white: the app's own surfaces colour it —
+     accent on a liked cover / hero pill / menu icon, the surface's text colour elsewhere. Both of
+     its uses are: the ⋮ menu's "Remove from Liked music" item and, on hover/focus of a LIKED
+     album, the swap on a cover heart, a search-album row heart and the album hero's pill (see
+     v4aqcss, which is unchanged: it only decides WHICH of the two glyphs is displayed).
+
+     SIZE. The file's ink only fills part of its 24-unit box — measured getBBox() on the live path:
+     x 1.394 … 22.001, y 1.393 … 21.485 (20.607 × 20.092) — so inside the app's 16px menu icon and
+     17px cover-heart icon it was painting about 13.3px and 14.2px of actual heart, i.e. ~0.8px of
+     wall at 16px, which is the "pixelated" look at its root. The symbol's viewBox is therefore
+     tightened to that ink box, NOT the geometry scaled: the same path, drawn a step larger inside
+     the same box. 1.2 1.2 21 20.5 keeps ≥0.19 of a unit of margin on all four sides (the earlier
+     1.35 1.35 20.3 20.3 draft cut the heart's right arc: 21.65 < 22.001, measured as 18 inked pixels
+     sitting ON the 16px raster's border), so nothing is clipped. Measured on the real 16px raster:
+     ink coverage goes 41.4% → 52.3% and the heart 13.3px → 15.7px wide (~+17%, ≈1.0px of wall), with
+     the icon boxes themselves untouched — the ⋮ menu row and the 30px cover circle do not move. -->
+<symbol id="i-heart-off" viewBox="1.2 1.2 21 20.5"><path fill="currentColor" stroke="none" d="m2.808 1.393l18.385 18.385l-1.415 1.414l-3.746-3.747L12 21.485l-8.478-8.492a6 6 0 0 1 .033-8.023L1.394 2.808zm2.172 10.23L12 18.654l2.618-2.623l-9.646-9.645a4 4 0 0 0 .008 5.237m15.263-6.866a6 6 0 0 1 .236 8.236l-1.635 1.636l-1.414-1.414l1.59-1.592a4 4 0 0 0-5.683-5.606l-1.335 1.198l-1.336-1.197a4 4 0 0 0-1.155-.723l-2.25-2.25A6 6 0 0 1 12 4.53a6 6 0 0 1 8.242.228"/></symbol>
 <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></symbol>
 <symbol id="i-play" viewBox="0 0 24 24"><path class="f" d="M8 5.5v13L19 12z"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><path class="f" d="M7 5.5h3.6v13H7zM13.4 5.5H17v13h-3.6z"/></symbol>
@@ -434,6 +506,11 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
 <symbol id="i-mute" viewBox="0 0 24 24"><path class="f" d="M3 10v4h3.5L11 18V6L6.5 10H3z"/><path d="M15.5 9.5 21 15M21 9.5l-5.5 5.5"/></symbol>
 <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><circle class="f" cx="4.5" cy="6" r="1.4"/><circle class="f" cx="4.5" cy="12" r="1.4"/><circle class="f" cx="4.5" cy="18" r="1.4"/></symbol>
 <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"/></symbol>
+<!-- Wave 21 — the user's own "add to playlist" glyph (a list with a plus), verbatim geometry, and
+     the ⋮ menu's Save to playlist item in place of i-save. Stroked like every other menu icon at
+     the app's 1.8px (.ic svg) instead of the file's 2px, the same normalisation i-expand /
+     i-collapse got, so it sits at the same weight as Play next / Add to queue beside it. -->
+<symbol id="i-addpl" viewBox="0 0 24 24"><path d="M19 8H5m0 4h9m-3 4H5m10 0h6m-3-3v6"/></symbol>
 <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle class="f" cx="12" cy="12" r="2.6"/></symbol>
 <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
 <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
@@ -1390,7 +1467,7 @@ function openMenu(ev,id){
   const fav=!!favs[id];
   const go=cls=>`<button class="mi ${cls||''}" data-a="${id}" data-act="...">`;
   m.innerHTML=`
-    <button class="mi" data-a="${esc(id)}" data-act="fav"><span class="ic">${ic(fav?'i-heart':'i-heart-o')}</span>${fav?'Remove from Liked music':'Add to Liked music'}</button>
+    <button class="mi" data-a="${esc(id)}" data-act="fav"><span class="ic">${ic(fav?'i-heart-off':'i-heart-o')}</span>${fav?'Remove from Liked music':'Add to Liked music'}</button>
     ${!(cur&&cur.id===id)?`<button class="mi" data-a="${esc(id)}" data-act="now"><span class="ic">${ic('i-play')}</span>Play now</button>`:''}
     <button class="mi" data-a="${esc(id)}" data-act="next"><span class="ic">${ic('i-next')}</span>Play next</button>
     <button class="mi" data-a="${esc(id)}" data-act="qadd"><span class="ic">${ic('i-plus')}</span>Add to queue</button>
@@ -1399,7 +1476,7 @@ function openMenu(ev,id){
       ?`<button class="mi" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-plus')}</span>Add back to taste</button>`
       :`<button class="mi dim" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-x')}</span>Remove from taste</button>`}
     <div class="sep"></div>
-    <button class="mi" data-a="${esc(id)}" data-act="pl"><span class="ic">${ic('i-save')}</span>Save to playlist</button>
+    <button class="mi" data-a="${esc(id)}" data-act="pl"><span class="ic">${ic('i-addpl')}</span>Save to playlist</button>
     <button class="mi" data-a="${esc(id)}" data-act="dl"><span class="ic">${ic('i-download')}</span>Download</button>`;
   m.hidden=false;
   const r=m.getBoundingClientRect();
@@ -3390,7 +3467,7 @@ function renderArtist(a){
   var pic = heroArt(a);
   var aud = a.monthlyAudience || '';
   if(aud && !/monthly/i.test(aud)) aud += ' monthly audience';
-  var h = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
+  var h = artBackHTML();
   /* Wave 4D hero (restored for Wave 4J) — everything sits ON the clear full-bleed
      banner: name, monthly audience, the 2-line-clamped description with MORE/LESS, and
      Play all / Mix. `.art-fit` is the 2.4:1 floor; the hero grows when the description
@@ -3450,7 +3527,7 @@ function artMoreToggle(){
 function renderArtistSongs(list){
   var el = document.getElementById('artSec'); if(!el || !artData) return;
   artListOpen = true;
-  el.innerHTML = '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>'+
+  el.innerHTML = artBackHTML()+
     '<div class="sec"><h2>All songs <span class="art-count">'+list.length+' songs</span></h2>'+artSongsHTML(list)+'</div>';
   register(list);
   var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = 0;
@@ -3474,45 +3551,79 @@ function artistPlayFrom(id){
     playList(list, i>=0?i:0, true);
   });
 }
+function artBackHTML(){
+  return '<button class="art-back" data-artback="1"><span class="ic">'+ic('i-back')+'</span>Back</button>';
+}
+/* the credit a name-only look-up was started from (see probeArtist): if the look-up finds no page,
+   that one span stops being a link, exactly as the old silent probe did it. */
+var artProbeSpan = null;
+function artUnlink(s){
+  if(!s || !s.classList) return;
+  try{ s.classList.remove('alink'); s.removeAttribute('data-artist-name') }catch(e){}
+}
 async function openArtist(id, name){
   var el = artSection(); if(!el) return;
+  var src = artProbeSpan; artProbeSpan = null;   // the credit this page was opened from, if any
   rememberView();
   var gen = ++artGen;
   if(document.body.classList.contains('pv')) closePV();   // reveal the page; playback keeps running
   el.hidden = false;
   document.getElementById('homeSec').hidden = true;
   document.getElementById('dynSec').hidden = true;
+  /* Wave 22 — #pgTitle/#pgSub (the Home "Now playing" row) are direct children of #scroll, OUTSIDE
+     #homeSec, so hiding the Home section left the row painted. On a FIRST visit to an artist the
+     stale "● Now playing / <track>" line therefore sat ABOVE this page's own Back button for the
+     whole skeleton, and the page only righted itself when renderArtist() hid the row on arrival
+     (reported). openAlbumPage() has hidden the row together with its loading state from the start,
+     and updatePlRows() already reads "pgTitle is hidden on the artist and album pages" — so the
+     skeleton was the one state breaking that rule. rememberView() has just snapshotted the row
+     (t/tHid/tCls/s/sHid), so restoreView() puts it back byte-for-byte on Back. */
+  var npT = document.getElementById('pgTitle'), npS = document.getElementById('pgSub');
+  if(npT) npT.hidden = true; if(npS) npS.hidden = true;
   setNav(null);
   curPage = 'artist'; curList = []; artData = null;        // keeps the keeper's homeLine() off
   artFull = []; artFullReq = null; artListOpen = false;    // a new artist ⇒ a new catalogue
-  el.innerHTML = (typeof skHero==='function')
+  /* Wave 21 — the skeleton carries its own Back button, the way the album page's loading state
+     does: the page appears the instant it is clicked, so it must also be escapable the instant it
+     is clicked (a slow channel used to leave the user with nothing but the view they came from). */
+  el.innerHTML = artBackHTML() + ((typeof skHero==='function')
     ? skHero()+'<div class="sec"><h2>Top songs</h2>'+skRows(5,true)+'</div>'
-    : '<div class="empty">Loading artist…</div>';
+    : '<div class="empty">Loading artist…</div>');
   var sc = document.getElementById('scroll'); if(sc) sc.scrollTop = 0;
   try{ document.title = 'Loading · Svara' }catch(e){}
   try{
     var r = await fetch('/api/artist?'+(id ? 'id='+encodeURIComponent(id) : 'name='+encodeURIComponent(name||'')));
     var j = await r.json();
     if(gen !== artGen) return;    // user navigated away while this was loading
-    if(!j || !j.id){ el.innerHTML = '<div class="empty">No artist page found for “'+esc(name||'')+'”.</div>'; return }
+    if(!j || !j.id){ artUnlink(src); el.innerHTML = artBackHTML()+'<div class="empty">No artist page found for “'+esc(name||'')+'”.</div>'; return }
+    /* WAVE 19 — A HEADER WITH NO CATALOGUE IS NOT AN ARTIST PAGE. Reported: playing a re-upload
+       whose credit reads "Honey Singh" opened an artist page whose hero said "Honey Singh" and whose
+       body was completely empty (the credit resolves to a 13-subscriber channel that publishes no
+       songs, no albums and no related artists — measured). /api/artist now resolves a name to a
+       real entity before it ever gets here, so this is the guard for the OTHER door: a track that
+       carries that channel's id as its artist id. An empty body is worse than an honest line, and
+       the artist's own name is still not lost — it stays in the panel that linked here. */
+    if(!(j.topSongs||[]).length && !(j.albums||[]).length && !(j.related||[]).length && !String(j.description||'').trim()){
+      artUnlink(src);
+      el.innerHTML = artBackHTML()+'<div class="empty">No artist page found for “'+esc(j.name||name||'')+'”.<br>That credit points at a channel with no music catalogue.</div>';
+      try{ document.title = (j.name||name||'Artist')+' · Svara' }catch(e){}
+      return;
+    }
     renderArtist(j);
     if(typeof skReveal==='function')skReveal(el);   // 4AJ: ~140ms reveal of the real page
     loadArtistSongs();            // prefetch the whole catalogue (up to 150) for Play all / Mix
-  }catch(e){ if(gen === artGen) el.innerHTML = '<div class="empty">Could not load this artist right now.</div>' }
+  }catch(e){ if(gen === artGen) el.innerHTML = artBackHTML()+'<div class="empty">Could not load this artist right now.</div>' }
 }
-/* name-only link: one lookup, then plain text if it fails */
+/* Wave 21 — a name-only credit opens the page IMMEDIATELY. It used to run a silent
+   /api/artist?name= look-up first (seconds on a cold channel) and only then open the page, so from
+   anywhere except the player — where the credit already carries a channel id and always went
+   straight through — a click changed nothing at all for that whole time. Reported as "did my click
+   even register?". The page owns the wait now: skeleton plus Back at once, the look-up finishing
+   inside it, exactly like an id-carrying credit. */
 function probeArtist(span, name){
   if(!name) return;
-  var gen = artGen;                       // if anything navigates meanwhile, drop this look-up
-  fetch('/api/artist?name='+encodeURIComponent(name)).then(function(r){ return r.json() }).then(function(j){
-    if(gen !== artGen) return;
-    if(j && j.id) openArtist(j.id, j.name || name);
-    else {
-      span.classList.remove('alink');
-      span.removeAttribute('data-artist-name');
-      toast('No artist page for “'+name+'”');
-    }
-  }).catch(function(){ toast('Artist lookup failed') });
+  artProbeSpan = span || null;
+  openArtist(null, name);                 // openArtist fetches by name when there is no id
 }
 function artShowAll(){
   if(!artData) return;
@@ -6098,9 +6209,23 @@ html[data-fx="bal"]  body::after{
 .alheart:hover{background:rgba(26,26,36,.88)}
 .rail:hover .alheart,.alheart.on{opacity:1;transform:none}
 .alheart.on{color:var(--acc)}
-.alheart.on svg{fill:var(--acc);stroke:none}
+.alheart.on .ic.ah-on svg{fill:var(--acc);stroke:none}
 .art-acts .pact.ghost.alik.on{color:var(--acc);border-color:var(--acc)}
-.art-acts .pact.ghost.alik.on svg{fill:var(--acc);stroke:none}
+.art-acts .pact.ghost.alik.on .ic.ah-on svg{fill:var(--acc);stroke:none}
+/* Wave 22 — the slashed glyph is a FILLED path again (`class="f"` in the sprite), so the stroke
+   exemption this layer carried in Wave 21 is deleted along with the reason it existed. Svg-level
+   fills (`.pact.on svg`, line 211, and the two accent rules above) are INHERITED only — a path's
+   own fill:currentColor (.ic svg .f) always wins — so the swap needs no rule of its own: it paints
+   at the heart's colour, accent on a liked cover/pill (.alheart.on, .alik.on) and the ⋮ menu's
+   text colour in the menu. */
+/* Wave 20 — the swap itself. A LIKED cover heart (or the album hero's "Liked" pill) shows the
+   filled accent heart; hovering/focusing it reveals the slashed heart, i.e. "this click
+   unlikes". An UNLIKED heart keeps the plain one on hover, so the add and the remove affordances
+   can never be confused. Specificity (.ic.ah-off) beats the shared `.alheart .ic` sizing rule, and
+   both glyphs are filled paths (class .f) since Wave 22, so both take the same currentColor. */
+.alheart .ic.ah-off,.art-acts .pact.ghost.alik .ic.ah-off{display:none}
+.alheart.on:hover .ic.ah-on,.alheart.on:focus-visible .ic.ah-on,.art-acts .pact.ghost.alik.on:hover .ic.ah-on,.art-acts .pact.ghost.alik.on:focus-visible .ic.ah-on{display:none}
+.alheart.on:hover .ic.ah-off,.alheart.on:focus-visible .ic.ah-off,.art-acts .pact.ghost.alik.on:hover .ic.ah-off,.art-acts .pact.ghost.alik.on:focus-visible .ic.ah-off{display:inline-flex}
 @media (hover:none){.alheart{opacity:1;transform:none}}
 /* 4AW: the same heart, on a search-result ALBUM row. The row is not a .rail, so the reveal rule
    above never fires — give the row its own. It lives in the trailing .rr slot and is absolutely
@@ -6123,20 +6248,24 @@ function refreshSidebar(){
 function isAlbumLiked(id){ return !!(id && LIKED_ALBUMS[id]) }
 function saveLikedAlbums(){ LSset('sv_liked_albums', LIKED_ALBUMS) }
 function likedAlbumList(){ return Object.keys(LIKED_ALBUMS).map(function(k){ return LIKED_ALBUMS[k] }).filter(function(x){ return x && x.id }) }
+/* Wave 20 — one heart button, TWO glyphs. Both are painted into every album heart; CSS (v4aqcss)
+   shows the plain heart at rest and swaps the slashed one in on hover/focus of a LIKED album, so
+   the affordance matches the action. The unliked state never swaps: its hover still means "like". */
+function alIcons(){ return '<span class="ic ah-on">'+ic('i-heart')+'</span><span class="ic ah-off" aria-hidden="true">'+ic('i-heart-off')+'</span>' }
 function albHeartHTML(a){
   var liked = isAlbumLiked(a && a.id);
-  return '<button class="alheart'+(liked?' on':'')+'" data-albheart="1" data-albid="'+esc(a.id)+'" data-albtitle="'+esc(a.title||'')+'" data-albartist="'+esc(a.artist||'')+'" data-albthumb="'+esc(a.thumb||'')+'" data-albyear="'+esc(a.year||'')+'" title="'+(liked?'Unlike album':'Like album')+'"><span class="ic">'+ic('i-heart')+'</span></button>';
+  return '<button class="alheart'+(liked?' on':'')+'" data-albheart="1" data-albid="'+esc(a.id)+'" data-albtitle="'+esc(a.title||'')+'" data-albartist="'+esc(a.artist||'')+'" data-albthumb="'+esc(a.thumb||'')+'" data-albyear="'+esc(a.year||'')+'" title="'+(liked?'Unlike album':'Like album')+'">'+alIcons()+'</button>';
 }
 function albHeartHeroHTML(j){
   var liked = isAlbumLiked(j && j.id);
   var yr = (typeof albData!=='undefined' && albData && albData.year) || '';
-  return '<button class="pact ghost alik'+(liked?' on':'')+'" data-albheart="1" data-albid="'+esc(j.id)+'" data-albtitle="'+esc(j.title||'')+'" data-albartist="'+esc(j.artist||'')+'" data-albthumb="'+esc(j.thumb||'')+'" data-albyear="'+esc(yr)+'" title="'+(liked?'Unlike album':'Like album')+'"><span class="ic">'+ic('i-heart')+'</span>'+(liked?'Liked':'Like')+'</button>';
+  return '<button class="pact ghost alik'+(liked?' on':'')+'" data-albheart="1" data-albid="'+esc(j.id)+'" data-albtitle="'+esc(j.title||'')+'" data-albartist="'+esc(j.artist||'')+'" data-albthumb="'+esc(j.thumb||'')+'" data-albyear="'+esc(yr)+'" title="'+(liked?'Unlike album':'Like album')+'">'+alIcons()+(liked?'Liked':'Like')+'</button>';
 }
 function paintAlbHeart(el){
   var liked = isAlbumLiked(el.getAttribute('data-albid'));
   el.classList.toggle('on', liked);
   el.setAttribute('title', liked?'Unlike album':'Like album');
-  if(el.classList.contains('alik')) el.innerHTML = '<span class="ic">'+ic('i-heart')+'</span>'+(liked?'Liked':'Like');
+  if(el.classList.contains('alik')) el.innerHTML = alIcons()+(liked?'Liked':'Like');
 }
 function renderLikedAlbumsView(){
   var items = likedAlbumList();
@@ -10406,8 +10535,16 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
      the two ways out are the two buttons, and until one is pressed the app is behind an overlay that
      covers the window at z-index 100. */
   function boot(){
-    if(!histEmpty() || profile || seen()) return;      // a fresh install only
+    /* WAVE 19 — the veil v19gatejs put on <html> at the top of <body> comes off HERE, in the same
+       synchronous tick that mounts + shows the overlay (mount() → .on → paint()), so the browser is
+       handed both changes inside one frame: it can never composite the Home page (which used to be
+       up for the rest of the parse) and it can never composite a blank window either. A returning
+       user takes it off on the first line, where there is nothing to hide. */
+    var gate = window.__svOncGate;
+    var release = function(){ if(gate) try{ gate.release() }catch(e){} };
+    if(!histEmpty() || profile || seen()){ release(); return }   // a fresh install only
     openFlow(false);
+    release();
   }
   boot();
 
@@ -10993,7 +11130,26 @@ function play(){
 (function watchTabs(){
   var l = byId('pvLyrics'); if(!l || l.__svPanW) return;
   l.__svPanW = 1;
-  try{ new MutationObserver(play).observe(l, { attributes:true, attributeFilter:['hidden'] }) }catch(e){}
+  /* THE REPORT: a SECOND click on the already-active "Up next" tab replayed the slide every time,
+     while the same click on the already-active Lyrics tab was correctly inert. Cause: the app's own
+     tab handler (line 1759) writes all four flags unconditionally, and the two writes are not
+     symmetrical. With lyrics OFF it assigns `#pvLyrics.hidden = true` — a same-value write to an
+     attribute that is ALREADY `hidden=""`, and a redundant setAttribute still queues a mutation
+     record, so this observer fired and the slide replayed. With lyrics ON it assigns `hidden = false`,
+     i.e. removeAttribute on an absent attribute, which is a genuine no-op that queues nothing —
+     hence a one-sided bug. (classList, used for the `.tab.on` pills in the same handler, de-dupes
+     its own writes, so only `hidden` could do this.)
+     FIX: a mutation only counts as a tab CHANGE when the reflected value differs from the one this
+     layer last acted on. Redundant writes fall through; real switches animate exactly once each
+     way. `#pvLyrics` ships `hidden` in the markup (line 609), so the stored baseline is right from
+     the first click. */
+  var lastHidden = l.hidden;
+  function onToggle(){
+    if(l.hidden === lastHidden) return;      /* the ACTIVE tab was clicked again: nothing changed */
+    lastHidden = l.hidden;
+    play();
+  }
+  try{ new MutationObserver(onToggle).observe(l, { attributes:true, attributeFilter:['hidden'] }) }catch(e){}
 })();
 
 /* ===== (2) the fullscreen crossfade ===========================================================
@@ -11161,5 +11317,107 @@ if(window.MutationObserver){ try{ new MutationObserver(tick).observe(body, { att
 body.lyrfull .lyrbar{background:none;pointer-events:none}
 body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,0,.85))}
 </style>
+<style id="v19onccss">
+/* ===== WAVE 19 — what a SELECTED onboarding chip looks like ====================================
+   Was: a SOLID accent pill (background:var(--acc) — #1FCF9B — with near-black text: the fill was the
+   whole signal, and on a screen that is otherwise near-black it read as a row of bright rectangles)
+   plus a 14px glow. Now it is the reference the user sent: the pill keeps its dark surface, the
+   accent moves into the EDGE and the TYPE, and the check mark (which the v6onc markup already had,
+   in the accent’s own colour) carries the state. Same box, same padding, same height — only the
+   paint changes, so nothing on the screen reflows and no measurement in the v6onc block is
+   invalidated. Unselected pills are untouched (this rule only ever matches aria-pressed="true").
+   The transition (background/border/color/box-shadow, 0.18s — set by .oncPill itself) still runs,
+   so the state change fades rather than popping.
+   SPECIFICITY NOTE: this rule and .oncPill:hover are both (0,2,0), so being later in the document
+   is what makes it win on a hovered selected pill — which is why the hover state is re-stated below
+   instead of left to inherit the unselected hover (white edge + white text). */
+.oncPill[aria-pressed="true"]{
+  background:rgba(var(--amb),.13);
+  border-color:var(--acc);
+  color:var(--acc);
+  font-weight:700;
+  box-shadow:0 0 0 1px rgba(var(--amb),.18) inset,0 0 16px rgba(var(--amb),.16)}
+.oncPill[aria-pressed="true"]:hover{background:rgba(var(--amb),.20);border-color:var(--acc2);color:var(--acc2)}
+</style>
+
+<script id="v19oncui">
+/* ================================================================================================
+   WAVE 19 — AND THE OTHER THING A LIKE DOES: it must not throw the user back to the start of a rail.
+   Reported: scrolling a long way into the Quick picks carousel on Home, tapping ♥ on a song, and
+   landing back at the FIRST card with the whole carousel reset — every time. Root cause: liking is a
+   GLOBAL state change (the same track can sit in Listen again, a picked shelf and the queue at once),
+   so refreshHearts() rebuilds the current page, and on Home that is renderHome(), whose first write
+   is sec.innerHTML = h: #homeSec is replaced wholesale, and a fresh grid/rail starts at scrollLeft 0
+   by definition — which is exactly where the user found themselves, every time.
+   THE FIX — put the offsets back, not the markup back. Before the rebuild this reads every scrolled
+   or scrollable node (.railwrap, .list, .chiprow) in each section, keyed by the section’s own <h2>
+   text, which survives a rebuild because it is what renderHome writes; after it, the same nodes are
+   found again by that key and their offsets are written back. renderHome paints its synchronous half
+   (the Quick picks grid among it) before it returns, so one restore call covers the reported case,
+   and the three discovery rails — which fill AFTER their fetch settles — are covered by the two
+   follow-ups below. Nothing is keyed by index alone: a section whose scrollers changed shape is
+   simply skipped (its node is missing) rather than restoring an unrelated offset.
+   ONLY the like/unlike path is wrapped: a repaint the user ASKED for (a chip, a sort) is still free
+   to start its rows where it likes, because it is the same wrapper renderHome()/goHome() call. */
+(function(){
+  var SCROLLERS = ".railwrap,.list,.chiprow";
+  function textKey(sec){
+    var h = sec.querySelector("h2"); if(!h) return "";
+    var first = h.firstChild;                                   /* skips the Play all / Show more buttons */
+    var t = (first && first.nodeType === 3) ? first.textContent : h.textContent;
+    return String(t || "").replace(/s+/g, " ").trim();
+  }
+  function scrollers(sec){
+    var out = [];
+    Array.prototype.forEach.call(sec.querySelectorAll(SCROLLERS), function(n){
+      if(n.scrollWidth - n.clientWidth > 2 || n.scrollTop) out.push(n);
+    });
+    return out;
+  }
+  function snapshot(rootEl){
+    var snap = [];
+    if(!rootEl) return snap;
+    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
+      var key = textKey(sec); if(!key) return;
+      var list = scrollers(sec); if(!list.length) return;
+      snap.push({ key:key, at:list.map(function(n){ return { l:n.scrollLeft, t:n.scrollTop } }) });
+    });
+    return snap;
+  }
+  function restore(rootEl, snap){
+    if(!rootEl || !snap || !snap.length) return 0;
+    var byKey = {};
+    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
+      var k = textKey(sec); if(k && !byKey[k]) byKey[k] = sec;
+    });
+    var n = 0;
+    snap.forEach(function(s){
+      var sec = byKey[s.key]; if(!sec) return;
+      var list = scrollers(sec);
+      s.at.forEach(function(p, i){
+        var node = list[i]; if(!node) return;
+        if(node.scrollLeft !== p.l){ node.scrollLeft = p.l; n++ }
+        if(p.t && node.scrollTop !== p.t) node.scrollTop = p.t;
+      });
+    });
+    return n;
+  }
+  var inner = (typeof refreshHearts === "function") ? refreshHearts : null;
+  if(!inner) return;
+  refreshHearts = function(){
+    var home = document.getElementById("homeSec");
+    if(!home || home.hidden || typeof renderHome !== "function") return inner.apply(this, arguments);
+    var snap = snapshot(home);
+    var out = renderHome();
+    restore(home, snap);
+    var again = function(){ restore(home, snap) };
+    if(out && typeof out.then === "function") out.then(again, again);
+    setTimeout(again, 60); setTimeout(again, 260);
+    return out;
+  };
+  window.svaraRailScroll = { keep: function(){ var h=document.getElementById("homeSec"); return snapshot(h) },
+                             put: function(s){ return restore(document.getElementById("homeSec"), s) } };
+})();
+</script>
 </body>
 </html>

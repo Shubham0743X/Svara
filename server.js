@@ -787,6 +787,97 @@ function mapRelatedArtist(i){
     };
   } catch (e) { return null; }
 }
+/* ===== WAVE 19 — WHO A NAME ACTUALLY IS =========================================================
+   Reported: a 9:57 re-upload credited to "Honey Singh" opened an artist page whose hero read "Honey
+   Singh" and whose body was EMPTY, while the real artist is called "Yo Yo Honey Singh" — and the
+   lyrics panel ran the official 4:14 recording's timings under it. Reproduced live on this route:
+   GET /api/artist?name=Honey%20Singh answered { id: "UCOZ5kxDXTaromQbnn4F5w8g", name: "Honey Singh" }
+   — a 13-subscriber channel that browses to a header and NOTHING else (0 top songs, 0 albums,
+   0 related, empty description) — while the artist search for that very string had "Yo Yo Honey
+   Singh — Artist • 289M monthly audience" as its FIRST row. The old resolver kept the exact-name
+   match and never looked at what was behind it.
+   WHAT CHANGED, and nothing else: the candidate list is ORDERED (exact real entities → exact
+   channels → real entities whose name CONTAINS the whole query as a run of whole words — the alias
+   direction, "Yo Yo Honey Singh" ⊇ "Honey Singh"), the first three are BROWSED, and the first one
+   that is an actual page wins. An exact name that browses to nothing therefore no longer beats a
+   real artist whose name contains it, and when no candidate is a page at all the route answers
+   { id: null } — which the client already renders as plain text — instead of a finished-looking
+   but empty hero.
+   THE EXACT NAME IS STILL FIRST AMONG EQUALS: a small artist whose page really exists is never
+   passed over for a bigger name that merely contains theirs, because the alias step only ever runs
+   after an exact-name candidate turned out to have nothing on it. The one extra browse this costs
+   is paid only on those dead ends (results are cached for 30 minutes like every other /api reply).
+   THE ID PATH IS UNTOUCHED: an explicitly clicked channel id is browsed exactly as before, so the
+   related-artist carousels and the song rows' own artist ids keep their present behaviour. */
+async function browseArtistPage(youtube, id){
+  const raw = await youtube.actions.execute('/browse', { browseId: id, client: 'YTMUSIC' });
+  const data = raw && raw.data;
+  if (!data || data.header == null) return null;
+  const page = Parser.parseResponse(data);
+  const header = (page.header && page.header.item && page.header.item()) || null;
+  const hdrRaw = data.header.musicImmersiveHeaderRenderer
+    || data.header.musicVisualHeaderRenderer
+    || data.header.musicHeaderRenderer || {};
+  const ht = header && header.thumbnail;
+  const thumbSrc = Array.isArray(ht) ? ht : (ht && ht.contents) || (header && header.thumbnails) || [];
+  const memo = page.contents_memo;
+  const shelves = memo && YTNodes.MusicShelf ? memo.getType(YTNodes.MusicShelf) : [];
+  const carousels = memo && YTNodes.MusicCarouselShelf ? memo.getType(YTNodes.MusicCarouselShelf) : [];
+  return { header, hdrRaw, thumbSrc, shelves, carousels };
+}
+/* one browsed page → exactly the fields this route has always answered with */
+function readArtistPage(p, fallbackName){
+  const topShelf = p.shelves.find(s => s.title && s.title.text === 'Top songs') || p.shelves[0];
+  const topSongs = topShelf ? (topShelf.contents || []).map(i => mapTrack(i, '', false)).filter(t => t && t.id) : [];
+  // classify carousels by item type (language-independent): album → Albums & singles, artist → related
+  const albums = [], related = [], seenAlbum = new Set();
+  for (const c of p.carousels) {
+    const items = c.contents || [];
+    const t0 = items[0] && items[0].item_type;
+    if (t0 === 'album') {
+      for (const it of items) {
+        const m = mapCarouselItem(it);
+        if (m && m.id && !seenAlbum.has(m.id)) { seenAlbum.add(m.id); albums.push(m); }
+      }
+    } else if (t0 === 'artist') {
+      for (const it of items) { const r = mapRelatedArtist(it); if (r && r.id) related.push(r); }
+    }
+  }
+  return {
+    name: txt(p.header && p.header.title) || fallbackName || '',
+    description: txt(p.header && p.header.description),
+    monthlyAudience: txt(p.hdrRaw.monthlyListenerCount),
+    banner: bestUrl(p.thumbSrc),
+    thumb: bestUrl((p.header && p.header.foreground_thumbnail) || p.thumbSrc),
+    topSongs, albums, related
+  };
+}
+/* nothing to show = not an artist page (measured on the 13-subscriber channel above) */
+function artistPageEmpty(a){ return !a.topSongs.length && !a.albums.length && !a.related.length && !a.description }
+async function artistIdCandidates(youtube, wantName){
+  const s = await youtube.music.search(wantName, { type: 'artist' });
+  const rows = collectItems(s.contents || [], []).filter(r => r && r.id && String(r.id).startsWith('UC'));
+  const nm = r => txt(r.name) || txt(r.title);
+  // EXACT name only — never rows[0]. A fuzzy fallback silently opens an unrelated artist (measured:
+  // "Study" → "Lofi Beat Study", "Dan" → "Dan Bull"), which is exactly the wrong-identity page this
+  // route must not produce. Unknown ⇒ plain text.
+  const norm = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+  const entity = r => /monthly\s*audience/i.test(txt(r.subtitle));   // "Artist • 289M monthly audience"
+  const want = norm(wantName);
+  const words = want.split(' ').filter(Boolean);
+  const containsRun = r => {
+    const t = norm(nm(r)).split(' ').filter(Boolean);
+    for (let i = 0; i + words.length <= t.length; i++) if (words.every((w, k) => t[i + k] === w)) return true;
+    return false;
+  };
+  const exact = rows.filter(r => norm(nm(r)) === want);
+  const out = [], seen = new Set();
+  const add = r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r.id) } };
+  exact.filter(entity).forEach(add);
+  exact.filter(r => !entity(r)).forEach(add);
+  rows.filter(r => entity(r) && norm(nm(r)) !== want && containsRun(r)).forEach(add);
+  return out;
+}
 app.get('/api/artist', async (req, res) => {
   cacheHeaders(res, '/api/artist');
   const wantId = String(req.query.id || '').trim();
@@ -794,70 +885,33 @@ app.get('/api/artist', async (req, res) => {
   if (!wantId && !wantName) return res.json({ id: null, error: 'missing id or name' });
   try {
     const youtube = await getYt();
+    let id = wantId, ready = null;
 
-    // name → browseId: ONE artist search, exact-name first. Failure ⇒ { id: null }.
-    let id = wantId;
     if (!id) {
-      const s = await youtube.music.search(wantName, { type: 'artist' });
-      const rows = collectItems(s.contents || [], []).filter(r => r && r.id && String(r.id).startsWith('UC'));
-      const nm = r => txt(r.name) || txt(r.title);
-      // EXACT name only — never rows[0]. A fuzzy fallback silently opens an unrelated
-      // artist (measured: "Study" → "Lofi Beat Study", "Dan" → "Dan Bull"), which is
-      // exactly the wrong-identity page this route must not produce. Unknown ⇒ plain text.
-      const norm = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
-      const hit = rows.find(r => norm(nm(r)) === norm(wantName));
-      id = (hit && hit.id) || '';
-      if (!id) return res.json({ id: null });
+      const cands = (await artistIdCandidates(youtube, wantName)).slice(0, 3);
+      if (!cands.length) return res.json({ id: null });
+      for (const cid of cands) {
+        const page = await browseArtistPage(youtube, cid);
+        if (!page) continue;
+        const read = readArtistPage(page, wantName);
+        if (artistPageEmpty(read)) continue;            // a header with no catalogue is not a page
+        ready = { id: cid, read };
+        break;
+      }
+      if (!ready) return res.json({ id: null, error: 'no artist page' });
+      id = ready.id;
     }
     if (!/^UC/.test(id) && !id.startsWith('FEmusic_library_privately_owned_artist')) {
       return res.json({ id: null, error: 'invalid artist id' });
     }
 
-    // ONE browse: parsed for structure, raw for the fields 18.0.0's parser drops
-    const raw = await youtube.actions.execute('/browse', { browseId: id, client: 'YTMUSIC' });
-    const data = raw && raw.data;
-    if (!data || data.header == null) return res.json({ id: null, error: 'artist not found' });
-    const page = Parser.parseResponse(data);
-    const header = (page.header && page.header.item && page.header.item()) || null;
-    const hdrRaw = data.header.musicImmersiveHeaderRenderer
-      || data.header.musicVisualHeaderRenderer
-      || data.header.musicHeaderRenderer || {};
-    const ht = header && header.thumbnail;
-    const thumbSrc = Array.isArray(ht) ? ht : (ht && ht.contents) || (header && header.thumbnails) || [];
-    const memo = page.contents_memo;
-
-    const shelves = memo && YTNodes.MusicShelf ? memo.getType(YTNodes.MusicShelf) : [];
-    const carousels = memo && YTNodes.MusicCarouselShelf ? memo.getType(YTNodes.MusicCarouselShelf) : [];
-
-    const topShelf = shelves.find(s => s.title && s.title.text === 'Top songs') || shelves[0];
-    const topSongs = topShelf ? (topShelf.contents || []).map(i => mapTrack(i, '', false)).filter(t => t && t.id) : [];
-
-    // classify carousels by item type (language-independent): album → Albums & singles, artist → related
-    const albums = [], related = [], seenAlbum = new Set();
-    for (const c of carousels) {
-      const items = c.contents || [];
-      const t0 = items[0] && items[0].item_type;
-      if (t0 === 'album') {
-        for (const it of items) {
-          const m = mapCarouselItem(it);
-          if (m && m.id && !seenAlbum.has(m.id)) { seenAlbum.add(m.id); albums.push(m); }
-        }
-      } else if (t0 === 'artist') {
-        for (const it of items) { const r = mapRelatedArtist(it); if (r && r.id) related.push(r); }
-      }
+    let read = ready ? ready.read : null;
+    if (!read) {
+      const page = await browseArtistPage(youtube, id);
+      if (!page) return res.json({ id: null, error: 'artist not found' });
+      read = readArtistPage(page, wantName);            // the id path keeps serving what it browsed
     }
-
-    res.json({
-      id,
-      name: txt(header && header.title) || wantName,
-      description: txt(header && header.description),
-      monthlyAudience: txt(hdrRaw.monthlyListenerCount),
-      banner: bestUrl(thumbSrc),
-      thumb: bestUrl((header && header.foreground_thumbnail) || thumbSrc),
-      topSongs,
-      albums,
-      related
-    });
+    res.json(Object.assign({ id }, read));
   } catch (e) {
     console.error('artist error:', e.message);
     res.json({ id: null, error: String(e.message || e) });
@@ -1098,14 +1152,79 @@ async function lrclibBest({ title, artist, album, duration }){
     ranked.push({ row, score });
   }
   ranked.sort((a, b) => b.score - a.score);
-  const best = ranked[0];
+  /* ===== WAVE 19 — A TITLE AND AN ARTIST ARE NOT ENOUGH; THE RECORDING HAS TO AGREE ON LENGTH ====
+     Reported: "Desi Kalakaar" played from a 9:57 re-upload while the lyrics panel walked the OFFICIAL
+     4:14 recording's timings — the highlight sat minutes away from the words being sung, for the
+     whole song. Reconstructed against the live API: that title's rows carry the credit "Honey Singh"
+     (a 13-subscriber re-upload channel) instead of "Yo Yo Honey Singh", which is enough for the
+     ranker below — 0.5·title + 0.3·artist + 0.2·duration — because a 343s disagreement only costs
+     the duration TERM (it floors at 0 past 12s): a perfect title with a half-matching artist still
+     scored 0.56 and won. Measured: the old lookup answered 4:14's synced lyrics for a 9:57 video.
+     THE RULE: a candidate is a DIFFERENT RECORDING unless its length is within max(30s, 25%) of the
+     track's own. Candidates split into `agree` (inside that tolerance, or with no duration to judge
+     by at all) and `off` (everything else), and only `agree` may win — a 4:14 master can still
+     highlight a 5:20 upload, and a 9:57 re-upload can never borrow 4:14's clock.
+     WHAT A MISMATCH BECOMES: the WORDS are almost certainly right (it is the same song, uploaded
+     longer) but the TIMINGS belong to the other recording, so the row goes back FLAGGED and
+     /api/lyrics publishes it as plain, unhighlighted text together with the reason. Answering
+     "no lyrics" instead would deny a song LRClib clearly knows. */
+  /* ...and a synced file whose LAST line lands minutes before our track ends was written for a
+     shorter cut, whatever its own duration field claims. That second test is the one that catches
+     the measured case: LRClib's "Desi Kalakaar" entry is filed as 598s — a 598s video asks for it and
+     its duration agrees — while its 82 timed lines run 0:00 → 4:09 and end with a 3:09 tail of
+     nothing. Played against a 9:57 upload its highlight is therefore already wrong at 0:41 (the
+     user's screenshot: [00:40.64] "Har veervaar peer baba se bhi maanga tujhe" under an instrumental
+     passage). COVERAGE is what tells the two apart, and it stays generous for honest recordings: a
+     normal entry reaches ~95% of its track (a 4:14 song's timings end at 4:09), so the slack is a
+     flat 90s or 20% of the track, whichever is larger. */
+  const agree = [], off = [];
+  const tol = duration > 0 ? Math.max(30, Math.round(duration * 0.25)) : 0;
+  const cover = duration > 0 ? Math.max(90, Math.round(duration * 0.2)) : 0;
+  for (const r of ranked) {
+    const gap = (duration > 0 && r.row.duration) ? Math.abs(r.row.duration - duration) : null;
+    const span = r.row.syncedLyrics ? lastStamp(r.row.syncedLyrics) : 0;
+    const shortCut = duration > 0 && span > 0 && span + cover < duration;
+    if (shortCut || (gap !== null && gap > tol)) off.push(r); else agree.push(r);
+  }
+  const use = agree.length ? agree : off;
+  let best = use[0];
   if (!best || best.score < 0.35) return null;
   // if the winner has no timings, prefer a slightly lower synced entry when it's still a match
   if (!best.row.syncedLyrics) {
-    const timed = ranked.find(x => x.row.syncedLyrics && x.score >= best.score - 0.12);
-    if (timed) return timed.row;
+    const timed = use.find(x => x.row.syncedLyrics && x.score >= best.score - 0.12);
+    if (timed) best = timed;
+  }
+  if (!agree.length) {
+    const row = best.row;
+    return Object.assign({}, row, { _durMismatch: true, _durOf: row.duration || 0,
+                                    _spanTo: row.syncedLyrics ? lastStamp(row.syncedLyrics) : 0 });
   }
   return best.row;
+}
+/* the LAST timestamp in a synced file (seconds), 0 when it carries none — see the coverage test
+   above. Every [mm:ss], [mm:ss.x] and [mm:ss.xxx] tag on a line counts, not just the first. */
+function lastStamp(lrc){
+  let last = 0;
+  const re = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
+  let m;
+  while ((m = re.exec(String(lrc || '')))) {
+    const frac = m[3] ? Number(m[3]) / (m[3].length === 3 ? 1000 : m[3].length === 2 ? 100 : 10) : 0;
+    const t = Number(m[1]) * 60 + Number(m[2]) + frac;
+    if (t > last) last = t;
+  }
+  return Math.round(last);
+}
+/* m:ss for a duration in seconds — used by the wave 19 mismatch note, and empty for 0/absent so a
+   sentence can never read "the  version". */
+function clock(sec){
+  const s = Math.round(Number(sec) || 0);
+  return s > 0 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '';
+}
+/* a synced file rendered as plain text: the [mm:ss.xx] tags are strip-only, the words are kept. */
+function stripLrcTags(s){
+  return String(s || '').split('\n')
+    .map(l => l.replace(/^\s*(\[[^\]]*\]\s*)+/, ''))
+    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // provider=auto (default) | ytm | lrclib   → auto prefers SYNCED lyrics
@@ -1122,8 +1241,10 @@ app.get('/api/lyrics', async (req, res) => {
     let lr = null, ytText = '';
     if (want !== 'ytm') lr = await lrclibBest({ title, artist, album, duration });
 
-    // 1) timed LRClib lyrics win — the only ones we can highlight
-    if (want !== 'ytm' && lr && lr.syncedLyrics) {
+    // 1) timed LRClib lyrics win — the only ones we can highlight. WAVE 19: a match that failed
+    //    lrclibBest's length / coverage tests is NOT one of them (it is published as plain text in
+    //    branch 3 instead — its words are the right song's, its clock is another recording's).
+    if (want !== 'ytm' && lr && lr.syncedLyrics && !lr._durMismatch) {
       out.provider = 'lrclib';
       out.synced = lr.syncedLyrics;
       out.plain = lr.plainLyrics || lr.syncedLyrics;
@@ -1145,11 +1266,28 @@ app.get('/api/lyrics', async (req, res) => {
 
     // 3) LRClib plain lyrics as the last resort
     if (lr && (lr.plainLyrics || lr.syncedLyrics)) {
+      /* WAVE 19 — a match that failed lrclibBest's duration test keeps its WORDS and loses its
+         timings: highlighting it would run this recording's clock on another recording's words. */
+      const mismatch = !!lr._durMismatch;
       out.provider = 'lrclib';
-      out.synced = lr.syncedLyrics || '';
-      out.plain = lr.plainLyrics || lr.syncedLyrics || '';
-      out.hasSync = !!lr.syncedLyrics;
-      if (!out.hasSync) out.note = 'LRClib has no timed lyrics for this track — lines are not clickable.';
+      out.synced = mismatch ? '' : (lr.syncedLyrics || '');
+      out.plain = lr.plainLyrics || (mismatch ? stripLrcTags(lr.syncedLyrics) : (lr.syncedLyrics || '')) || '';
+      out.hasSync = !!out.synced;
+      if (mismatch) {
+        const was = clock(lr._durOf), is = clock(duration), to = clock(lr._spanTo);
+        /* which test sent it down here decides what the note says — a recording of a different
+           LENGTH, or timings that only cover a shorter CUT of the song. */
+        const lenOff = was && is
+          && Math.abs((lr._durOf || 0) - duration) > Math.max(30, Math.round(duration * 0.25));
+        out.note = lenOff
+          ? 'These words are from the ' + was + ' version of this song — LRClib has nothing timed for this '
+            + is + ' one, so the lines are not highlighted.'
+          : (to && is)
+            ? 'LRClib\u2019s timed lyrics for this song stop at ' + to + ' while this track runs ' + is
+              + ' — they were written for a shorter cut, so they are shown without highlighting.'
+            : 'These words are from another version of this song — LRClib has no timed lyrics that match this one, so the lines are not highlighted.';
+      }
+      else if (!out.hasSync) out.note = 'LRClib has no timed lyrics for this track — lines are not clickable.';
       return res.json(out);
     }
 
