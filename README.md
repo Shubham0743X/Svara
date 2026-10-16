@@ -84,8 +84,7 @@ settings all carry across.
 
 ## About
 
-Svara is a personal project by **Shubham Nag** — [GitHub](https://github.com/Shubham0743X) ·
-[Instagram](https://instagram.com/notso_shubhamm).
+Svara is a personal project by **Shubham Nag**.
 
 Audio and artwork come from YouTube. Svara is **not affiliated with, endorsed by or sponsored by
 YouTube or Google**, and anything you download is your own responsibility under YouTube's Terms of
