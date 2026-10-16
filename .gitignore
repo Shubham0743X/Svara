@@ -14,3 +14,5 @@ PROMPT-*.md
 *.log
 
 yt-dlp.exe
+# local design asset — kept on disk, never committed
+svara-logo-green.svg
