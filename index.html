@@ -11419,5 +11419,284 @@ body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,
                              put: function(s){ return restore(document.getElementById("homeSec"), s) } };
 })();
 </script>
+<style id="v20cwcss">
+/* ================= WAVE 20 — arrows on every horizontal carousel =================
+   WHY THIS LAYER EXISTS. Every rail on Home (Trending songs, Listen again, Popular right now,
+   Albums for you and the picked shelves), the Quick picks grid, the artist page's "Fans might also
+   like" and the album page's rows are all `overflow-x:auto` scrollers with
+   `::-webkit-scrollbar{width:0}` — so the ONLY way to move them was a trackpad, a tilt wheel or
+   shift+wheel. On a desktop mouse with a plain wheel they could not be scrolled at all, which is
+   the report this wave answers.
+
+   1) ARROWS, NOT A SCROLLBAR. Each carousel gets a left and a right pill, modelled on Apple Music's
+      own: a 34x62 rounded rectangle with a 20px chevron, vertically centred on the ROW BOX itself —
+      `top:50%` of the carousel, so a four-row Quick picks grid puts them halfway down the grid and a
+      single album rail puts them halfway down the whole card. The pill is a translucent white glass
+      over a 20px backdrop blur, so it reads over any album art and over both the page background
+      and a light cover.
+
+   2) FADE IN ON THE ROW'S OWN HOVER. `opacity:0` is the resting state and `.cwWrap:hover` is what
+      reveals the pair — each carousel reveals only its own arrows, never a neighbour's. There is
+      no always-on chrome anywhere, which is what the reference does. On a touch device (no hover)
+      they are simply always visible.
+      CLICK MUST NOT PIN THEM OPEN. A pointer click would otherwise leave the button focused, and
+      `.cwWrap:focus-within` kept the pair lit after the cursor left the row; the mousedown default
+      is cancelled (so a click never focuses the pill) and only `:focus-visible` — keyboard focus —
+      reveals them without hover.
+
+   3) AN ARROW IS ABSENT, NOT DISABLED, WHEN THERE IS NOTHING THERE. Visibility is computed from
+      the scroller's real offsets — `scrollLeft > 2` for left, `scrollLeft < scrollWidth -
+      clientWidth - 2` for right — so it is honest in every case that matters:
+        · at the far left, the left arrow is gone and only the right one shows;
+        · at the far right, the reverse;
+        · mid-row, both show;
+        · a row that fits entirely (or only a few cards) shows NEITHER, because it is not scrollable;
+        · a row with four cards at a narrow window is STILL scrollable, so its arrows still appear —
+          the test is remaining scroll distance, never a card count.
+
+   4) ONE CLICK MOVES ONE PAGE, CLAMPED. The step is measured from the row itself: the smallest
+      horizontal pitch between two distinct card positions (which works for both the flex rails and
+      the column-major Quick picks grid) times however many whole cards fit. Trending's 3.2-wide row
+      therefore steps 3 cards, a cover row of 6.4 steps 6, Quick picks steps 3 columns. The target
+      is clamped to `scrollWidth - clientWidth`, so the last click lands the final card flush with
+      the right edge — it is not centred, and it does not stop short.
+
+   NOTHING IN THE ROWS IS REBUILT. The scroller keeps its markup, its children and its handlers; the
+   only DOM change is a `.cwWrap` box around it (a plain block, so every `%`-width rule inside —
+   `.rail{width:calc((100% - …)/var(--railcols))}` included — measures exactly as before) holding the
+   two buttons. Grids that merely LOOK like rails (.railwrap.algrid, .libgrid, #dynSec .list.qpAll)
+   have `overflow:visible` and are skipped by the computed-style test, so they are never touched. */
+.cwWrap{position:relative;min-width:0}
+.cwBtn{
+  position:absolute;top:50%;z-index:7;
+  width:34px;height:62px;padding:0;margin:0;
+  border:1px solid rgba(255,255,255,.1);border-radius:18px;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.09));
+  -webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
+  color:#fff;cursor:pointer;
+  box-shadow:0 8px 22px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.12);
+  transform:translateY(-50%);
+  opacity:0;pointer-events:none;
+  transition:opacity .16s ease,background .16s ease,box-shadow .16s ease;
+}
+/* FLUSH, NOT OVERHANGING. Three of Home's rows (Trending, Popular, Albums for you) are a rail
+   INSIDE a rail: skRail's placeholder `.railwrap` is the outer box and the fill that replaces it
+   keeps that nesting, so the outer `overflow-x:auto` clips anything drawn past its content edge —
+   measured, a `left:-12px` pill showed as a 22px sliver with no chevron. Sitting at 0 is inside
+   every host, clips in none of them, and is the same edge Apple's arrows sit on. */
+.cwBtn.cwL{left:0}
+.cwBtn.cwR{right:0}
+.cwBtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+.cwWrap.cwOn:hover>.cwBtn{opacity:1;pointer-events:auto}
+.cwWrap.cwOn:hover>.cwBtn:hover{background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,.15));
+  box-shadow:0 10px 26px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.18)}
+/* the edge test is absolute: an arrow with nothing to reveal is removed from hit-testing too, so a
+   click can never land on a button that would not move the row */
+.cwWrap.cwNoL>.cwL,.cwWrap.cwNoR>.cwR{opacity:0!important;pointer-events:none!important}
+.cwBtn:focus-visible{outline:2px solid var(--acc);outline-offset:3px;opacity:1;pointer-events:auto}
+@media (hover:none){.cwWrap.cwOn>.cwBtn{opacity:1;pointer-events:auto}}
+/* MAGNETIC SNAP (see snap() below) rides the same preference switches as the arrows themselves. */
+/* the graphics-level setting must be able to turn the blur off — a solid pill is the fallback, and
+   it is a hair darker so the chevron keeps the same contrast the glass gave it */
+html[data-gfx="low"] .cwBtn,html[data-gfx="reduced"] .cwBtn{
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  background:rgba(34,34,38,.92);transition:none}
+html[data-gfx="low"] .cwBtn svg,html[data-gfx="reduced"] .cwBtn svg{filter:none}
+</style>
+<script id="v20cwjs">
+/* ================================================================================================
+   WAVE 20 — the behaviour behind the arrows above. Deliberately generic: it finds every element
+   that is ACTUALLY a horizontal scroller (computed `overflow-x:auto|scroll` AND real overflow), so
+   a new row — or a row the app starts building tomorrow — needs no registration here. Rows that
+   are grids at rest, hidden pages and skeletons that happen to fit are all ignored by the same test.
+
+   RE-DECORATION. Home is repainted wholesale (`#homeSec.innerHTML = …`) whenever a like, a chip or
+   a page switch happens, and the rails then fill asynchronously, so every wrapper dies with its
+   DOM. One MutationObserver on #scroll (childList + subtree + the `hidden` attribute, because a
+   page shown from `display:none` has zero width until it is visible) schedules a scan on the next
+   animation frame; the scan is idempotent and re-syncs the rows it already knows. A resize debounce
+   and three bounded late passes cover layout and lazily-filled rows.
+
+   EDGE STATE IS RECOMPUTED, NEVER ASSUMED: after a click, on the row's own scroll event, on every
+   scan and on resize. That is what keeps the arrows correct when the row is scrolled with a
+   trackpad first, when the window changes width, and when the last page is reached by clamping.
+
+   MAGNETIC SNAP. A trackpad or a wheel leaves a row wherever the momentum died, which is usually
+   with the leftmost card half cut off at the left edge. Once scrolling stops, snap() rounds the
+   offset to the nearest card boundary: a card more than half visible stays (the row rounds DOWN to
+   its edge, so it is shown whole) and a card less than half visible is pushed away (the row rounds
+   UP to the next edge). It is the same 50% rule the reference uses, applied to the leading edge of
+   every rail and to every column of the Quick picks grid — the pitch is measured from the row, so
+   nothing is hard-coded. A tail shorter than half a card (the very end of a row that is not an
+   exact multiple of the pitch) snaps flush to the end instead of hiding that sliver. */
+
+(function(){
+'use strict';
+var SEL='.railwrap,.list,.art-rel';
+var RM=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)');
+var raf=0, rt=0;
+
+function hmax(el){ return el.scrollWidth - el.clientWidth }
+function isHScroll(el){
+  var cs; try{ cs=getComputedStyle(el) }catch(e){ return false }
+  if(!/(auto|scroll)/.test(cs.overflowX)) return false;      /* visible/hidden rows are not carousels */
+  return hmax(el) > 2;                                        /* and neither is one that fits */
+}
+/* The pitch between two cards: the smallest positive gap between distinct left edges. Works for a
+   flex rail (card, card, card…) and for the column-major Quick picks grid (four rows per column),
+   where the first four children share one left edge and the fifth starts the next column. */
+function pitch(el){
+  var kids=el.children, lefts=[], i, r, l;
+  for(i=0;i<kids.length&&lefts.length<10;i++){
+    if(!kids[i].getClientRects().length) continue;
+    r=kids[i].getBoundingClientRect();
+    if(r.width<=0) continue;
+    l=Math.round(r.left*10)/10;
+    if(lefts.indexOf(l)<0) lefts.push(l);
+  }
+  if(lefts.length<2) return el.clientWidth||1;
+  lefts.sort(function(a,b){ return a-b });
+  var min=Infinity,d;
+  for(i=1;i<lefts.length;i++){ d=lefts[i]-lefts[i-1]; if(d>0.5&&d<min) min=d }
+  return min===Infinity?(el.clientWidth||1):min;
+}
+function pageOf(el){
+  var p=pitch(el), n=Math.floor(el.clientWidth/p);
+  return Math.max(1,n)*p;
+}
+function sync(el){
+  var w=el.__cwWrap; if(!w) return;
+  var max=hmax(el), can=max>2, l=el.scrollLeft;
+  w.classList.toggle('cwOn',can);
+  w.classList.toggle('cwNoL',!can||l<=2);
+  w.classList.toggle('cwNoR',!can||l>=max-2);
+}
+function smoothOk(){
+  var gfx=document.documentElement.getAttribute('data-gfx');
+  return !(RM&&RM.matches)&&gfx!=='reduced';
+}
+/* The 50% rule. One card's pitch p, and the row's own lead-in `off` (0 for a flex rail; a grid can
+   start its columns a few pixels in). Nearest edge = off + k*p. The one exception is the tail: if
+   the distance from that edge to the end is shorter than half a card, the tail is shown whole
+   instead, because rounding down there would hide most of the last card. */
+function snap(el){
+  var max=hmax(el); if(max<=2) return;
+  var l=el.scrollLeft;
+  if(l<=2||l>=max-2) return;                       /* both ends are already as flush as they get */
+  var p=pitch(el); if(!(p>1)) return;
+  var kid=el.children[0], off=0;
+  if(kid&&kid.getClientRects().length){
+    off=Math.round((kid.getBoundingClientRect().left-el.getBoundingClientRect().left+l)*10)/10;
+    if(off<0||off>p*0.9) off=0;                    /* not a real lead-in — do not shift a resting row */
+  }
+  var to=off+Math.round((l-off)/p)*p;
+  if(to<0) to=0;
+  if(to>max||max-to<p*0.5) to=max;                 /* a tail under half a card: reveal it, flush */
+  if(Math.abs(to-l)<2) return;                     /* under 2px is invisible: do not micro-correct */
+  goTo(el,to);
+}
+/* ONE writer for programmatic scrolling, with TWO separate timers. `__cwA` is the "the animation is
+   still running" flag's own timer; `__cwT` is the settle debounce. They were sharing a slot at
+   first, so every scroll event of an arrow's smooth animation cancelled the flag's reset, the flag
+   stayed true for ever and settle() re-polled it on an endless 120ms loop. */
+function goTo(el,to){
+  var smooth=smoothOk();
+  el.__cwAnim=true;
+  try{ el.scrollTo({left:to,behavior:smooth?'smooth':'auto'}) }catch(e){ el.scrollLeft=to }
+  clearTimeout(el.__cwA);
+  /* scrollend clears this early where the platform emits it (Chromium does); the timer is only the
+     fallback so the flag can never be stuck. */
+  el.__cwA=setTimeout(function(){ el.__cwAnim=false; sync(el) },smooth?700:40);
+}
+/* settling debounce: a trackpad's momentum fires scroll events long after the fingers lift, so the
+   snap waits for a short quiet gap. A row that is mid-way through an arrow's own scroll is left
+   alone until that animation reports done. */
+function settle(el){
+  if(el.__cwAnim){ el.__cwT=setTimeout(function(){ settle(el) },120); return }
+  snap(el);
+}
+function touched(el){
+  sync(el);
+  clearTimeout(el.__cwT);
+  el.__cwT=setTimeout(function(){ settle(el) },170);
+}
+function step(el,dir){
+  var max=hmax(el); if(max<=2) return;
+  goTo(el,Math.max(0,Math.min(max,el.scrollLeft+dir*pageOf(el))));
+  sync(el);
+}
+function chevron(dir){
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M'+
+    (dir==='L'?'15.5 5 8.5 12l7 7':'8.5 5l7 7-7 7')+'"/></svg>';
+}
+function mkBtn(dir){
+  var b=document.createElement('button');
+  b.type='button';
+  b.className='cwBtn cw'+dir;
+  b.title=dir==='L'?'Scroll left':'Scroll right';
+  b.setAttribute('aria-label',b.title);
+  b.innerHTML=chevron(dir);
+  /* a mouse click must not leave the pill focused — that is what kept the pair lit after the
+     cursor left the row. Focus from Tab is untouched, so the keyboard path still shows them. */
+  b.addEventListener('mousedown',function(ev){ ev.preventDefault() });
+  return b;
+}
+function wrap(el){
+  if(el.__cwWrap){ sync(el); return }
+  if(!el.parentNode) return;
+  var w=document.createElement('div');
+  w.className='cwWrap';
+  el.parentNode.insertBefore(w,el);
+  w.appendChild(el);
+  el.__cwWrap=w;
+  var L=mkBtn('L'),R=mkBtn('R');
+  L.addEventListener('click',function(ev){ ev.preventDefault(); ev.stopPropagation(); step(el,-1) });
+  R.addEventListener('click',function(ev){ ev.preventDefault(); ev.stopPropagation(); step(el,1) });
+  w.appendChild(L); w.appendChild(R);
+  el.addEventListener('scroll',function(){ touched(el) },{passive:true});
+  el.addEventListener('scrollend',function(){ el.__cwAnim=false; clearTimeout(el.__cwA); sync(el) });
+  sync(el);
+}
+function scan(){
+  raf=0;
+  var list=document.querySelectorAll(SEL), i, el;
+  for(i=0;i<list.length;i++){
+    el=list[i];
+    if(el.__cwWrap){ sync(el); continue }
+    /* skeletons are never a carousel: the outer loader is a railwrap whose only child is the
+       .sk-region band, and the placeholder rail INSIDE that band is sized by a direct-child rule
+       (.railwrap>.sk-region>.railwrap) a wrapper would hide — which measurably let it run 4663px
+       wide instead of the row. Both are skipped, and the fill that replaces the band is a childList
+       mutation, so the real row is decorated the moment it exists. */
+    if(el.querySelector('.sk-card,.sk-bar,.sk-region')) continue;   /* still a skeleton row */
+    if(el.querySelector('.cwWrap')) continue;                       /* the rail inside it IS the row */
+    if(el.children.length===1&&el.children[0].classList.contains('railwrap')) continue; /* loader
+       passthrough: #trendRail / #popRail / #albRail hold skRail's own `.railwrap`, and the fill that
+       lands in it makes THAT the scroller — the outer box only ever overflows by a rounding pixel */
+    if(isHScroll(el)) wrap(el);
+  }
+}
+function schedule(){ if(!raf) raf=requestAnimationFrame(scan) }
+function boot(){
+  scan();
+  var root=document.getElementById('scroll')||document.body;
+  try{
+    new MutationObserver(schedule).observe(root,{
+      childList:true,subtree:true,attributes:true,attributeFilter:['hidden']
+    });
+  }catch(e){}
+  window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(scan,140) });
+  document.addEventListener('scroll',function(ev){
+    var t=ev.target; if(t&&t.__cwWrap) sync(t);
+  },true);
+  setTimeout(scan,400); setTimeout(scan,1200); setTimeout(scan,3000);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot);
+else boot();
+window.svaraCarousel={ rescan:scan, step:step, sync:sync, snap:snap };
+})();
+</script>
 </body>
 </html>
