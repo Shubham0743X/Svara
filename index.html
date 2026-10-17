@@ -11429,11 +11429,12 @@ body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,
    the report this wave answers.
 
    1) ARROWS, NOT A SCROLLBAR. Each carousel gets a left and a right pill, modelled on Apple Music's
-      own: a 34x62 rounded rectangle with a 20px chevron, vertically centred on the ROW BOX itself —
-      `top:50%` of the carousel, so a four-row Quick picks grid puts them halfway down the grid and a
-      single album rail puts them halfway down the whole card. The pill is a translucent white glass
-      over a 20px backdrop blur, so it reads over any album art and over both the page background
-      and a light cover.
+      own: a 34x62 rounded rectangle with a 20px chevron, vertically centred on the COVER — the pill
+      sits at the middle of the artwork, not of the card, because every card carries a title and an
+      artist line under its cover and centring on the card drops the arrow ~28px too low. A row that
+      stacks several cards per column (Quick picks) has no single cover to centre on, so it keeps the
+      middle of the row box. The pill is a translucent white glass over a 20px backdrop blur, so it
+      reads over any album art and over both the page background and a light cover.
 
    2) FADE IN ON THE ROW'S OWN HOVER. `opacity:0` is the resting state and `.cwWrap:hover` is what
       reveals the pair — each carousel reveals only its own arrows, never a neighbour's. There is
@@ -11468,7 +11469,7 @@ body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,
    have `overflow:visible` and are skipped by the computed-style test, so they are never touched. */
 .cwWrap{position:relative;min-width:0}
 .cwBtn{
-  position:absolute;top:50%;z-index:7;
+  position:absolute;top:var(--cwt,50%);z-index:7;
   width:34px;height:62px;padding:0;margin:0;
   border:1px solid rgba(255,255,255,.1);border-radius:18px;
   display:flex;align-items:center;justify-content:center;
@@ -11566,12 +11567,33 @@ function pageOf(el){
   var p=pitch(el), n=Math.floor(el.clientWidth/p);
   return Math.max(1,n)*p;
 }
+/* Where the pills sit vertically: the middle of the COVER, and only on the cover carousels
+   (Listen again, Popular right now, Albums for you and the picked shelves). Their cards put a title
+   and an artist line under the artwork, so the card's own middle is ~28px lower than the cover's and
+   the pill must ride the artwork instead. Two kinds of row keep the middle of the row box:
+     · Quick picks — a grid with several songs per column, so its first cover sits in the top row and
+       there is no single cover to centre on;
+     · Trending songs — a wide 16:9 tile whose title is printed over the artwork, so the artwork IS
+       the card and the two centres already coincide (the `ab.height >= cb.height-4` test). */
+function artCentre(el){
+  var card=el.children[0]; if(!card||!card.querySelector) return 0;
+  var art=card.querySelector('.art,.rt,.ring');
+  if(!art) return 0;
+  var eb=el.getBoundingClientRect(), cb=card.getBoundingClientRect(), ab=art.getBoundingClientRect();
+  if(eb.height<=0||ab.height<=0) return 0;
+  if(cb.height<eb.height*0.6) return 0;          /* several cards per column: use the row's middle */
+  if(ab.height>=cb.height-4) return 0;           /* the artwork IS the card: no title lines below */
+  return ab.top-eb.top+ab.height/2;
+}
 function sync(el){
   var w=el.__cwWrap; if(!w) return;
   var max=hmax(el), can=max>2, l=el.scrollLeft;
   w.classList.toggle('cwOn',can);
   w.classList.toggle('cwNoL',!can||l<=2);
   w.classList.toggle('cwNoR',!can||l>=max-2);
+  var c=artCentre(el);
+  if(c>0) w.style.setProperty('--cwt',Math.round(c)+'px');
+  else w.style.removeProperty('--cwt');
 }
 function smoothOk(){
   var gfx=document.documentElement.getAttribute('data-gfx');
