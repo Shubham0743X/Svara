@@ -11720,5 +11720,151 @@ else boot();
 window.svaraCarousel={ rescan:scan, step:step, sync:sync, snap:snap };
 })();
 </script>
+<script id="v20lyrjs">
+/* ===== WAVE 25 — the lyrics are already there when the tab is opened ================================
+   THE REPORT: lyrics only started loading when the Lyrics tab was opened, so every open began with
+   "Loading lyrics…" and a network wait, and the next song had the same wait again.
+
+   WHAT THIS LAYER DOES. It prefetches. The moment a track BECOMES the playing track (setNowUI runs
+   for it — the one path every play, skip, queue jump and shuffle re-order goes through) it asks
+   /api/lyrics for that track AND for the one that will follow it in `seq`, and keeps both answers
+   in memory. The tab therefore has nothing to wait for: its loader finds the entry and paints it in
+   the same frame. Because the following track is fetched while the current one still plays, reaching
+   the end of a song and opening lyrics is instant too — the same "next track is already ready"
+   promise the stream prefetch in v5xfjs makes for audio.
+
+   A CACHE, NOT A SECOND FETCH PATH. One entry per `provider|videoId`. /api/lyrics answers with
+   `private, max-age=86400`, so a repeat ask would be a silent disk-cache hit anyway; keeping the
+   parsed JSON in memory removes even that round trip and, crucially, the "Loading…" flash. Entries
+   are capped at 60 tracks (oldest dropped) so a long session cannot grow without bound.
+
+   DURATION IS PART OF THE MATCH. LRClib picks a recording by title + artist + length, and the
+   server refuses a candidate whose length disagrees by more than max(30s, 25%) — that guard is what
+   stops a 9:57 upload borrowing a 4:14 master's clock. A row's printed duration ("2:47") and the
+   stream's own `audio.duration` can differ by a second or two, so an entry stays valid within 8s of
+   the length it was fetched with and is silently refetched past that. A prefetch for an unplayed
+   track uses the row's duration; a fetch for the playing track prefers the element's real one.
+
+   PROVIDER IS PART OF THE KEY. Auto / YouTube Music / LRClib each cache separately, so switching the
+   pill re-fetches only what it has to, and the prefetch for the NEXT track is made under whichever
+   provider is selected when that track starts.
+
+   NOTHING ELSE CHANGES. The render path (renderLyricsBody, the karaoke timer, padding, jump pill),
+   the provider pills, the fullscreen view and the error notes are the same code as before — this
+   layer only replaces loadLyrics() so that it reads the cache first, and wraps setNowUI() to warm
+   the cache. Every failure degrades to the old behaviour: a rejected fetch is retried on the next
+   open, and a cache miss simply loads as it used to. */
+(function(){
+'use strict';
+if(window.svaraLyrics) return;
+var CACHE={}, ORDER=[], PENDING={}, GEN=0, CAP=60;
+/* our OWN staleness token. The app's `lyrToken` is declared inside the v2js closure, not on
+   `window`, so the replacement loader below cannot read it (a measured ReferenceError); it does
+   not need to — the only writer of that counter was the loader this layer replaces. */
+var TOKEN=0;
+function prov(){ return (lyrPref==='ytm'||lyrPref==='lrclib')?lyrPref:'auto' }
+function durOf(it){ try{ return (typeof durSecs==='function'&&durSecs(it&&it.duration))||0 }catch(e){ return 0 } }
+/* the playing track's real length when the element is actually on it, else the row's printed one */
+function durNow(it){
+  var d=0;
+  try{
+    var src=String((audio&&(audio.currentSrc||audio.getAttribute('src')))||'');
+    if(src.indexOf(it.id)>=0&&isFinite(audio.duration)) d=audio.duration;
+  }catch(e){}
+  if(!(d>0)) d=durOf(it);
+  return Math.round(d)||0;
+}
+function keyOf(it,p){ return p+'|'+it.id }
+function urlFor(it,p,d){
+  var qs=new URLSearchParams();
+  qs.set('provider',p);
+  qs.set('id',it.id); qs.set('title',it.title||''); qs.set('artist',it.artist||'');
+  if(d>0) qs.set('duration',String(d));
+  return '/api/lyrics?'+qs.toString();
+}
+function remember(k,d,j){
+  if(CACHE[k]){ CACHE[k].d=d; CACHE[k].j=j; return }
+  CACHE[k]={d:d,j:j}; ORDER.push(k);
+  while(ORDER.length>CAP){ delete CACHE[ORDER.shift()] }
+}
+function hit(it,p,d){
+  var e=CACHE[keyOf(it,p)]; if(!e) return null;
+  if(d>0&&e.d>0&&Math.abs(e.d-d)>8) return null;   /* a different recording — refetch */
+  return e.j;
+}
+function ask(it,p,d){
+  var k=keyOf(it,p), e=CACHE[k];
+  if(e&&!(d>0&&e.d>0&&Math.abs(e.d-d)>8)) return Promise.resolve(e.j);
+  if(PENDING[k]) return PENDING[k];
+  var pr=fetch(urlFor(it,p,d)).then(function(r){ return r.json() }).then(function(j){
+    delete PENDING[k];
+    if(j&&typeof j==='object') remember(k,d,j);
+    return j;
+  },function(err){ delete PENDING[k]; throw err });
+  PENDING[k]=pr;
+  return pr;
+}
+/* sizeLyrPad lives inside the v2js closure too — call it only when it is reachable, so this layer
+   can never break the panel it is meant to speed up. */
+function pad(){ try{ if(typeof sizeLyrPad==='function') sizeLyrPad() }catch(e){} }
+function apply(j){
+  lyr.plain=(j&&j.plain)||'';
+  lyr.synced=(j&&j.synced)||'';
+  lyr.note=(j&&j.note)||'';
+  lyr.error=(j&&j.error)||'';
+  lyr.lines=[];
+  renderLyricsBody();
+}
+/* the one the FOLLOWING track is, exactly as nextTrack() would pick it */
+function nextInQueue(){
+  try{
+    if(!queue||!queue.length||cur<0) return null;
+    if(cur+1<seq.length) return queue[seq[cur+1]]||null;
+    if(typeof repeat==='string'&&repeat!=='off') return queue[seq[0]]||null;
+  }catch(e){}
+  return null;
+}
+function prefetch(){
+  var it=(typeof nowItem==='function')?nowItem():null;
+  if(!it||!it.id) return;
+  var p=prov(), d=durNow(it), nx=nextInQueue();
+  ask(it,p,d).catch(function(){});                 /* current track — the tab's next request */
+  if(nx&&nx.id&&nx.id!==it.id) ask(nx,p,durOf(nx)).catch(function(){});   /* and the one after it */
+}
+loadLyrics=async function(){
+  var body=$('#lyrBody'); if(!body) return;          /* the panel has never been built: nothing to paint */
+  var it=(typeof nowItem==='function')?nowItem():null;
+  if(!it){ lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Nothing playing.</div>'; pad(); return }
+  var token=++TOKEN, p=prov(), d=durNow(it);
+  lyr.loadedFor=it.id+':'+p;
+  var t=$('#lyrT'); if(t)t.textContent=it.title||'';
+  var a=$('#lyrA'); if(a)a.textContent=it.artist||'';
+  var c=hit(it,p,d);
+  if(c){ apply(c); return }                          /* already fetched: paint, do not blink "Loading…" */
+  lyr.mode='loading'; lyr.lines=[]; lyr.cur=-1; clearInterval(lyr.timer); lyr.timer=null;
+  body.innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
+  pad();
+  try{
+    var j=await ask(it,p,d);
+    if(token!==TOKEN) return;
+    apply(j);
+  }catch(e){
+    if(token!==TOKEN) return;
+    lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Lyrics failed to load.</div>'; pad();
+  }
+};
+/* every track change goes through setNowUI: warm the cache for it and for what follows */
+if(typeof setNowUI==='function'){
+  var _setNowUI=setNowUI;
+  setNowUI=function(it){
+    var r=_setNowUI.apply(this,arguments);
+    var g=++GEN;
+    setTimeout(function(){ if(g===GEN) prefetch() },0);
+    return r;
+  };
+}
+window.svaraLyrics={ cache:CACHE, prefetch:prefetch, ask:ask, load:function(){ return loadLyrics.apply(this,arguments) } };
+})();
+</script>
 </body>
 </html>
