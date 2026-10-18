@@ -11577,8 +11577,15 @@ function pitch(el){
   for(i=1;i<lefts.length;i++){ d=lefts[i]-lefts[i-1]; if(d>0.5&&d<min) min=d }
   return min===Infinity?(el.clientWidth||1):min;
 }
+/* WAVE 22 — a full-bleed row carries its content inset as PADDING (see the v22bleedcss note), so a
+   "page" is the cards that fit INSIDE that inset. Counting clientWidth instead would step one card
+   too far on every click, because 284px of the row is now the sidebar's column plus the right gutter. */
+function padX(el){
+  var cs=getComputedStyle(el);
+  return (parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+}
 function pageOf(el){
-  var p=pitch(el), n=Math.floor(el.clientWidth/p);
+  var p=pitch(el), n=Math.floor((el.clientWidth-padX(el))/p);
   return Math.max(1,n)*p;
 }
 /* Where the pills sit vertically: the middle of the COVER, and only on the cover carousels
@@ -11625,6 +11632,13 @@ function snap(el){
   var kid=el.children[0], off=0;
   if(kid&&kid.getClientRects().length){
     off=Math.round((kid.getBoundingClientRect().left-el.getBoundingClientRect().left+l)*10)/10;
+    /* WAVE 22 — subtract the row's own padding. A full-bleed row (see v22bleedcss) carries the
+       sidebar column as PADDING-LEFT, which is not a lead-in: the first card still sits at
+       scrollLeft 0, and the boundaries we want are the scroll offsets at which a card edge meets
+       the CONTENT edge. Measured before this line: 260px of padding passed the `p*0.9` guard on a
+       416px pitch, so a 500px resting offset snapped to 676 (260 + one pitch) and left a card cut
+       flush against the window edge under the glass instead of aligned with the first column. */
+    off-=parseFloat(getComputedStyle(el).paddingLeft)||0;
     if(off<0||off>p*0.9) off=0;                    /* not a real lead-in — do not shift a resting row */
   }
   var to=off+Math.round((l-off)/p)*p;
@@ -11884,5 +11898,83 @@ if(typeof setNowUI==='function'){
 window.svaraLyrics={ cache:CACHE, prefetch:prefetch, ask:ask, load:function(){ return loadLyrics.apply(this,arguments) } };
 })();
 </script>
+<style id="v22bleedcss">
+/* ================= WAVE 22 — full-bleed content: glass sidebar, window-edge carousels =============
+   THE TWO REPORTS ARE ONE CHANGE.
+   (a) THE RIGHT-HAND GUTTER. #scroll carries `padding:4px 24px 130px`, so every row stopped 24px
+       short of the window's edge and a strip of plain background sat there with the arrow pill
+       floating in it (measured at a 718px window: exactly 24px of nothing — the strip ringed in
+       green). A row is now FULL-BLEED to the window edge: its cards run under the edge and are cut
+       by the window itself, which is what the reference does, and the pill sits in that corner.
+   (b) THE LEFT EDGE. Content could never pass the sidebar, because #app was a flex sibling that
+       STARTED at 236px — the sidebar was a wall, so a scrolled row showed a hard vertical cut at
+       its edge. #app now starts at x=0 and slides 236px under the sidebar, which becomes the dark
+       glass slab: translucent, heavily blurred, hairline border. Scrolled cards therefore travel
+       UNDER it and read as blurred shapes behind the panel, as in the reference's library slab,
+       instead of vanishing at a line.
+
+   HOW THE 24px INSET SURVIVES. Both come from ONE number, --cwInL (sidebar + the app's own gutter).
+   #scroll keeps that as its padding-left, so headings, lists and grids sit exactly where they did.
+   A carousel wrap cancels the padding with negative margins and its scroller puts the same 284px
+   back as PADDING-LEFT/RIGHT. Because `*{box-sizing:border-box}` and the box grows by precisely the
+   padding it gains, the CONTENT box is unchanged — so `.rail`, `.heroSec .rail` and the Quick picks
+   `grid-auto-columns` (all `%` of that content box) keep the exact card sizes they have today. That
+   padding is inside the scrollport, so scrolled cards paint all the way to x=0, under the glass.
+
+   THE ARROWS FOLLOW, AND THEY MOVE IN BY A GAP, NOT TO THE EDGE. Both pills now stand --cwPill
+   (10px) inside the VISIBLE edge of the row: the left one 10px right of the glass slab, the right
+   one 10px left of the window edge — equal gaps to the two surfaces they sit between, where before
+   the left pill sat on the content edge (over the first card) and the right pill touched the window.
+   Both read their inset off --cwPill, so the pair is symmetric at any width.
+   pageOf() in v20cwjs counts a page from the CONTENT box, not from clientWidth (which now includes
+   the 284px of bleed) — otherwise one click would step a card too far. snap()
+   needed no change: the padding shifts where cards are PAINTED, not their scroll coordinates, so
+   cards still snap to the content edge exactly as before. */
+:root{--cwSide:236px;--cwPad:24px;--cwPill:10px;--cwInL:calc(var(--cwSide) + var(--cwPad))}
+#app{margin-left:calc(-1 * var(--cwSide))}
+#top{margin-left:0;width:100%}
+#searchFilters{padding-left:calc(var(--cwSide) + 22px)}
+#scroll{padding-left:var(--cwInL)}
+/* THE THREE LOADER PASS-THROUGHS. Trending / Popular right now / Albums for you boot from a
+   skeleton: their row is `#trendRail` / `#popRail` / `#albRail`, which is ITSELF a `.railwrap`
+   (overflow-x:auto) holding the real, wrapped row inside it. That outer box is only the content
+   column wide (1316), so it stayed a scrollport of its own and CLIPPED the bleeding row at the
+   content edge: measured on all three, `scrollWidth - clientWidth` was exactly 24 — the same 24px
+   strip of background the report circled — and their cards never reached the glass on the left
+   either, because the clip sat at 260. A pass-through is not a carousel; it just carries one. With
+   it out of the overflow business the row inside paints to both window edges like every other row,
+   and the outer box can no longer be scrolled by a stray horizontal wheel. */
+#scroll .sec > .railwrap:has(> .cwWrap){overflow:visible}
+/* the carousels bleed; every other block keeps #scroll's insets untouched */
+#scroll .cwWrap{margin-left:calc(-1 * var(--cwInL));margin-right:calc(-1 * var(--cwPad))}
+#scroll .cwWrap>:not(.cwBtn){padding-left:var(--cwInL);padding-right:var(--cwPad)}
+/* the pair is symmetric: 10px from the glass on the left, 10px from the window on the right */
+#scroll .cwWrap>.cwBtn.cwL{left:calc(var(--cwSide) + var(--cwPill))}
+#scroll .cwWrap>.cwBtn.cwR{right:var(--cwPill)}
+/* THE GLASS SLAB. The old .72 alpha over blur(8px) was enough while nothing could pass under it;
+   with covers sliding behind it the panel has to read as glass (the artwork visible as a soft wash)
+   AND keep every label legible over a white cover — and the first try got the second half wrong: at
+   .42/.56 over blur(20px) a white sleeve behind "Liked albums" left the muted rows and their counts
+   unreadable. So the backdrop is DIMMED before the film is laid over it, and the film stays deep
+   enough that a white sleeve behind a muted row still reads: wave 22 settled on brightness .62 with
+   a .58/.7 film (a white sleeve composited to ~72/255 against the panel's own ~20, #f4f4f7 text at
+   ~8:1, the muted rows at ~3.5:1).
+   WAVE 23 — ONE STEP LIGHTER, AND THAT IS THE ONLY TONE. The .62 film was dark enough that a card
+   scrolled under the panel all but vanished, so the three bleeding rows looked CLIPPED at the glass
+   edge rather than sliding behind it. The film is now a lighter slate (28,28,38 at .62 → 19,19,28 at
+   .71) over a .76-dimmed backdrop: a white sleeve lands at ~91 at the top of the panel and ~70 at
+   the bottom — no worse than before where legibility matters — while the panel's own empty surface
+   lifts from ~9 to ~19 against the page, so covers read as a pale wash behind the labels instead of
+   disappearing into a black wall. There is no second tone and no setting: these are the values.
+   The low graphics levels keep a near-solid panel (a 24px backdrop blur over moving artwork is the
+   most expensive thing this page could ask for) and every glyph keeps its contrast. */
+#sb{background:linear-gradient(180deg,rgba(28,28,38,.62),rgba(19,19,28,.71));
+  -webkit-backdrop-filter:blur(24px) saturate(140%) brightness(.76);
+  backdrop-filter:blur(24px) saturate(140%) brightness(.76);
+  border-right:1px solid rgba(255,255,255,.1);
+  box-shadow:10px 0 34px -22px rgba(0,0,0,.95)}
+html[data-gfx="low"] #sb,html[data-gfx="reduced"] #sb{
+  -webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(20,20,28,.97)}
+</style>
 </body>
 </html>
