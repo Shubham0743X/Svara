@@ -563,6 +563,15 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
     <div id="homeSec"></div>
     <div id="dynSec" hidden></div>
   </div>
+
+  <!-- WAVE 26 — THE TOP OF THE FEED. Eight masked blur bands stacked over the first 230px of the
+       window, where the feed now scrolls on behind the header: the header (search field, radio +
+       settings) and the filter chips paint ABOVE this at z-index 4, so only the content is blurred.
+       See #v26topblurcss at the end of the file; the JS behind it is #v26topblurjs. -->
+  <div id="topBlur" aria-hidden="true">
+    <i class="tpFade"></i>
+    <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+  </div>
 </div>
 
 <!-- MINI PLAYER -->
@@ -11976,5 +11985,142 @@ window.svaraLyrics={ cache:CACHE, prefetch:prefetch, ask:ask, load:function(){ r
 html[data-gfx="low"] #sb,html[data-gfx="reduced"] #sb{
   -webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(20,20,28,.97)}
 </style>
+<style id="v26topblurcss">
+/* ================= WAVE 26 — the top of the feed blurs as it slides under the search bar ==========
+   THE REPORT: scrolling ran every cover into a hard horizontal line at the bottom of the header — the
+   feed was clipped by a scrollport that STARTED there, so the top of the page read as a guillotine.
+   The reference (a Framer site) does the opposite of a hard edge twice over: its content keeps going
+   BEHIND the floating bar and turns into a blur as it leaves. Both halves are done here.
+
+   (a) THE FEED KEEPS GOING. #scroll is pulled up under the header (negative margin) and given that
+       height back as PADDING-TOP, so the content sits at exactly the y it always did at rest and
+       scrolls ON past it — behind the search field, behind the radio and the settings icon, to the
+       window's top edge. The header, the chip row and the sidebar all paint above it; the search
+       field itself is opaque, so what shows between them is the blurred wash of a cover leaving.
+       The lead is MEASURED (header + filter chips, #v26topblurjs) and re-measured on resize, so a
+       text-size change or a chip row appearing can never leave the content sitting too low.
+
+   (b) IT BLURS ON THE WAY OUT. Eight absolutely positioned layers, each with a slightly stronger
+       backdrop-filter, each revealed only inside its slice of the height by its own mask gradient.
+       Because a backdrop-filter blurs everything PAINTED BEHIND the layer and its mask eases that
+       contribution in and out, the slices compose into ONE continuous ramp — 0.5px at the soft end,
+       53px at the window's edge. The reference's stops are used verbatim, MIRRORED (`to top` instead
+       of `to bottom`), because its effect sits at the bottom of its viewport and ours at the top.
+       Eight slices and not one: a single masked `blur(20px)` fades the FINISH of a blur but never its
+       STRENGTH — a flat veil, which is exactly what this replaces.
+
+   STACKING. #topBlur is a child of #app at z-index 3. The header is 4 and the filter chips 4, so the
+   search field, radio, settings and chips are never blurred; #scroll is 2, one number below, so the
+   whole feed (the arrow pills' own z-index 7 included) is inside this layer's backdrop. The layer
+   starts at the sidebar's right edge — blurring behind the glass slab costs GPU and shows nothing.
+
+   OFF AT THE TOP OF THE PAGE, IN OVER 50px. At scrollTop 0 nothing has left yet, and the first
+   sections sit exactly where they were before this layer existed, so the ramp is driven by the scroll
+   position (#v26topblurjs): parked above the window until 8px, fully in place by 60px, sliding in
+   between.
+
+   WHY IT SLIDES IN AND DOES NOT FADE IN — measured, not assumed. The first version faded the ramp
+   with `opacity`, and at 0.45 Chromium DROPPED the whole effect: a backdrop-filter's backdrop is
+   taken from its nearest BACKDROP ROOT, and an ancestor with opacity (or a mask, or a filter)
+   becomes one — so the layers were blurring the inside of an empty box, and an untouched feed showed
+   through. `filter:opacity()` and a flat alpha mask on the parent failed the same way. A transform
+   does not create a backdrop root, so the gate is a TRANSLATE: `--tpgate` 1 = in place, 0 = one
+   height above the window. Verified on the desktop build (Chromium 152) over a hard checkerboard:
+   at 0.45 the contrast still drops (blur alive), where opacity at 0.45 left it at full contrast.
+
+   THE ONE THING THAT DOES NOT BLUR: THE MOOD PILLS. They sit ~4px under the header, so they reach the
+   soft end of the ramp almost immediately, where a 1–2px blur reads as a smudge rather than as depth.
+   They FADE instead — same scroll value, straight opacity — and are gone by the time they are up
+   behind the search field. Everything that follows them (titles, covers, rows) gets the blur.
+
+   GRAPHICS LEVEL. Eight live backdrop-filters over moving artwork is the most expensive thing this
+   page could ask for, so `low` and `reduced` swap the stack for ONE static fade to the page colour
+   (.tpFade): still no hard cut, no per-frame blur. */
+:root{--tpLead:74px}   /* header height; #v26topblurjs replaces it with the measured value */
+#app{position:relative}
+#scroll{position:relative;z-index:2;margin-top:calc(-1 * var(--tpLead));padding-top:calc(var(--tpLead) + 4px)}
+#searchFilters{position:relative;z-index:4}   /* the chips stay sharp: they sit inside the ramp's reach */
+#topBlur{position:absolute;left:var(--cwSide);right:0;top:0;height:230px;z-index:3;
+  pointer-events:none;--tpgate:1;transform:translateY(calc((1 - var(--tpgate)) * -100%))}
+#topBlur>i{position:absolute;inset:0;display:block;pointer-events:none}
+/* the ramp, softest first — each band's stops are the reference's, mirrored */
+#topBlur>i:nth-child(2){-webkit-backdrop-filter:blur(.5px);backdrop-filter:blur(.5px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 0%,#000 12.5%,#000 25%,rgba(0,0,0,0) 37.5%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 0%,#000 12.5%,#000 25%,rgba(0,0,0,0) 37.5%)}
+#topBlur>i:nth-child(3){-webkit-backdrop-filter:blur(.83px);backdrop-filter:blur(.83px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 12.5%,#000 25%,#000 37.5%,rgba(0,0,0,0) 50%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 12.5%,#000 25%,#000 37.5%,rgba(0,0,0,0) 50%)}
+#topBlur>i:nth-child(4){-webkit-backdrop-filter:blur(1.66px);backdrop-filter:blur(1.66px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 25%,#000 37.5%,#000 50%,rgba(0,0,0,0) 62.5%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 25%,#000 37.5%,#000 50%,rgba(0,0,0,0) 62.5%)}
+#topBlur>i:nth-child(5){-webkit-backdrop-filter:blur(3.31px);backdrop-filter:blur(3.31px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 37.5%,#000 50%,#000 62.5%,rgba(0,0,0,0) 75%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 37.5%,#000 50%,#000 62.5%,rgba(0,0,0,0) 75%)}
+#topBlur>i:nth-child(6){-webkit-backdrop-filter:blur(6.63px);backdrop-filter:blur(6.63px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 50%,#000 62.5%,#000 75%,rgba(0,0,0,0) 87.5%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 50%,#000 62.5%,#000 75%,rgba(0,0,0,0) 87.5%)}
+#topBlur>i:nth-child(7){-webkit-backdrop-filter:blur(13.25px);backdrop-filter:blur(13.25px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 62.5%,#000 75%,#000 87.5%,rgba(0,0,0,0) 100%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 62.5%,#000 75%,#000 87.5%,rgba(0,0,0,0) 100%)}
+#topBlur>i:nth-child(8){-webkit-backdrop-filter:blur(26.5px);backdrop-filter:blur(26.5px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 75%,#000 87.5%,#000 100%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 75%,#000 87.5%,#000 100%)}
+#topBlur>i:nth-child(9){-webkit-backdrop-filter:blur(53px);backdrop-filter:blur(53px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 87.5%,#000 100%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 87.5%,#000 100%)}
+/* the low-graphics stand-in: one fade to the page colour, no live blur at all */
+#topBlur>.tpFade{display:none;height:150px;background:linear-gradient(to bottom,var(--bg) 0%,var(--bg) 46%,rgba(7,7,10,0) 100%)}
+html[data-gfx="low"] #topBlur>i:not(.tpFade),html[data-gfx="reduced"] #topBlur>i:not(.tpFade){display:none}
+html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{display:block}
+</style>
+<script id="v26topblurjs">
+/* ===== WAVE 26 — how far the feed tucks under the header, and how much blur is showing ===========
+   Two jobs, both cheap:
+   1) LEAD. `--tpLead` is how much of the feed is hidden under the header: the header's own height
+      plus, when they are on screen, the search filter chips. #scroll is pulled up by exactly that and
+      padded by it again, so the first section sits where it always did and scrolls ON behind them.
+      It is MEASURED (offsetHeight, the one place this layer costs layout) and re-measured on resize
+      and whenever the header or the chip row changes size — a text-size change or a chip row
+      appearing therefore never leaves the content sitting a few pixels too low.
+   2) TONE. One number, `gate`, from the scroll position: 0 until 8px, 1 by 60px. It drives the ramp's
+      opacity AND the mood pills' fade (1 - gate). Two inline styles per scroll event, no layout read
+      and no query beyond one cached #homeSec .chips lookup — the element is remembered until the home
+      page is re-rendered, which is the only time the node changes. */
+(function(){
+  'use strict';
+  if(window.svaraTopBlur) return;
+  var root = document.documentElement, app = document.getElementById('app'),
+      sc = document.getElementById('scroll'), tp = document.getElementById('topBlur'),
+      top = document.getElementById('top');
+  if(!app || !sc || !tp || !top) return;
+  var chips = null;
+  function tone(){
+    var y = sc.scrollTop || 0;
+    var gate = y <= 8 ? 0 : (y >= 60 ? 1 : (y - 8) / 52);
+    /* a TRANSFORM, not opacity — an ancestor with opacity becomes a backdrop root and Chromium then
+       throws the whole ramp away (see the head of #v26topblurcss) */
+    tp.style.setProperty('--tpgate', gate >= 1 ? '1' : gate.toFixed(3));
+    /* the mood pills fade out instead of blurring — see the head of #v26topblurcss */
+    var c = document.querySelector('#homeSec .chips');
+    if(c !== chips){ if(chips) chips.style.opacity = ''; chips = c; }
+    if(chips) chips.style.opacity = gate >= 1 ? '0' : (1 - gate).toFixed(3);
+  }
+  function place(){
+    var f = document.getElementById('searchFilters');
+    var lead = top.offsetHeight + ((f && !f.hidden) ? f.offsetHeight : 0);
+    root.style.setProperty('--tpLead', lead + 'px');
+    tone();
+  }
+  sc.addEventListener('scroll', tone, { passive:true });
+  window.addEventListener('resize', place);
+  try{
+    var ro = new ResizeObserver(place);
+    ro.observe(top);
+    var f2 = document.getElementById('searchFilters'); if(f2) ro.observe(f2);
+  }catch(e){}
+  place();
+  window.svaraTopBlur = { place: place, tone: tone };
+})();
+</script>
 </body>
 </html>
