@@ -571,6 +571,7 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
   <div id="topBlur" aria-hidden="true">
     <i class="tpFade"></i>
     <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    <i class="tpShade"></i>
   </div>
 </div>
 
@@ -12120,6 +12121,174 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
   }catch(e){}
   place();
   window.svaraTopBlur = { place: place, tone: tone };
+})();
+</script>
+<style id="v27polishcss">
+/* ================= WAVE 27 — the shade, the blurred-target rule, and "open at the top" ==========
+   THREE SMALL POLISHES, all of them consequences of the Wave 26 top ramp.
+
+   (1) THE SHADE. Over a bright cover (a white sleeve, a pale film still) the ramp's blurred wash
+       is still BRIGHT, and the search field — an opaque --panel pill on a bright wash — loses its
+       edge exactly where the artwork behind it is lightest (reported: "the search bar is not that
+       clearly visible"). The blur is left exactly as it is; one flat, transparent-to-clear
+       gradient is laid over the top of the ramp instead: 0.60 of the page colour at the window's
+       edge, still ~0.58 behind the field (the header's own 74px), easing to nothing by the bottom
+       of the ramp. 0.60 is a LITTLE darker than the art, not a black band: measured over a bright
+       rail, the header band's mean luminance drops 45.7 -> 26.3 — still clearly artwork, and now
+       below the field's own edge. The gradient reaches 0 at the ramp's bottom, so the feed below
+       230px is not dimmed at all.
+       It is the ramp's LAST child, so it paints OVER the eight backdrop bands (it tones the
+       blurred result, not the sharp source), it inherits the ramp's translateY gate, and it is
+       pointer-events:none like the rest of the layer. At rest the whole ramp is parked above the
+       window, so a page that has never scrolled is dimmed by exactly nothing. Low / reduced
+       graphics keep their single opaque .tpFade instead (the :not(.tpFade) rule in #v26topblurcss
+       already hides this one) — that fallback is already a solid wash to the page colour. */
+#topBlur>i.tpShade{background:linear-gradient(to bottom,
+  rgba(7,7,10,.60) 0%,
+  rgba(7,7,10,.58) 32%,
+  rgba(7,7,10,.40) 55%,
+  rgba(7,7,10,.14) 80%,
+  rgba(7,7,10,0) 100%)}
+</style>
+<script id="v27polishjs">
+/* ===== WAVE 27 — (2) a blurred target scrolls into view instead of firing =====================
+   THE REPORT: with the feed scrolled under the search bar, the top rail's covers are half gone in
+   the blur — and they were still live. A click on one of them played / opened a card the user
+   could barely see, and a mood pill that had faded to 0 was still clickable.
+
+   THE RULE (one capture listener on window, so it runs before EVERY handler the app has — the
+   document-level ones, the capture ones and the per-element ones alike): if a click lands inside
+   the part of the ramp where the blur is real, the click does not happen. The page scrolls the
+   clicked block back out of the blur instead, top of the block just below the ramp. No handler is
+   reached at all (preventDefault + stopPropagation), so nothing can play, open or navigate.
+   "SLIGHTLY blurred still opens": the test is the CLICK POINT against 68% of the ramp's visible
+   height — the last third of the ramp is the 0.5–0.9px bands, where a cover is only a little soft,
+   and it stays clickable. It is the CLICK POINT and not the block's whole box on purpose: a tall
+   card with its cover under the bar and its title sharp below is opened by clicking the title and
+   scrolled by clicking the cover.
+
+   WHICH CLICKS: any element the app made clickable — a button or link, a row ([data-play]), a
+   rail card ([data-rail]/[data-id]), a chip, a library card, the artist/album affordances. Plain
+   text and the page background are not targets, so clicking a blurred heading still does nothing.
+   The guard is armed only while the ramp is really over something: its own --tpgate (0 until 8px
+   of scroll, 1 by 60px). Low / reduced graphics obey the same rule against their static fade —
+   that band is just as obscured there, by the page colour instead of a blur. A drag that ends in
+   a click (a horizontal rail flick) is left alone, and keyboard activation (detail 0) is never
+   touched, so Tab + Enter still works on a pill whose row happens to be scrolled under the bar.
+
+   (3) OPEN AT THE TOP. Home / the wordmark / Library / Liked music / a playlist / Liked albums /
+   History / a new search / a filter pill all reused the SAME scrolled #scroll, so the new page
+   opened wherever the old one was left (reported). Every one of them paints through showDyn() or
+   goHome(), so the two are wrapped here — AFTER the app and every other wave has had its say.
+   The reset is on the PAGE'S IDENTITY, not on the call: showDyn() puts #scroll back at 0 only when
+   the title it is given differs from the page already on screen. PAGING IS NOT A PAGE CHANGE —
+   loadMore() -> paintSearch() -> showDyn() repaints the SAME results under the same title, so a
+   reader half-way down a forty-result list keeps their place while page two arrives. A filter pill
+   (or a mood, or Search pressed again) repaints under that same title too, which is exactly why
+   doSearch() — the only thing that starts a NEW list — is wrapped as well and resets at the call.
+   goHome() always resets, so re-clicking Home while Home is already open takes the page back to
+   the top. Back from an album or artist page is left alone on purpose: those restore the
+   remembered position (albRestoreView / restoreView). */
+(function(){
+  'use strict';
+  var doc = document;
+  var sc = doc.getElementById('scroll'), tp = doc.getElementById('topBlur');
+  if(!sc) return;
+
+  var EDGE = 0.68;          /* the part of the visible ramp that is too blurred to click */
+
+  function gate(){
+    if(!tp) return 0;
+    var g = parseFloat(getComputedStyle(tp).getPropertyValue('--tpgate'));
+    return isFinite(g) ? g : 0;
+  }
+  function restMotion(){
+    try{ if(window.svaraGfx && typeof window.svaraGfx.reduced === 'function') return !!window.svaraGfx.reduced() }catch(e){}
+    try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) }catch(e){}
+    return false;
+  }
+
+  /* every element the app treats as a control; anything else is not a target */
+  var TARGETS = 'button,a,[role="button"],[data-play],[data-rail],[data-chip],[data-id],' +
+    '[data-artist-id],[data-artist-name],[data-lib],[data-libtab],[data-libsort],[data-sfilter],' +
+    '[data-qp],[data-qpmore],[data-qpall],[data-qpback],[data-trshuffle],[data-trmix],' +
+    '[data-artplay],[data-artmix],[data-artshowall],[data-artback],[data-albplay],[data-albback],' +
+    '.chip,.row,.rail';
+
+  var down = null;
+  window.addEventListener('pointerdown', function(e){
+    down = (e && e.pointerType !== 'mouse') ? null : { x:e.clientX, y:e.clientY };
+  }, true);
+
+  window.addEventListener('click', function(e){
+    if(!e || e.button) return;                           /* a plain left click only */
+    if(!e.clientY && !e.clientX) return;                 /* keyboard activation: never block */
+    if(down && (Math.abs(e.clientX - down.x) > 8 || Math.abs(e.clientY - down.y) > 8)) return;
+    var g = gate(); if(g <= 0.02) return;
+    var ramp = tp.offsetHeight || 230;
+    if(e.clientY >= ramp * g * EDGE) return;             /* only slightly blurred: let it through */
+    var t = e.target;
+    if(!t || !t.closest) return;
+    var el = t.closest(TARGETS);
+    if(!el || !sc.contains(el)) return;
+    /* scroll the whole card/row into view, not the little heart or dots button that was clicked */
+    var block = el.closest('.row,.rail') || el;
+    if(!sc.contains(block)) block = el;
+    /* the block's own top, in the feed's scroll space, parked just below the ramp */
+    var r = block.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    var target = r.top - sr.top + sc.scrollTop - (ramp + 10);
+    if(target < 0) target = 0;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    try{ sc.scrollTo({ top:target, behavior: restMotion() ? 'auto' : 'smooth' }) }
+    catch(err){ sc.scrollTop = target }
+  }, true);
+
+  /* ---------- every page change opens at the top ---------- */
+  function toTop(){ try{ if(sc.scrollTop) sc.scrollTop = 0 }catch(e){} }
+  /* The page's identity as showDyn() receives it — its title, with any markup stripped. A REPAINT
+     of the page already on screen keeps it; that is the test, not "a function was called". It
+     matters because paging repaints the results through paintSearch() -> showDyn() with the same
+     title: no jump, the rows simply arrive under the reader. */
+  function pageKey(t){
+    /* the Library's own tab and sort strips repaint under the SAME "Library" title, so they are
+       part of the identity: switching Songs -> Albums is a new list and opens at the top too */
+    var k = '', a = doc.querySelector('#dynSec [data-libtab].on'), b = doc.querySelector('#dynSec [data-libsort].on');
+    if(a) k += '|' + a.getAttribute('data-libtab');
+    if(b) k += '|' + b.getAttribute('data-libsort');
+    return String(t == null ? '' : t).replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim() + k;
+  }
+  var lastPage = '';
+
+  var _showDyn = window.showDyn, _goHome = window.goHome;
+  if(typeof _showDyn === 'function'){
+    window.showDyn = function(title){
+      var out = _showDyn.apply(this, arguments);
+      var key = pageKey(title);                     /* read AFTER the paint: the new tab is live */
+      if(key !== lastPage){ lastPage = key; toTop() }
+      return out;
+    };
+  }
+  if(typeof _goHome === 'function'){
+    window.goHome = function(){
+      var out = _goHome.apply(this, arguments);
+      lastPage = '\u0000home';
+      toTop();
+      return out;
+    };
+  }
+  /* A NEW SEARCH IS A NEW LIST even when it repaints under the SAME title — the filter pills
+     (All / Songs / Albums / Artists), a mood pill, or Search pressed again. doSearch() paints
+     "Searching…" synchronously before its fetch, so the reset belongs here, at the call. */
+  var _doSearch = window.doSearch;
+  if(typeof _doSearch === 'function'){
+    window.doSearch = function(){
+      var out = _doSearch.apply(this, arguments);
+      toTop();
+      return out;
+    };
+  }
 })();
 </script>
 </body>
