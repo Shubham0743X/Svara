@@ -4586,6 +4586,12 @@ function setRender(){
     ? setCfmRow('Replace your Svara data with '+(setPend?Object.keys(setPend).length:0)+' keys from the file?','Import','import_yes')
     : setRow('Export','Downloads every Svara localStorage key as JSON','<button class="setAct" type="button" data-setact="export">Export</button>')+
       setRow('Import','Restores a file exported here — nothing is written unless it validates','<button class="setAct" type="button" data-setact="import">Import</button>');
+  /* WAVE 28 — the factory reset. The LAST row of the panel's most destructive group, behind a
+     confirm like its two siblings above, and it keeps exactly ONE key (sv_onboard_seen) so the
+     first-run setup cannot come back — a reset is "start empty", not "new install". */
+  h += (setCfm==='reset')
+    ? setCfmRow('Erase everything and restart Svara?','Reset','reset_yes')
+    : setRow('Reset app','Resetting the app restarts Svara with its defaults. The first-run setup does not come back; Export first if you want a copy.','<button class="setAct danger" type="button" data-setact="reset">Reset…</button>');
   h += '</div>';
   /* Wave 4F — the About group is now ONE full-width button at the BOTTOM of the panel; the
      version / name / links it used to hold live in the #aboutCard overlay it opens. No group
@@ -4859,6 +4865,42 @@ function setImportApply(){
   setRefresh();
   toast('Imported '+n+' keys');
 }
+/* ===== WAVE 28 — RESET APP =====================================================
+   Erases every key this app owns — the same `sv_`/`ml_` allowlist Export and Import use, so a key
+   the app does not own can never be touched — and then reloads, which is what makes the wipe real:
+   the boot layer re-reads localStorage from scratch, so no live state (queue, history, likes,
+   playlists, texture cache) survives in memory either.
+   ONE KEY IS KEPT: sv_onboard_seen. That is the first-run gate — the personalisation flow opens only
+   when there is no history, no profile AND no seen flag — so keeping the flag is exactly what makes
+   "erase everything" different from "a new install": the user gets an empty library AND never sees
+   the welcome flow again. Its raw value is re-written untouched (the boot layer reads it as JSON,
+   and this function never parses or re-encodes it). sv_profile and the three handover keys ARE
+   erased: the shelves they describe live in ml_history, which is going away with them.
+   Playback is stopped so no stream keeps feeding a document that is about to be thrown away, and
+   the reload is DELAYED only long enough for the toast to be read. The panel is deliberately NOT
+   redrawn: its counts are live variables, not storage, so a repaint here would show the old
+   numbers for the last 700 ms — the reload is what makes every count zero. */
+function setResetAll(){
+  var n = 0, keep = null, doomed = [], k, i;
+  try{
+    keep = localStorage.getItem('sv_onboard_seen');
+    for(i=0;i<localStorage.length;i++){
+      k = localStorage.key(i);
+      if(!k || !/^(sv_|ml_)[a-z_0-9]*$/i.test(k)) continue;
+      if(k === 'sv_onboard_seen') continue;
+      doomed.push(k);
+    }
+    for(i=0;i<doomed.length;i++){ try{ localStorage.removeItem(doomed[i]); n++ }catch(e2){} }
+    /* the gate reads this as JSON, so `1` is the canonical "seen" value. Written even if it was
+       absent before: the point of the reset is an empty library, never a second first-run. */
+    try{ localStorage.setItem('sv_onboard_seen', keep !== null ? keep : '1') }catch(e2){}
+  }catch(e){}
+  try{ if(audio && audio.pause) audio.pause() }catch(e){}
+  try{ if(audioAlt && audioAlt.pause) audioAlt.pause() }catch(e){}
+  setCfm = ''; setPend = null; setSys = null; setSysAsked = false;
+  toast('Erased '+n+' keys — restarting Svara');
+  setTimeout(function(){ try{ location.reload() }catch(e){} }, 700);
+}
 /* after an import: re-read localStorage into the live state and repaint */
 function setRefresh(){
   hist = LSget('ml_history', {}) || {};
@@ -4950,6 +4992,8 @@ document.addEventListener('click', function(e){
     if(act==='export'){ setExport(); return }
     if(act==='import'){ var f = document.getElementById('setFile'); if(f) f.click(); return }
     if(act==='import_yes'){ setImportApply(); return }
+    if(act==='reset'){ setCfm='reset'; setRender(); return }
+    if(act==='reset_yes'){ setResetAll(); return }
     return;
   }
   /* click outside closes — but only for real clicks: a programmatic click (the lyrics
@@ -12137,15 +12181,23 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
        rail, the header band's mean luminance drops 45.7 -> 26.3 — still clearly artwork, and now
        below the field's own edge. The gradient reaches 0 at the ramp's bottom, so the feed below
        230px is not dimmed at all.
-       It is the ramp's LAST child, so it paints OVER the eight backdrop bands (it tones the
-       blurred result, not the sharp source), it inherits the ramp's translateY gate, and it is
-       pointer-events:none like the rest of the layer. At rest the whole ramp is parked above the
-       window, so a page that has never scrolled is dimmed by exactly nothing. Low / reduced
-       graphics keep their single opaque .tpFade instead (the :not(.tpFade) rule in #v26topblurcss
-       already hides this one) — that fallback is already a solid wash to the page colour. */
+       WAVE 28 — ONE HAIRLINE, AND NOTHING ELSE CHANGED. The old stops held 0.60/0.58 all the way
+       to 32% and then jumped: that 0.02 alpha step sat exactly on the header's bottom edge (32% of
+       230px = 74px), which over a bright sleeve rendered as the 1px line reported above the All
+       pill. Measured on a flat bright plate: 90.1 -> 95.1 luminance in one row. The step is now a
+       0.60 -> 0.58 ramp spread over 30.4-33.9% (8px), which reads as the same tone with no line
+       at all (90.1 flat through that row); every other stop is the original curve, untouched, so
+       the shade looks exactly as it did before. It is the ramp's LAST child, so it paints OVER
+       the eight backdrop bands (it tones the blurred result, not the sharp source), it inherits
+       the ramp's translateY gate, and it is pointer-events:none like the rest of the layer. At
+       rest the whole ramp is parked above the window, so a page that has never scrolled is dimmed
+       by exactly nothing. Low / reduced graphics keep their single opaque .tpFade instead (the
+       :not(.tpFade) rule in #v26topblurcss already hides this one). */
 #topBlur>i.tpShade{background:linear-gradient(to bottom,
   rgba(7,7,10,.60) 0%,
-  rgba(7,7,10,.58) 32%,
+  rgba(7,7,10,.60) 30.4%,
+  rgba(7,7,10,.59) 32.2%,
+  rgba(7,7,10,.58) 33.9%,
   rgba(7,7,10,.40) 55%,
   rgba(7,7,10,.14) 80%,
   rgba(7,7,10,0) 100%)}
@@ -12289,6 +12341,80 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
       return out;
     };
   }
+})();
+</script>
+<script id="v28js">
+/* ===== WAVE 28 — a stream that fails once is RETRIED, not silently dead =========================
+   THE EVIDENCE (the app's own console): `stream: upstream 403 for ju4KQTOwLOI (host rr2---sn-gwpa-pmfl)
+   — refreshing URL and retrying once` followed by `stream: upstream 403 again … — giving up`. The
+   route then answers 502. On the CLIENT that 502 was the end of the story: setNowUI() had already
+   run, the audio element fired `error`, the "Starting…" flag was cleared — and nothing else
+   happened. The player sat on a track it would never play, with no message, until the user pressed
+   next. googlevideo 403s are not deterministic (the same id resolves and plays on the next attempt —
+   that is why the server keeps a retry at all), so one client-side retry is worth having.
+
+   WHAT THIS DOES: on the ACTIVE element's `error`, if the loaded stream is the one belonging to the
+   current queue item, reload that same /api/stream URL once, 700 ms later. By then the server has
+   already dropped the dead URL from its cache (it does that before its own retry), so the reload is
+   a real re-resolve, not the same 403 again. The budget is ONE retry PER TRACK: `tried[id]` is set
+   before the retry, so a track that fails twice is left alone — it cannot loop. When that second
+   failure arrives, the app says so out loud and, if the queue has a next track, moves to it (at most
+   two auto-skips in a row, so a dead network cannot walk through a whole playlist; one successful
+   `playing` event clears the count).
+
+   The cache-buster `&r=` only stops a stopped-but-cached media load from being reused; /api/stream
+   reads `id` and ignores everything else. onAudio() above only lets the ACTIVE element through, so a
+   failed crossfade into audioAlt is still handled by the crossfade's own onErr, exactly as before. */
+(function(){
+  'use strict';
+  if(!window.onAudio || !document.getElementById('audio')) return;
+  var el = document.getElementById('audio');
+  var tried = {};        // video id -> it has already used its one retry
+  var skips = 0;         // consecutive auto-skips; reset by any successful start
+
+  function curItem(){
+    try{ if(!queue || !seq || cur < 0 || cur >= seq.length) return null; return queue[seq[cur]] || null }
+    catch(e){ return null }
+  }
+  function sameStream(it){
+    try{
+      if(!it) return false;
+      var s = el.getAttribute('src') || '', base = '/api/stream?id=' + it.id;
+      /* the retry's own URL carries `&r=<stamp>` — this must still count as THE SAME stream, or the
+         second failure would be ignored and the player would sit dead on a track it cannot play. */
+      return s === base || s.indexOf(base + '&') === 0;
+    }catch(e){ return false }
+  }
+  function label(it){
+    var t = String((it && it.title) || 'this track').replace(/\s+/g,' ').trim();
+    return t.length > 42 ? t.slice(0,41) + '…' : t;
+  }
+
+  onAudio('playing', function(){ skips = 0 });
+  onAudio('error', function(){
+    var it = curItem();
+    if(!it || !it.id || !sameStream(it)) return;          // not a failed track load (empty src, a probe)
+    if(tried[it.id]){
+      if(cur + 1 < seq.length && skips < 2){
+        skips++;
+        toast('Couldn’t play “' + label(it) + '” — trying the next track');
+        setTimeout(function(){ try{ nextTrack(false) }catch(e){} }, 350);
+      } else {
+        toast('Couldn’t play “' + label(it) + '” — check your connection and try again');
+      }
+      return;
+    }
+    tried[it.id] = true;
+    var id = it.id;
+    toast('Reconnecting “' + label(it) + '”…');
+    setTimeout(function(){
+      var now = curItem();
+      if(!now || now.id !== id) return;                   // the user moved on while we waited
+      try{ el.src = '/api/stream?id=' + id + '&r=' + Date.now() }catch(e){ return }
+      var p = el.play();
+      if(p && p.catch) p.catch(function(){});             // a refusal is reported by `error`, not here
+    }, 700);
+  });
 })();
 </script>
 </body>

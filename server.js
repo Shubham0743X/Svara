@@ -1418,8 +1418,15 @@ const streamResolving = new Map();       // videoId → the in-flight resolve, s
    progressively (Range/206, piped straight through). So the URL is now resolved AHEAD of playback
    by /api/prefetch, and this function deduplicates: a prefetch that overlaps real playback must
    never spawn a second yt-dlp process for the same video. */
-async function resolveStreamUrl(videoId){
-  const { stdout } = await execFileP(YTDLP, ['-f', 'ba', '-g', 'https://www.youtube.com/watch?v=' + videoId], { timeout: 60000, windowsHide: true });
+/* WAVE 28 — `variant` 1 asks a DIFFERENT player client (the same pairing the download route uses
+   after a 403). A googlevideo URL is signed for the client that requested it, so a node that keeps
+   answering 403 for the default client's URL often serves the web_safari one — a genuinely
+   independent second chance instead of asking the same question twice. */
+async function resolveStreamUrl(videoId, variant){
+  const args = ['-f', 'ba', '-g'];
+  if (variant) args.push('--extractor-args', 'youtube:player_client=default,web_safari');
+  args.push('https://www.youtube.com/watch?v=' + videoId);
+  const { stdout } = await execFileP(YTDLP, args, { timeout: 60000, windowsHide: true });
   const url = (stdout || '').trim().split('\n').pop();
   if (!url) throw new Error('yt-dlp returned no URL for ' + videoId);
   if (streamCache.size >= STREAM_CACHE_MAX) {
@@ -1429,16 +1436,17 @@ async function resolveStreamUrl(videoId){
   streamCache.set(videoId, { url, expires: Date.now() + STREAM_TTL });
   return url;
 }
-function getStreamUrl(videoId){
+function getStreamUrl(videoId, variant){
   const hit = streamCache.get(videoId);
   if (hit && hit.expires > Date.now()) return Promise.resolve(hit.url);
-  const inflight = streamResolving.get(videoId);
+  const key = videoId + '#' + (variant ? 1 : 0);          // the two clients resolve independently
+  const inflight = streamResolving.get(key);
   if (inflight) return inflight;
-  const guarded = resolveStreamUrl(videoId).then(
-    url => { streamResolving.delete(videoId); return url },
-    err => { streamResolving.delete(videoId); throw err }
+  const guarded = resolveStreamUrl(videoId, variant).then(
+    url => { streamResolving.delete(key); return url },
+    err => { streamResolving.delete(key); throw err }
   );
-  streamResolving.set(videoId, guarded);
+  streamResolving.set(key, guarded);
   return guarded;
 }
 
@@ -1518,9 +1526,21 @@ app.get('/api/stream', async (req, res) => {
     if (!up.ok) {
       console.error(`stream: upstream ${up.status} for ${id} (host ${hostOf(url)}) — refreshing URL and retrying once`);
       streamCache.delete(id);
-      url = await getStreamUrl(id);
+      /* WAVE 28: the retry used to re-resolve with the SAME client, so it could (and in the field
+         did) come back with the same 403 from the same host. It now waits out the blip and asks a
+         different player client; only if THAT resolve itself fails does it fall back to the default
+         one. One extra attempt in total, no loop. */
+      await new Promise(s => setTimeout(s, 250));
+      let fresh = url;
+      try { fresh = await getStreamUrl(id, 1) }
+      catch(e){ try { fresh = await getStreamUrl(id, 0) } catch(e2){} }
+      url = fresh;
       up = await grab(url);
       if (!up.ok) {
+        /* the failing URL must not stay cached: the renderer's own retry (v28js) re-requests this
+           route a second later expecting a fresh resolve, and a cached 403-ing URL would just
+           repeat itself. */
+        streamCache.delete(id);
         console.error(`stream: upstream ${up.status} again for ${id} (host ${hostOf(url)}) — giving up`);
         return res.status(502).json({ error: `upstream ${up.status} after refreshing the stream URL` });
       }
