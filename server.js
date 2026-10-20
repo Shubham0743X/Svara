@@ -1418,10 +1418,13 @@ const streamResolving = new Map();       // videoId → the in-flight resolve, s
    progressively (Range/206, piped straight through). So the URL is now resolved AHEAD of playback
    by /api/prefetch, and this function deduplicates: a prefetch that overlaps real playback must
    never spawn a second yt-dlp process for the same video. */
-/* WAVE 28 — `variant` 1 asks a DIFFERENT player client (the same pairing the download route uses
-   after a 403). A googlevideo URL is signed for the client that requested it, so a node that keeps
-   answering 403 for the default client's URL often serves the web_safari one — a genuinely
-   independent second chance instead of asking the same question twice. */
+/* WAVE 28 — `variant` 1 re-extracts with the download route's fallback pairing (default,web_safari).
+   MEASURED 2026-10-19 (yt-dlp 2026.08.19), so the comment tells the truth: web_safari alone answers
+   "Only images are available" for audio (it needs a GVS PO token), and web_embedded/tv/mweb resolve
+   a URL that goes on to 403, so neither can be used as a stand-in client. What the retry really
+   buys is a SECOND EXTRACTION — a freshly signed URL (new expire/ei/sig, often a different
+   googlevideo host) — which is what clears the burst 403s seen in the field. The stream route still
+   drops the dead entry before asking, so this can never hand back the URL that just failed. */
 async function resolveStreamUrl(videoId, variant){
   const args = ['-f', 'ba', '-g'];
   if (variant) args.push('--extractor-args', 'youtube:player_client=default,web_safari');
@@ -1526,10 +1529,10 @@ app.get('/api/stream', async (req, res) => {
     if (!up.ok) {
       console.error(`stream: upstream ${up.status} for ${id} (host ${hostOf(url)}) — refreshing URL and retrying once`);
       streamCache.delete(id);
-      /* WAVE 28: the retry used to re-resolve with the SAME client, so it could (and in the field
-         did) come back with the same 403 from the same host. It now waits out the blip and asks a
-         different player client; only if THAT resolve itself fails does it fall back to the default
-         one. One extra attempt in total, no loop. */
+      /* WAVE 28: wait out the blip, then re-extract (see resolveStreamUrl — the retry's value is a
+         fresh signature, not a different client). Only if that resolve itself fails does it fall
+         back to the default one. One extra attempt in total, no loop; the renderer owns the rest
+         (v28js retries twice more, 700 ms and 1.8 s later). */
       await new Promise(s => setTimeout(s, 250));
       let fresh = url;
       try { fresh = await getStreamUrl(id, 1) }

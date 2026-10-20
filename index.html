@@ -1746,7 +1746,10 @@ onAudio('ended',()=>{
   if(repeat==='all'){loadAt(0);return}
   audio.currentTime=0;paintControls();
 });
-onAudio('error',()=>{toast('Stream error — try the next track')});
+/* WAVE 29 — the generic line is only the FALLBACK. The v28js guard below owns the message (and
+   the retry) for a track load; when it is installed this handler stays silent, so a cancelled or
+   already-retried load can never flash a second, plainer toast over its own. */
+onAudio('error',()=>{ if(!window.__svaraStreamGuard) toast('Stream error — try the next track') });
 
 /* buttons */
 $('#playBtn').onclick=togglePlay;$('#pvPlay').onclick=togglePlay;
@@ -12185,21 +12188,25 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
        to 32% and then jumped: that 0.02 alpha step sat exactly on the header's bottom edge (32% of
        230px = 74px), which over a bright sleeve rendered as the 1px line reported above the All
        pill. Measured on a flat bright plate: 90.1 -> 95.1 luminance in one row. The step is now a
-       0.60 -> 0.58 ramp spread over 30.4-33.9% (8px), which reads as the same tone with no line
-       at all (90.1 flat through that row); every other stop is the original curve, untouched, so
-       the shade looks exactly as it did before. It is the ramp's LAST child, so it paints OVER
-       the eight backdrop bands (it tones the blurred result, not the sharp source), it inherits
-       the ramp's translateY gate, and it is pointer-events:none like the rest of the layer. At
-       rest the whole ramp is parked above the window, so a page that has never scrolled is dimmed
-       by exactly nothing. Low / reduced graphics keep their single opaque .tpFade instead (the
-       :not(.tpFade) rule in #v26topblurcss already hides this one). */
+       continuous ramp spread over 30.4-33.9% (8px), which reads as the same tone with no line at
+       all; every other stop is the original curve, untouched. It is the ramp's LAST child, so it
+       paints OVER the eight backdrop bands (it tones the blurred result, not the sharp source), it
+       inherits the ramp's translateY gate, and it is pointer-events:none like the rest of the
+       layer. At rest the whole ramp is parked above the window, so a page that has never scrolled
+       is dimmed by exactly nothing. Low / reduced graphics keep their single opaque .tpFade instead
+       (the :not(.tpFade) rule in #v26topblurcss already hides this one).
+       WAVE 29 — LIGHTER. 0.60 was chosen for a dark feed; over a WHITE sleeve it read as a grey
+       slab sitting on the artwork, and the first scrolled frame showed that slab arriving. The
+       whole curve is scaled to 0.50/0.48 (mean over a flat white plate: 106 -> 132, still below
+       the search field's own edge, so legibility is kept) and the fade-out stops are scaled with
+       it (.40 -> .33, .14 -> .12) so the shape — and the hairline fix above — is unchanged. */
 #topBlur>i.tpShade{background:linear-gradient(to bottom,
-  rgba(7,7,10,.60) 0%,
-  rgba(7,7,10,.60) 30.4%,
-  rgba(7,7,10,.59) 32.2%,
-  rgba(7,7,10,.58) 33.9%,
-  rgba(7,7,10,.40) 55%,
-  rgba(7,7,10,.14) 80%,
+  rgba(7,7,10,.50) 0%,
+  rgba(7,7,10,.50) 30.4%,
+  rgba(7,7,10,.49) 32.2%,
+  rgba(7,7,10,.48) 33.9%,
+  rgba(7,7,10,.33) 55%,
+  rgba(7,7,10,.12) 80%,
   rgba(7,7,10,0) 100%)}
 </style>
 <script id="v27polishjs">
@@ -12353,32 +12360,45 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
    next. googlevideo 403s are not deterministic (the same id resolves and plays on the next attempt —
    that is why the server keeps a retry at all), so one client-side retry is worth having.
 
+   WAVE 29 — WHY THE RETRY NEVER RAN. This block used to hold a reference to `#audio`, the FIRST
+   media element, and compare that element's src with the current track. The app plays on TWO
+   elements: a hand-off or a crossfade swaps the active one to `#audioAlt`, and the idle `#audio`
+   is then immediately pointed at the FOLLOWING track's stream by the preloader. From the second
+   track onward the old check therefore compared the wrong stream, returned early, and the only
+   thing the listener heard about a failed load was the generic "Stream error — try the next track"
+   from the base handler — exactly the report ("a few songs play, then a failure, and pressing the
+   track again plays it"). It now uses the element the event fired on (`this`, already filtered to
+   the active one by onAudio) and always acts through the live `audio` reference.
+
    WHAT THIS DOES: on the ACTIVE element's `error`, if the loaded stream is the one belonging to the
-   current queue item, reload that same /api/stream URL once, 700 ms later. By then the server has
-   already dropped the dead URL from its cache (it does that before its own retry), so the reload is
-   a real re-resolve, not the same 403 again. The budget is ONE retry PER TRACK: `tried[id]` is set
-   before the retry, so a track that fails twice is left alone — it cannot loop. When that second
-   failure arrives, the app says so out loud and, if the queue has a next track, moves to it (at most
-   two auto-skips in a row, so a dead network cannot walk through a whole playlist; one successful
-   `playing` event clears the count).
+   current queue item, reload that same /api/stream URL. By then the server has already dropped the
+   dead URL from its cache (it does that before its own retry), so the reload is a real re-resolve,
+   not the same 403 again. The budget is TWO retries per track per failure episode, 700 ms then
+   1.8 s apart, because the 403s the server logs are bursts that clear in a second or two; a
+   successful `playing` wipes that track's history, so a later, unrelated failure gets its full
+   budget again (it used to be a one-shot flag that never reset). MEDIA_ERR_ABORTED is ignored
+   outright — a load cancelled by picking another row is not a stream failure. When both retries
+   fail the app says so out loud and, if the queue has a next track, moves to it (at most two
+   auto-skips in a row, so a dead network cannot walk through a whole playlist).
 
    The cache-buster `&r=` only stops a stopped-but-cached media load from being reused; /api/stream
    reads `id` and ignores everything else. onAudio() above only lets the ACTIVE element through, so a
    failed crossfade into audioAlt is still handled by the crossfade's own onErr, exactly as before. */
 (function(){
   'use strict';
-  if(!window.onAudio || !document.getElementById('audio')) return;
-  var el = document.getElementById('audio');
-  var tried = {};        // video id -> it has already used its one retry
+  if(!window.onAudio) return;
+  window.__svaraStreamGuard = true;   // the base `error` toast stands down: this block speaks instead
+  var tries = {};        // video id -> retries already spent in its current failure episode
+  var MAX_TRIES = 2;
   var skips = 0;         // consecutive auto-skips; reset by any successful start
 
   function curItem(){
     try{ if(!queue || !seq || cur < 0 || cur >= seq.length) return null; return queue[seq[cur]] || null }
     catch(e){ return null }
   }
-  function sameStream(it){
+  function sameStream(it, el){
     try{
-      if(!it) return false;
+      if(!it || !el) return false;
       var s = el.getAttribute('src') || '', base = '/api/stream?id=' + it.id;
       /* the retry's own URL carries `&r=<stamp>` — this must still count as THE SAME stream, or the
          second failure would be ignored and the player would sit dead on a track it cannot play. */
@@ -12390,11 +12410,19 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
     return t.length > 42 ? t.slice(0,41) + '…' : t;
   }
 
-  onAudio('playing', function(){ skips = 0 });
-  onAudio('error', function(){
+  onAudio('playing', function(){
+    skips = 0;
     var it = curItem();
-    if(!it || !it.id || !sameStream(it)) return;          // not a failed track load (empty src, a probe)
-    if(tried[it.id]){
+    if(it && it.id) delete tries[it.id];   // a good start wipes that track's failure history
+  });
+  onAudio('error', function(){
+    var el = this;                          // the ACTIVE element the event fired on (see the head)
+    var e = el && el.error;
+    if(e && e.code === 1) return;           // MEDIA_ERR_ABORTED — a cancelled load is not a failure
+    var it = curItem();
+    if(!it || !it.id || !sameStream(it, el)) return;      // not a failed track load (empty src, a probe)
+    var n = tries[it.id] || 0;
+    if(n >= MAX_TRIES){
       if(cur + 1 < seq.length && skips < 2){
         skips++;
         toast('Couldn’t play “' + label(it) + '” — trying the next track');
@@ -12404,16 +12432,19 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
       }
       return;
     }
-    tried[it.id] = true;
-    var id = it.id;
-    toast('Reconnecting “' + label(it) + '”…');
+    var id = it.id, wait = n ? 1800 : 700;
+    tries[id] = n + 1;
+    toast((n ? 'Retrying “' : 'Reconnecting “') + label(it) + '”…');
     setTimeout(function(){
       var now = curItem();
       if(!now || now.id !== id) return;                   // the user moved on while we waited
-      try{ el.src = '/api/stream?id=' + id + '&r=' + Date.now() }catch(e){ return }
-      var p = el.play();
+      var target = (typeof audio !== 'undefined' && audio) ? audio : el;
+      /* WAVE 29: clear first, then load. Assigning `src` alone leaves a failed MEDIA load's error
+         state readable for a moment; load() starts the new resource from a clean slate. */
+      try{ target.src = '/api/stream?id=' + id + '&r=' + Date.now(); target.load() }catch(e){ return }
+      var p = target.play();
       if(p && p.catch) p.catch(function(){});             // a refusal is reported by `error`, not here
-    }, 700);
+    }, wait);
   });
 })();
 </script>
