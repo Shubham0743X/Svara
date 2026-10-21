@@ -18,7 +18,7 @@ img{display:block}
 .ic svg .f{fill:currentColor;stroke:none}
 #theme{position:fixed;inset:0;z-index:-1;background:#07070a;transition:opacity .55s ease;pointer-events:none}
 /* sidebar */
-#sb{width:236px;flex-shrink:0;background:rgba(15,15,21,.72);backdrop-filter:blur(8px);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px;z-index:5}
+#sb{width:236px;flex-shrink:0;background:rgba(15,15,21,.72);backdrop-filter:blur(8px);display:flex;flex-direction:column;padding:18px 12px;z-index:5}
 .logo{font-size:23px;font-weight:800;letter-spacing:-.5px;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 #sb nav{margin-top:20px;display:flex;flex-direction:column;gap:2px}
 .navit{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;font-size:14px;color:var(--dim);transition:.15s}
@@ -12065,12 +12065,43 @@ window.svaraLyrics={ cache:CACHE, prefetch:prefetch, ask:ask, load:function(){ r
    disappearing into a black wall. There is no second tone and no setting: these are the values.
    The low graphics levels keep a near-solid panel (a 24px backdrop blur over moving artwork is the
    most expensive thing this page could ask for) and every glyph keeps its contrast. */
-#sb{background:linear-gradient(180deg,rgba(28,28,38,.62),rgba(19,19,28,.71));
+/* WAVE 32 — THE SLAB'S GLASS ENDS IN A 3px FADE, NOT IN A ONE-PIXEL SEAM.
+   THE BUG: a full-height BLACK VERTICAL LINE at the panel's right edge, on every page, until a track
+   had been loaded. Measured, not guessed: the border was innocent (removing it changed nothing), so
+   were `box-shadow`, `#topBlur` and the shade. The line is the LAST DEVICE PIXEL OF ANY
+   BACKDROP-FILTERED ELEMENT at a fractional display scale: the filter's backdrop stops one pixel
+   short of the element's edge, so that column composes the film over the RAW page instead of over
+   the blurred backdrop. Where a bright hero starts right at the panel's edge the blurred backdrop is
+   bright (the 24px blur pulls the hero in) and the raw column is the near-black page — 17 against the
+   interior's 26 at 175%, nothing at 100/125/150/200%, which is why it came and went with display
+   scaling. It disappeared the moment playback started because the album wash (#ambGlow, z-index -1)
+   lights exactly that column: the line was a HOLE, not a paint.
+
+   WHY A FADE AND NOT A CLIP. `clip-path`, `mask` with a hard stop, a transparent border and
+   `overflow:hidden` were all tried on the panel and all measure IDENTICAL to the bug: Chromium
+   truncates the filter region exactly where the visible edge is, so the short column simply follows
+   the edge wherever it is put. A GRADUAL mask is the one thing that works — the leak is multiplied by
+   an alpha of ~0 at the edge, so it cannot show. Verified at 175% on an artist page: the profile
+   across the edge goes 26, 26, 26, 26, | 17 | 171 (a black hairline) before, and 24, 24, 23, 43, 75,
+   108, 141, 178 after — one continuous gradient into the artwork, no step and no line.
+
+   SHAPE OF THE CHANGE. The glass moved off the panel element onto #sb::before, which is 3px WIDER
+   than the slab and fades out over exactly those 3px, so the panel's own surface is untouched up to
+   its edge and the fade lands on the content beside it — over a gutter, a hero's left edge or a
+   cover sliding under (the carousels already bleed behind the panel, and a 3px fade there is
+   invisible). z-index -1 keeps the film under the rows and above the page, and the pseudo is not a
+   real element, so the playlist ⋮ menus, the ripple hosts and the falloff shadow are untouched. The
+   film gradient, the .76 dimming and the wave-23 shadow are unchanged — this is an edge fix, not a
+   retune. */
+#sb{background:none;position:relative;box-shadow:10px 0 34px -22px rgba(0,0,0,.95);
+  -webkit-backdrop-filter:none;backdrop-filter:none}
+#sb::before{content:'';position:absolute;inset:0 -3px 0 0;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(28,28,38,.62),rgba(19,19,28,.71));
   -webkit-backdrop-filter:blur(24px) saturate(140%) brightness(.76);
   backdrop-filter:blur(24px) saturate(140%) brightness(.76);
-  border-right:1px solid rgba(255,255,255,.1);
-  box-shadow:10px 0 34px -22px rgba(0,0,0,.95)}
-html[data-gfx="low"] #sb,html[data-gfx="reduced"] #sb{
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 3px),rgba(0,0,0,0) 100%);
+  mask-image:linear-gradient(to right,#000 calc(100% - 3px),rgba(0,0,0,0) 100%)}
+html[data-gfx="low"] #sb::before,html[data-gfx="reduced"] #sb::before{
   -webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(20,20,28,.97)}
 </style>
 <style id="v26topblurcss">
