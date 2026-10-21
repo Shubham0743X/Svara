@@ -4586,7 +4586,7 @@ function setRender(){
     ? setCfmRow('Remove every liked song?','Clear','likes_yes')
     : setRow('Clear likes','Empties Liked music ('+Object.keys(favs||{}).length+' songs)','<button class="setAct danger" type="button" data-setact="likes">Clear</button>');
   h += (setCfm==='import')
-    ? setCfmRow('Replace your Svara data with '+(setPend?Object.keys(setPend).length:0)+' keys from the file?','Import','import_yes')
+    ? setCfmRow('Replace your Svara data with '+(setPend?Object.keys(setPend).length:0)+' keys ('+(setPend?setAlbumCount(setPend['sv_liked_albums']):0)+' liked albums) from the file?','Import','import_yes')
     : setRow('Export','Downloads every Svara localStorage key as JSON','<button class="setAct" type="button" data-setact="export">Export</button>')+
       setRow('Import','Restores a file exported here — nothing is written unless it validates','<button class="setAct" type="button" data-setact="import">Import</button>');
   /* WAVE 28 — the factory reset. The LAST row of the panel's most destructive group, behind a
@@ -4802,7 +4802,18 @@ function setClearLikes(){
   try{ refreshHearts() }catch(e){}
   toast('Liked music cleared');
 }
+/* how many albums a stored/raw sv_liked_albums value holds. Export, the Import preview and the
+   Import toast all report this same number, so the panel and the file can never disagree. */
+function setAlbumCount(raw){
+  try{
+    var o = typeof raw==='string' ? JSON.parse(raw) : raw;
+    return (o && typeof o==='object' && !Array.isArray(o)) ? Object.keys(o).length : 0;
+  }catch(e){ return 0 }
+}
 function setExport(){
+  /* liked albums live in their own layer and are only written to storage when a heart is tapped.
+     Flush that layer first, so a file can never miss an album this session is showing. */
+  try{ if(typeof saveLikedAlbums==='function') saveLikedAlbums() }catch(e){}
   var keys = {}, n = 0, k;
   try{
     for(var i=0;i<localStorage.length;i++){
@@ -4819,7 +4830,7 @@ function setExport(){
     a.download = 'svara-data-'+new Date().toISOString().slice(0,10)+'.json';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href) }, 5000);
-    toast('Exported '+n+' keys');
+    toast('Exported '+n+' keys · '+setAlbumCount(keys['sv_liked_albums'])+' liked albums');
   }catch(e){ toast('Export failed: '+e.message) }
 }
 function setImportFile(file){
@@ -4843,7 +4854,7 @@ function setImportFile(file){
     var n = Object.keys(out).length;
     if(!n){ toast('Import failed: no Svara data in the file'); return }
     setPend = out; setCfm = 'import'; setRender();
-    toast('Loaded '+n+' keys — press Import to apply');
+    toast('Loaded '+n+' keys ('+setAlbumCount(out['sv_liked_albums'])+' liked albums) — press Import to apply');
   };
   fr.onerror = function(){ toast('Import failed: could not read the file') };
   fr.readAsText(file);
@@ -4866,7 +4877,7 @@ function setImportApply(){
     return;
   }
   setRefresh();
-  toast('Imported '+n+' keys');
+  toast('Imported '+n+' keys · '+setAlbumCount(out['sv_liked_albums'])+' liked albums');
 }
 /* ===== WAVE 28 — RESET APP =====================================================
    Erases every key this app owns — the same `sv_`/`ml_` allowlist Export and Import use, so a key
@@ -4910,6 +4921,19 @@ function setRefresh(){
   favs = LSget('sv_favs', {}) || {};
   pls  = LSget('sv_pls', {}) || {};
   shist = LSget('sv_shist', []) || [];
+  /* Liked albums (4AQ) and the taste-exclusion list (4AR) are globals read once at boot. Re-read
+     them BEFORE updatePlRows() below, because its sidebar count comes from likedAlbumCount(). */
+  try{ if(typeof reloadLikedAlbums==='function') reloadLikedAlbums() }catch(e){}
+  try{
+    if(typeof TASTE_EXCLUDED !== 'undefined'){
+      var te = LSget('sv_taste_excluded', []);
+      TASTE_EXCLUDED = Array.isArray(te) ? te : [];
+    }
+  }catch(e){}
+  try{ if(typeof repaintAlbumHearts==='function') repaintAlbumHearts() }catch(e){}
+  try{ if(typeof refreshSidebar==='function') refreshSidebar() }catch(e){}
+  /* the Liked albums page, if it is the page on screen, must be rebuilt from the imported set */
+  try{ if(typeof isLikedAlbumsViewOpen==='function' && isLikedAlbumsViewOpen() && typeof renderLikedAlbumsView==='function') renderLikedAlbumsView() }catch(e){}
   var lp = LSget('sv_lyr', null); if(lp) lyrPref = lp;
   recentTracks = LS.get('sv_tracks', []) || [];
   recentIds = LS.get('sv_recent_ids', []) || [];
@@ -6304,6 +6328,22 @@ function refreshSidebar(){
 }
 function isAlbumLiked(id){ return !!(id && LIKED_ALBUMS[id]) }
 function saveLikedAlbums(){ LSset('sv_liked_albums', LIKED_ALBUMS) }
+/* IMPORT/EXPORT — LIKED_ALBUMS is read ONCE, when this layer boots. An import writes the key
+   straight into localStorage, so without this the hearts, the sidebar count and the Liked albums
+   page kept reading the OLD object until a restart — and the first heart tap afterwards then wrote
+   that stale object back over the imported albums. setRefresh() calls this after every import. */
+function reloadLikedAlbums(){
+  LIKED_ALBUMS = LSget('sv_liked_albums', {}) || {};
+  if(typeof LIKED_ALBUMS !== 'object' || Array.isArray(LIKED_ALBUMS)) LIKED_ALBUMS = {};
+  return LIKED_ALBUMS;
+}
+/* repaint every album heart currently on screen from the (just re-read) state */
+function repaintAlbumHearts(){
+  try{
+    var ns = document.querySelectorAll('[data-albheart]');
+    for(var i=0;i<ns.length;i++) paintAlbHeart(ns[i]);
+  }catch(e){}
+}
 function likedAlbumList(){ return Object.keys(LIKED_ALBUMS).map(function(k){ return LIKED_ALBUMS[k] }).filter(function(x){ return x && x.id }) }
 /* Wave 20 — one heart button, TWO glyphs. Both are painted into every album heart; CSS (v4aqcss)
    shows the plain heart at rest and swaps the slashed one in on hover/focus of a LIKED album, so
