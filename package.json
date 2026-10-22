@@ -26,6 +26,8 @@
     "files": [
       "**/*",
       "!.freebuff/**",
+      "!**/*.log",
+      "!screenshots/**",
       "!dist/**",
       "!PLAN.md",
       "!WAVE0-NOTES.md",
