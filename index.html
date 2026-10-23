@@ -497,6 +497,11 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
 <symbol id="i-repeat1" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M12.4 9.5v5.2"/><path d="M10.9 9.8 12.4 9.5v1.6"/></symbol>
 <symbol id="i-dice" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M12 21c3.75 0 5.625 0 6.939-.955a5 5 0 0 0 1.106-1.106C21 17.625 21 15.749 21 12s0-5.625-.955-6.939a5 5 0 0 0-1.106-1.106C17.625 3 15.749 3 12 3s-5.625 0-6.939.955A5 5 0 0 0 3.955 5.06C3 6.375 3 8.251 3 12s0 5.625.955 6.939a5 5 0 0 0 1.106 1.106C6.375 21 8.251 21 12 21"/><path d="M8.25 8H8m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm-.25 8H8m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm7.75 0H16m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm-4.25-4H12m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm3.75-4H16m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Z"/></symbol>
 <symbol id="i-dots" viewBox="0 0 24 24"><circle class="f" cx="12" cy="5" r="1.7"/><circle class="f" cx="12" cy="12" r="1.7"/><circle class="f" cx="12" cy="19" r="1.7"/></symbol>
+<!-- WAVE 30 — the Up-next lock (closed / open, keyhole dot in the body) and the two-bar drag
+     handle. Stroke glyphs like the rest of the sprite: .ic svg paints them at 1.8px, round caps. -->
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="3.2" y="10" width="17.6" height="10.8" rx="2.6"/><path d="M7.4 10V7a4.6 4.6 0 0 1 9.2 0v3"/><circle class="f" cx="12" cy="15.4" r="1.15"/></symbol>
+<symbol id="i-lock-open" viewBox="0 0 24 24"><rect x="3.2" y="10" width="17.6" height="10.8" rx="2.6"/><path d="M7.4 10V7a4.6 4.6 0 0 1 8.7-2.3"/><circle class="f" cx="12" cy="15.4" r="1.15"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M4.6 9.6h14.8M4.6 14.4h14.8"/></symbol>
 <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 17v1.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V17"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
 <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
@@ -633,7 +638,7 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
         <button class="tab" data-tab="lyr">Lyrics</button>
       </div>
       <div class="pvctx" id="pvCtx"></div>
-      <div class="pvhead" id="pvHead"><button class="go" id="clearQ">Clear</button></div>
+      <div class="pvhead" id="pvHead"><button class="go qlock" id="qLock" type="button" title="Queue locked"><span class="ic"><svg><use href="#i-lock"/></svg></span></button><button class="go" id="clearQ">Clear</button></div>
       <div id="pvQueue"></div>
       <div id="pvLyrics" hidden></div>
     </aside>
@@ -3167,23 +3172,21 @@ renderQueue = function(){
   var ctx = $('#pvCtx'); if(ctx) ctx.textContent = it ? ('Playing from '+(it.artist||'your queue')) : 'Nothing playing';
   if(!queue.length){ el.innerHTML = '<div class="empty">Queue is empty — add songs from ⋮ → “Add to queue”.</div>';
     if($('#pvFab')) syncFab(); return }
-  var curQi = it ? queue.findIndex(function(x){ return x.id===it.id }) : -1;
+  var curQi = (cur>=0 && cur<seq.length && queue[seq[cur]]) ? seq[cur]
+            : (it ? queue.findIndex(function(x){ return x.id===it.id }) : -1);
+  /* WAVE 30 — the queue now KEEPS what it has played. Wave 5 showed only “now + upcoming”, so a
+     finished track vanished from the list; the row order is now the PLAY ORDER itself (`seq`), which
+     puts the tracks already heard ABOVE the now-playing row and the ones still to come below it.
+     Nothing is dropped from `queue` (that was already true — only the view filtered them out), so
+     repeat-all and a click on a past row behave exactly as before. `seq` stays the single source of
+     truth for the order, which is what the unlocked drag handle rewrites (see #v30qjs). */
   var order = [];
-  if(curQi>=0) order.push(curQi);
-  var ci = seq.indexOf(curQi);
-  /* Wave 5 (UI-5): “Up next” now lists only the tracks that have NOT played yet, in playback
-     order. It used to WRAP the play order around (seq.slice(ci+1).concat(seq.slice(0,ci))), which
-     parked every already-played track at the BOTTOM of the list — i.e. behind the songs autoplay
-     keeps appending at the tail — so with autoplay on they could never be reached again: they just
-     piled up at the end and only played once nothing new was being added. The wrap is kept ONLY
-     for repeat-all, the one mode where playback genuinely does return to them. */
-  var walk = ci>=0 ? seq.slice(ci+1).concat(repeat==='all' ? seq.slice(0,ci) : []) : seq.slice();
-  walk.forEach(function(qi){ if(qi>=0 && qi<queue.length && order.indexOf(qi)<0) order.push(qi) });
-  /* safety net — only entries the play order never mentions at all (never played, never upcoming) */
-  queue.forEach(function(_,i){ if(order.indexOf(i)<0 && seq.indexOf(i)<0) order.push(i) });
-  el.innerHTML = order.map(function(qi,pos){
+  seq.forEach(function(qi){ if(qi>=0 && qi<queue.length && order.indexOf(qi)<0) order.push(qi) });
+  /* safety net — an entry the play order never mentions still has to be reachable */
+  queue.forEach(function(_,i){ if(order.indexOf(i)<0) order.push(i) });
+  el.innerHTML = order.map(function(qi){
     var x = queue[qi]; if(!x) return '';
-    var isCur = (pos===0 && curQi>=0);
+    var isCur = (curQi>=0 && qi===curQi);
     var A = artistLinksHTML(x);   // 4Z-b: computed once — an empty artist must not leave a stray " • "
     if(isCur && startingNow()) A = 'Starting…';   // 4AE: the now-playing row mirrors the stream state
     return '<div class="row '+(isCur?'cur':'')+'" data-q="'+qi+'" data-qid="'+esc(x.id)+'">'+
@@ -12543,6 +12546,216 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
       if(p && p.catch) p.catch(function(){});             // a refusal is reported by `error`, not here
     }, wait);
   });
+})();
+</script>
+
+<style id="v30qcss">
+/* ===== WAVE 30 — Up next: the lock, the drag handle, and a queue that keeps its history ===== */
+/* The padlock sits LEFT of Clear. `.pvhead .go{margin-left:auto}` would give every button an auto
+   margin (splitting the free space), so only the FIRST one keeps it: the group stays right-aligned
+   however many buttons the panel has — Autoplay similar, the lock, Clear. */
+#pvHead .go{margin-left:0}
+#pvHead .go:first-child{margin-left:auto}
+#qLock{padding:5px;border-radius:8px;color:var(--dim);display:inline-flex;align-items:center;justify-content:center;transition:color .12s,background .12s}
+#qLock .ic{width:17px;height:17px}
+#qLock:hover{color:var(--tx);background:var(--panel)}
+#qLock.un{color:var(--acc)}
+/* The two-bar handle: hidden while the queue is LOCKED (the default), and the only thing that
+   replaces the row's Like heart once it is unlocked. `disabled` = a row that cannot be dragged
+   (already played, or the one playing now). */
+#pvQueue .qgrip{display:none;padding:7px;border-radius:50%;color:var(--dim);cursor:grab;touch-action:none}
+#pvQueue .qgrip .ic{width:17px;height:17px}
+#pvQueue .qgrip:hover{color:var(--tx);background:var(--panel)}
+#pvQueue .qgrip[disabled]{cursor:default;opacity:.26}
+#pvQueue .qgrip[disabled]:hover{color:var(--dim);background:none}
+html[data-qunlock="1"] #pvQueue .qgrip{display:inline-flex}
+html[data-qunlock="1"] #pvQueue .favh{display:none}
+/* the lifted row, while it is being carried */
+#pvQueue .row.qdrag{background:var(--panel2);box-shadow:0 10px 26px rgba(0,0,0,.5);position:relative;z-index:2}
+#pvQueue.qdragging,#pvQueue.qdragging .row{cursor:grabbing}
+</style>
+<script id="v30qjs">
+/* ===== WAVE 30 — unlock the Up-next list =====
+   (1) LOCK / UNLOCK. The padlock next to Clear is CLOSED by default. Unlocked, a queue row swaps
+       its Like heart for the two-bar drag handle — ⋮ stays, one slot to the left, now the last
+       button in the row. The state is a display preference only: it lives in localStorage and
+       never touches `queue`, `seq` or `cur`.
+   (2) DRAG TO REORDER. The handle moves a track inside the UPCOMING part of the list: the playing
+       row is the divider (everything above it has been heard and cannot be moved, the playing row
+       is pinned), everything below is draggable. The drop rewrites `seq` — playback order — so the
+       next track follows exactly what the list shows.
+   (3) The list itself now draws in seq order (see renderQueue): played rows stay above the now-
+       playing row, and the panel parks that row at the top whenever the track changes, so the
+       history is one scroll up rather than gone. */
+(function(){
+'use strict';
+var KEY = 'sv_q_unlock';
+var unlocked = (function(){ try{ return LSget(KEY, false) === true }catch(e){ return false } })();
+var lastScrollId = null;
+
+function box(){ return document.getElementById('pvQueue') }
+
+function paintLock(){
+  document.documentElement.setAttribute('data-qunlock', unlocked ? '1' : '0');
+  var b = document.getElementById('qLock'); if(!b) return;
+  b.classList.toggle('un', unlocked);
+  b.setAttribute('aria-pressed', unlocked ? 'true' : 'false');
+  b.title = unlocked ? 'Queue unlocked — drag the ☰ handle to reorder'
+                     : 'Queue locked — unlock to reorder songs';
+  b.innerHTML = '<span class="ic">' + ic(unlocked ? 'i-lock-open' : 'i-lock') + '</span>';
+}
+
+/* Put a handle on every queue row and decide which of them may be dragged. Runs after each
+   renderQueue(), so it survives every repaint (a track change, a Like, a credit repair). */
+function decorate(){
+  var el = box(); if(!el) return;
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var ci = -1;
+  for(var i=0;i<rows.length;i++){ if(rows[i].classList.contains('cur')){ ci = i; break } }
+  rows.forEach(function(r, i){
+    var rr = r.querySelector('.rr'); if(!rr) return;
+    var g = rr.querySelector('[data-qgrip]');
+    if(!g){
+      g = document.createElement('button');
+      g.type = 'button';
+      g.className = 'qgrip';
+      g.setAttribute('data-qgrip', '1');
+      g.innerHTML = '<span class="ic">' + ic('i-grip') + '</span>';
+      rr.appendChild(g);
+    }
+    var movable = (ci < 0) || (i > ci);
+    g.disabled = !movable;
+    g.title = movable ? 'Drag to move this song'
+            : (i === ci ? 'Playing now — drag the songs below it'
+                        : 'Already played — drag the songs below it');
+  });
+}
+
+/* Park the now-playing row at the top of the panel. Only the panel's own scroll, only while the
+   player page and the Up next tab are actually on screen. */
+function scrollToCurrent(){
+  var el = box(); if(!el || el.hidden) return;
+  if(!document.body.classList.contains('pv')) return;
+  var row = el.querySelector('.row.cur'); if(!row) return;
+  var top = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 4;
+  el.scrollTop = Math.max(0, top);
+}
+
+var _rq30 = renderQueue;
+renderQueue = function(){
+  _rq30.apply(this, arguments);
+  decorate();
+  var it = (typeof nowItem === 'function') ? nowItem() : null;
+  var id = it ? it.id : null;
+  if(id !== lastScrollId){ lastScrollId = id; scrollToCurrent() }
+};
+
+/* A fresh open of the player page always re-parks the playing row (the panel may have been left
+   scrolled into the history), and so does switching back from the Lyrics tab. */
+var _openPV30 = openPV;
+openPV = function(){ lastScrollId = null; return _openPV30.apply(this, arguments) };
+try{
+  document.querySelectorAll('.tab').forEach(function(t){
+    if(t.dataset.tab !== 'up') return;
+    t.addEventListener('click', function(){ lastScrollId = null; renderQueue(); setTimeout(scrollToCurrent, 0) });
+  });
+}catch(e){}
+
+/* ---------- the lock ---------- */
+try{
+  var lockBtn = document.getElementById('qLock');
+  if(lockBtn) lockBtn.addEventListener('click', function(){
+    unlocked = !unlocked;
+    try{ LSset(KEY, unlocked) }catch(e){}
+    paintLock();
+    toast(unlocked ? 'Queue unlocked — drag ☰ to reorder' : 'Queue locked');
+  });
+}catch(e){}
+
+/* ---------- drag to reorder ---------- */
+var dragRow = null, dragPointer = null;
+
+function rowOf(n){ try{ return n && n.closest ? n.closest('.row[data-q]') : null }catch(e){ return null } }
+
+document.addEventListener('pointerdown', function(e){
+  if(!unlocked || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  var g = null; try{ g = e.target.closest ? e.target.closest('[data-qgrip]') : null }catch(err){}
+  if(!g || g.disabled) return;
+  var row = rowOf(g); if(!row) return;
+  e.preventDefault(); e.stopPropagation();   // never let the row's own click start playback
+  dragRow = row; dragPointer = e.pointerId;
+  row.classList.add('qdrag');
+  var el = box(); if(el) el.classList.add('qdragging');
+  try{ g.setPointerCapture(e.pointerId) }catch(err){}
+}, true);
+
+document.addEventListener('pointermove', function(e){
+  if(!dragRow || (dragPointer != null && e.pointerId !== dragPointer)) return;
+  var el = box(); if(!el || !dragRow.parentNode) return;
+  e.preventDefault();
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var ci = -1;
+  for(var i=0;i<rows.length;i++){ if(rows[i].classList.contains('cur')){ ci = i; break } }
+  var zone = (ci < 0) ? rows : rows.slice(ci + 1);       // upcoming only — history and the
+  if(zone.indexOf(dragRow) < 0) return;                   // now-playing row never move
+  var y = e.clientY, target = null;
+  for(var j=0;j<zone.length;j++){
+    var r = zone[j]; if(r === dragRow) continue;
+    var b = r.getBoundingClientRect();
+    if(y < b.top + b.height / 2){ target = r; break }
+  }
+  if(target){ if(dragRow.nextElementSibling !== target) el.insertBefore(dragRow, target) }
+  else {
+    var last = zone[zone.length - 1];
+    if(last && last !== dragRow && dragRow.nextElementSibling) el.appendChild(dragRow);
+  }
+}, { passive:false });
+
+function endDrag(commit){
+  if(!dragRow) return;
+  var row = dragRow; dragRow = null; dragPointer = null;
+  row.classList.remove('qdrag');
+  var el = box(); if(el) el.classList.remove('qdragging');
+  if(commit) commitOrder(); else renderQueue();
+}
+
+document.addEventListener('pointerup', function(e){
+  if(dragPointer != null && e.pointerId !== dragPointer) return;
+  endDrag(true);
+});
+document.addEventListener('pointercancel', function(){ endDrag(true) });
+
+/* Turn the on-screen order back into `seq`. `queue` itself is not touched: its indexes are the
+   entries' identity for the whole engine, so only the play order (and `cur`'s place in it) moves. */
+function commitOrder(){
+  var el = box(); if(!el) return;
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var curQ = (cur >= 0 && cur < seq.length) ? seq[cur] : -1;
+  var seen = {}, out = [];
+  rows.forEach(function(r){
+    var n = parseInt(r.getAttribute('data-q'), 10);
+    if(!(n >= 0) || n >= queue.length || seen[n]) return;
+    seen[n] = 1; out.push(n);
+  });
+  queue.forEach(function(_, i){ if(!seen[i]){ seen[i] = 1; out.push(i) } });
+  var same = out.length === seq.length && out.every(function(n, i){ return seq[i] === n });
+  if(same) return;
+  seq = out;
+  cur = curQ >= 0 ? out.indexOf(curQ) : 0;
+  if(cur < 0) cur = 0;
+  renderQueue();
+}
+
+/* A click on the handle is not a row click (the capture listener above already stops it, this is
+   the belt-and-braces for any path that gets its own capture listener first). */
+document.addEventListener('click', function(e){
+  var g = null; try{ g = e.target.closest ? e.target.closest('[data-qgrip]') : null }catch(err){}
+  if(!g) return;
+  e.preventDefault(); e.stopPropagation();
+}, true);
+
+paintLock();
+try{ if(box() && box().querySelector('.row[data-q]')) decorate() }catch(e){}
 })();
 </script>
 </body>
