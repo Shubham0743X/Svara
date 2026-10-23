@@ -689,6 +689,10 @@ function onAudio(ev,fn){
 let queue=[],seq=[],cur=-1;           // seq = play order as queue indexes
 let repeat='off',shuffle=false,volume=80,wasVol=80;
 let curList=[],quickList=[],curPage='home';        // curList = list rows in main area; quickList = Home Quick picks
+/* the playlist whose page is on screen right now — set by openPl(), cleared by every other view
+   (showDyn/goHome). It is what lets the row's ⋮ menu offer "Remove from …": the same listHTML()
+   rows are shared by playlists, Liked music, search and history, so the row alone cannot say. */
+var plCtx=null;
 let lyr={plain:'',synced:'',cur:-1,timer:null,loadedFor:null};
 
 /* ============ nav / views ============ */
@@ -701,14 +705,14 @@ function setNav(on){
    boot path that lasted until #v3js's homeLine() first ran, 600ms in. The markup now boots the row
    in its idle state and every later visit is repainted by the showDyn/goHome wrapper (which calls
    homeLine() in the same tick as this function), so nothing has to blank it any more. */
-function goHome(){curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
+function goHome(){plCtx=null;curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
 /* WAVE 14 — a dyn page can now say HOW to rebuild itself. `list` = {head, cls}: the page's own bar
    (if it has one) plus the class its listHTML() list was built with. A repaint — a Like, an unlike,
    anything that calls refreshHearts() — then rebuilds the page the user is actually looking at.
    Without it, refreshHearts() fell back to a bare listHTML(curList): that is exactly what turned
    the Quick picks page's grid back into a plain list and dropped its Back / Play all bar. */
 var dynList=null;
-function showDyn(title,sub,html,list){dynList=(list&&typeof list==='object')?list:null;curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
+function showDyn(title,sub,html,list){plCtx=null;dynList=(list&&typeof list==='object')?list:null;curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
 /* Rebuild the current dyn page from the same recipe it was built with. Returns false when the page
    never registered one, so the caller keeps the rebuild it had before this wave. */
 function repaintDyn(){
@@ -729,7 +733,10 @@ function updatePlRows(){
   $('#plList').innerHTML=h+'<div class="sbt" style="opacity:.35">Library opens here</div>';
 }
 function openLiked(){const items=Object.values(favs).filter(x=>x&&x.id);if(!items.length){toast('No liked songs yet — tap the ♥');return}showDyn('Liked music',items.length+' songs',listHTML(items));curList=items;register(items);}
-function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlist is empty');return}showDyn(esc(name),items.length+' songs · '+esc('click ⋮ to remove'),listHTML(items));curList=items;register(items);}
+function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlist is empty');return}
+  showDyn(esc(name),items.length+' songs · '+esc('click ⋮ to remove'),listHTML(items));
+  plCtx=name;                                   /* showDyn cleared it; this page is the playlist */
+  curList=items;register(items);}
 
 /* ============ rows & rails ============ */
 /* Wave 4AD — the size token is now context-specific. thumb(it) with no size still means
@@ -1447,6 +1454,18 @@ function openPlModal(it){
   $('#npGo').onclick=()=>{const n=$('#npName').value.trim();if(!n)return;addToPlaylist(n,it);closeModal()};
   $('#npName').onkeydown=e=>{if(e.key==='Enter')$('#npGo').click()};
 }
+/* take one song out of a playlist. The queue holds its own copies of these entries, so playback
+   and the upcoming list are untouched — same promise the Delete-playlist confirm makes. */
+function removeFromPlaylist(name,it){
+  var arr=pls[name]; if(!arr||!it)return;
+  var at=arr.findIndex(function(x){return x&&x.id===it.id}); if(at<0)return;
+  arr.splice(at,1);
+  saveAll();
+  if(!arr.length){ plCtx=null; goHome(); toast('Removed from “'+name+'” · playlist is empty'); return }
+  try{ openPl(name) }catch(e){updatePlRows()}      // rebuild the page the row came from
+  updatePlRows();
+  toast('Removed from “'+name+'”');
+}
 function closeModal(){$('#modal').classList.remove('show')}
 
 /* ============ download ============ */
@@ -1475,6 +1494,10 @@ function openMenu(ev,id){
   const cur=nowItem();
   const lines=[];
   const fav=!!favs[id];
+  /* "Remove from playlist" only exists when the row that opened this menu belongs to a playlist
+     page that is actually on screen — a queue row, the player's ⋮ or a search result must not
+     offer it. */
+  const plName=(plCtx&&ev.target&&ev.target.closest&&ev.target.closest('#dynSec'))?plCtx:null;
   const go=cls=>`<button class="mi ${cls||''}" data-a="${id}" data-act="...">`;
   m.innerHTML=`
     <button class="mi" data-a="${esc(id)}" data-act="fav"><span class="ic">${ic(fav?'i-heart-off':'i-heart-o')}</span>${fav?'Remove from Liked music':'Add to Liked music'}</button>
@@ -1482,6 +1505,7 @@ function openMenu(ev,id){
     <button class="mi" data-a="${esc(id)}" data-act="next"><span class="ic">${ic('i-next')}</span>Play next</button>
     <button class="mi" data-a="${esc(id)}" data-act="qadd"><span class="ic">${ic('i-plus')}</span>Add to queue</button>
     ${queued?`<button class="mi dim" data-a="${esc(id)}" data-act="qrm"><span class="ic">${ic('i-x')}</span>Remove from queue</button>`:''}
+    ${plName?`<button class="mi dim" data-a="${esc(id)}" data-act="plrm" data-pl="${esc(plName)}"><span class="ic">${ic('i-x')}</span>Remove from “${esc(plName)}”</button>`:''}
     ${(typeof tasteExcluded==='function'&&tasteExcluded(id))
       ?`<button class="mi" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-plus')}</span>Add back to taste</button>`
       :`<button class="mi dim" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-x')}</span>Remove from taste</button>`}
@@ -1508,6 +1532,7 @@ document.addEventListener('click',e=>{
     else if(act==='next')insertNext(it);
     else if(act==='qadd'){addQueue(it,true);toast('Added to queue')}
     else if(act==='qrm')removeFromQueue(it.id);
+    else if(act==='plrm')removeFromPlaylist(mm.dataset.pl,it);
     else if(act==='taste')toggleTasteExcluded(it);   /* 4AR */
     else if(act==='pl')openPlModal(it);
     else if(act==='dl')downloadTrack(it);
