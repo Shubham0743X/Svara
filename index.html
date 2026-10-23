@@ -637,7 +637,6 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
         <button class="tab on" data-tab="up">Up next</button>
         <button class="tab" data-tab="lyr">Lyrics</button>
       </div>
-      <div class="pvctx" id="pvCtx"></div>
       <div class="pvhead" id="pvHead"><button class="go qlock" id="qLock" type="button" title="Queue locked"><span class="ic"><svg><use href="#i-lock"/></svg></span></button><button class="go" id="clearQ">Clear</button></div>
       <div id="pvQueue"></div>
       <div id="pvLyrics" hidden></div>
@@ -1297,7 +1296,6 @@ function setNowUI(it){
   const ma=$('#mArt'),pa=$('#pvImg');
   if(art){ma.src=art;ma.style.display='';pa.src=art;$('#pvArtBg').style.backgroundImage=`url("${art}")`;$('#mArtPh').style.display='none'}
   else{ma.style.display='none';pa.removeAttribute('src');$('#pvArtBg').style.backgroundImage='';$('#mArtPh').style.display='flex'}
-  $('#pvCtx').textContent=queue.length?`Playing from ${queue[seq[cur]]?.artist||'your queue'}`:'';
   paintFavs();setTheme(art);resetLyrics();
 }
 function loadAt(seqPos,autoplay=true){
@@ -1385,7 +1383,6 @@ function paintRowCursor(){document.querySelectorAll('.row.cur').forEach(r=>{if(!
 function renderQueue(){
   const el=$('#pvQueue');
   const it=nowItem();
-  $('#pvCtx').textContent=it?`Playing from ${it.artist||'your queue'}`:'Nothing playing';
   if(!queue.length){el.innerHTML='<div class="empty">Queue is empty — add songs from ⋮ → “Add to queue”.</div>';return}
   el.innerHTML=queue.map((x,i)=>{
     const isCur=it&&it.id===x.id;
@@ -1824,7 +1821,7 @@ document.addEventListener('click',e=>{const pl=e.target.closest('[data-lib]');if
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
   const lyrOn=t.dataset.tab==='lyr';
-  $('#pvLyrics').hidden=!lyrOn;$('#pvQueue').hidden=lyrOn;$('#pvHead').hidden=lyrOn;$('#pvCtx').hidden=lyrOn;
+  $('#pvLyrics').hidden=!lyrOn;$('#pvQueue').hidden=lyrOn;$('#pvHead').hidden=lyrOn;
   if(lyrOn){ensureLyricsUI();if(!lyr.loadedFor)loadLyrics()}
 });
 /* lyrics provider seg (built on first open of lyrics) */
@@ -1901,13 +1898,22 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
 /* 4AO: the panel is a three-part column — header (fixed in place) / scroller / jump pill.
    The header lives OUTSIDE the scroller, so it can never scroll away. */
 #pvLyrics:not([hidden]){position:relative;display:flex;flex-direction:column;overflow:hidden}
-.lyrbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t f" "a a" "s s";align-items:center;gap:8px 12px;padding:12px 2px;border-bottom:1px solid var(--line)}
-.lyrbar .lyrt{grid-area:t;min-width:0;margin:0;font-size:17px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* UI-10: 14px -> 17px — the rail (490px at 1784) had room; still nowrap + ellipsis */
-.lyrbar .lyra{grid-area:a;min-width:0;font-size:11.5px;font-weight:500;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lyrbar .lyrchip{grid-area:s}
-.lyrbar #lyrFull{grid-area:f;align-self:center;justify-self:end}
-.lyrchip{display:flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:2px;width:100%}
-.lyrchip button{flex:1;min-width:0;padding:6px 8px;border-radius:99px;font-size:10.5px;font-weight:700;letter-spacing:.4px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* WAVE 31 — ONE header row: [provider pill][fullscreen button], right-aligned, both on the same
+   centre line. #lyrHead is the sliding wrapper: collapsed (0fr) and lifted 8px while the pointer is
+   away from the panel, full height again on hover or keyboard focus. The scroller below it grows /
+   shrinks with it, so the lyrics stay centred (the v2js lyrics layer re-measures every frame). */
+#lyrHead{flex:0 0 auto;display:grid;grid-template-rows:0fr;opacity:0;transform:translateY(-8px);
+  transition:grid-template-rows .3s cubic-bezier(.22,1,.36,1),opacity .22s ease,transform .3s cubic-bezier(.22,1,.36,1)}
+/* :focus-visible (not :focus-within) — a MOUSE click on a pill or the fullscreen button must not
+   pin the header open after the pointer leaves; Tab-through still reveals it. */
+#pvLyrics:hover #lyrHead,#lyrHead:has(:focus-visible){grid-template-rows:1fr;opacity:1;transform:none}
+/* the clipper is a plain box: the bar's own padding + border would keep the 0fr track from
+   collapsing to 0 (an item's padding is part of its minimum contribution) */
+#lyrHead>.lyrclip{min-height:0;overflow:hidden}
+.lyrbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.lyrchip{display:flex;flex:0 0 auto;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:2px;width:auto}
+/* layout only — the pill's type, colours and ring come from the v5 provider-pill layer */
+.lyrchip button{flex:0 0 auto;white-space:nowrap;border-radius:99px}
 .lyrchip button.on{background:var(--panel2);color:var(--tx)}
 .lyrbtn{width:30px;height:30px;flex:0 0 auto;border-radius:50%;color:var(--dim);display:flex;align-items:center;justify-content:center}
 .lyrbtn:hover{background:var(--panel2);color:var(--tx)}
@@ -2416,12 +2422,13 @@ function lyrReopen(){
 ensureLyricsUI=function(){
   var host=$('#pvLyrics'); if(!host)return;
   if($('#lyrBar')){ lyrReopen(); return }
-  host.innerHTML='<div class="lyrbar" id="lyrBar">'+
-      '<div class="lyrt" id="lyrT"></div>'+
-      '<div class="lyra" id="lyrA"></div>'+
+  /* WAVE 31 — the header is ONE row now: the provider pills and the fullscreen button, side by
+     side. The song title / artist are gone (the player page already shows them, and the lyrics tab
+     needs the room); the row slides down on hover and retracts when the pointer leaves (#lyrHead). */
+  host.innerHTML='<div id="lyrHead"><div class="lyrclip"><div class="lyrbar" id="lyrBar">'+
       '<div class="lyrchip" id="lyrSeg"><button id="lYT">YouTube Music</button><button id="lLR">LRClib</button></div>'+
       '<button class="lyrbtn" id="lyrFull" title="Fullscreen lyrics"><span class="ic">'+ic('i-expand')+'</span></button>'+
-    '</div>'+
+    '</div></div></div>'+
     '<div id="lyrScroll"><div id="lyrBody"></div></div>'+
     '<button id="lyrJump" hidden><span class="ic">'+ic('i-down')+'</span>Jump to current</button>';
   paintLyrChip();
@@ -2446,6 +2453,36 @@ window.addEventListener('resize',function(){
   }
   updateLyrJump();
 },{passive:true});
+/* WAVE 31 — the lyrics header (provider pills + fullscreen button) collapses while the pointer is
+   away and slides back in on hover, so #lyrScroll gains / loses ~60px. The centred line is derived
+   from the scrollport height (bottom padding = half of it, follow target = height/2), so both have
+   to follow EVERY frame of that transition or the active line drifts up and slides back and the
+   last line can no longer reach the centre. A ResizeObserver on #lyrScroll fires on exactly those
+   frames; the recompute is on the INSTANT path for the same reason as the resize handler above. */
+var lyrSc=null, lyrRO=null, lyrH=-1;
+function lyrReflow(){
+  if(!lyrSc || !lyrSc.isConnected) return;
+  var h=lyrSc.clientHeight; if(h===lyrH) return;
+  var moved = lyrH >= 0;          /* the FIRST measurement is not a move — tab open keeps its own
+                                     smooth recentre from lyrReopen() */
+  lyrH=h;
+  sizeLyrPad();
+  if(moved && lyrAuto && lyr.mode==='synced' && lyr.lines && lyr.lines.length){
+    lyrInstant=true; try{ lyrRecenter(); } finally { lyrInstant=false; }
+  }
+  updateLyrJump();
+}
+function lyrWatch(){
+  var el=document.getElementById('lyrScroll');
+  if(!el || el===lyrSc) return;
+  lyrSc=el; lyrH=-1;
+  if(!window.ResizeObserver) return;
+  if(lyrRO) lyrRO.disconnect();
+  lyrRO=new ResizeObserver(lyrReflow); lyrRO.observe(el);
+}
+/* the lyrics UI is built lazily, and only once — hook its builder rather than the markup */
+var _ensureLyrUI=ensureLyricsUI;
+ensureLyricsUI=function(){ var r=_ensureLyrUI.apply(this,arguments); lyrWatch(); return r };
 loadLyrics=async function(){
   var body=$('#lyrBody'); if(!body)return;
   var it=nowItem();
@@ -3171,7 +3208,6 @@ paintSeek = function(){
 renderQueue = function(){
   var el = $('#pvQueue'); if(!el) return;
   var it = nowItem();
-  var ctx = $('#pvCtx'); if(ctx) ctx.textContent = it ? ('Playing from '+(it.artist||'your queue')) : 'Nothing playing';
   if(!queue.length){ el.innerHTML = '<div class="empty">Queue is empty — add songs from ⋮ → “Add to queue”.</div>';
     if($('#pvFab')) syncFab(); return }
   var curQi = (cur>=0 && cur<seq.length && queue[seq[cur]]) ? seq[cur]
@@ -11133,8 +11169,8 @@ if(sc && window.MutationObserver){ try{ new MutationObserver(scan).observe(sc, {
 <style id="v16pancss">
 /* ===== WAVE 16 — the player panel: an Up next ⇄ Lyrics slide, and the fullscreen crossfade ====
    (1) THE PANEL SLIDE. The two tab LABELS are untouched — they are the affordance, and the request
-   was to leave them exactly as they are. What moves is what sits UNDER them: the Up next trio
-   (#pvCtx "Playing from …", #pvHead "Autoplay similar / Clear", #pvQueue the list) on one side and
+   was to leave them exactly as they are.   What moves is what sits UNDER them: the Up next pair
+   (#pvHead "Autoplay similar / Clear", #pvQueue the list) on one side and
    #pvLyrics on the other. #v16panjs reads the side from `#pvLyrics.hidden`, which the app's own tab
    handler has already flipped by the time its observer runs.
    DIRECTION: Lyrics is the RIGHT-hand tab, so it arrives from the RIGHT and Up next arrives from the
@@ -11150,10 +11186,10 @@ if(sc && window.MutationObserver){ try{ new MutationObserver(scan).observe(sc, {
    the class in the same case, and the rule below covers a level change mid-session. */
 @keyframes svPanInL{from{transform:translateX(calc(-1 * var(--sv-pan-dx,44px)));opacity:.001}to{transform:none;opacity:1}}
 @keyframes svPanInR{from{transform:translateX(var(--sv-pan-dx,44px));opacity:.001}to{transform:none;opacity:1}}
-#pvQueue.svPanL,#pvCtx.svPanL,#pvHead.svPanL,#pvLyrics.svPanL{animation:svPanInL var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
-#pvQueue.svPanR,#pvCtx.svPanR,#pvHead.svPanR,#pvLyrics.svPanR{animation:svPanInR var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
-html[data-gfx="reduced"] #pvQueue.svPanL,html[data-gfx="reduced"] #pvCtx.svPanL,html[data-gfx="reduced"] #pvHead.svPanL,html[data-gfx="reduced"] #pvLyrics.svPanL,
-html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvCtx.svPanR,html[data-gfx="reduced"] #pvHead.svPanR,html[data-gfx="reduced"] #pvLyrics.svPanR{animation:none}
+#pvQueue.svPanL,#pvHead.svPanL,#pvLyrics.svPanL{animation:svPanInL var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+#pvQueue.svPanR,#pvHead.svPanR,#pvLyrics.svPanR{animation:svPanInR var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+html[data-gfx="reduced"] #pvQueue.svPanL,html[data-gfx="reduced"] #pvHead.svPanL,html[data-gfx="reduced"] #pvLyrics.svPanL,
+html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvHead.svPanR,html[data-gfx="reduced"] #pvLyrics.svPanR{animation:none}
 
 /* (2) THE FULLSCREEN CROSSFADE — the mini player's "Up next" while the fullscreen lyrics overlay
    is open. The reported bug is "it just switches", and the cause is a cascade accident, not a
@@ -11207,9 +11243,9 @@ function reduced(){
 }
 function byId(id){ return document.getElementById(id) }
 
-/* the two views: Lyrics is ONE box, Up next is THREE sibling blocks that the tab handler shows and
-   hides together (the "Playing from …" line, the Clear bar, the list) */
-var UP = ['pvCtx','pvHead','pvQueue'];
+/* the two views: Lyrics is ONE box, Up next is TWO sibling blocks that the tab handler shows and
+   hides together (the Clear bar, the list — WAVE 31 dropped the "Playing from …" line above them) */
+var UP = ['pvHead','pvQueue'];
 
 function oneShot(node, cls){
   if(!node) return;
@@ -12821,5 +12857,28 @@ paintLock();
 try{ if(box() && box().querySelector('.row[data-q]')) decorate() }catch(e){}
 })();
 </script>
+
+<style id="v31css">
+/* ===== WAVE 31 — lyrics header: pills + fullscreen on one line, and it slides away ===== */
+/* In FULLSCREEN the header is always open: it is the only way back out of that view. The hover
+   rule is for the side panel only, so this must outrank `#pvLyrics:hover #lyrHead` without an
+   !important (two ids beat id + pseudo-class + id). */
+body.lyrfull #pvLyrics #lyrHead{grid-template-rows:1fr;opacity:1;transform:none}
+/* The pill sits on the SAME line as the fullscreen button, so its box is trimmed to that button's
+   38px: 30px of button + 3px trough padding + 1px border on each side. The buttons keep the v5
+   family look (font, ring, glow) — only the box height and the horizontal padding change, and the
+   fullscreen button itself is not touched. */
+#lyrBar .lyrchip button{height:30px;display:inline-flex;align-items:center;padding:0 11px;flex:0 1 auto;min-width:0;overflow:hidden}
+/* the rail can go as narrow as 290px (the --pvrail floor), where pill + gap + button no longer fit:
+   let the trough give way instead of pushing the button off the panel. At every normal width the
+   pill is content-sized and nothing shrinks. */
+#lyrBar .lyrchip{flex:0 1 auto;min-width:0}
+/* Below ~1170px the rail (27.5vw) is too narrow for the three full labels next to the button, so
+   the pill tightens instead of clipping them; from 1170px up nothing is touched. */
+@media (max-width:1170px){
+  #lyrBar .lyrchip{padding:2px;gap:2px}
+  #lyrBar .lyrchip button{padding:0 7px;font-size:11.5px}
+}
+</style>
 </body>
 </html>
