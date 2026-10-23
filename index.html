@@ -12551,11 +12551,14 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
 
 <style id="v30qcss">
 /* ===== WAVE 30 — Up next: the lock, the drag handle, and a queue that keeps its history ===== */
-/* The padlock sits LEFT of Clear. `.pvhead .go{margin-left:auto}` would give every button an auto
-   margin (splitting the free space), so only the FIRST one keeps it: the group stays right-aligned
-   however many buttons the panel has — Autoplay similar, the lock, Clear. */
+/* Autoplay similar sits in the CENTRE of the bar; the lock + Clear stay right-aligned. Centring is
+   done out of flow (the button is inserted by the v3js layer at runtime, so a 3-column grid cannot
+   count on it): the flex row is just [lock][Clear] pushed right, and #v3auto is pinned to 50%.
+   `max-width` keeps it clear of the right-hand pair on a narrow rail. */
+#pvHead{position:relative}
+#v3auto{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;max-width:calc(100% - 170px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pvHead .go{margin-left:0}
-#pvHead .go:first-child{margin-left:auto}
+#pvHead .go#qLock{margin-left:auto}      /* id+class: must outrank the .go reset above */
 #qLock{padding:5px;border-radius:8px;color:var(--dim);display:inline-flex;align-items:center;justify-content:center;transition:color .12s,background .12s}
 #qLock .ic{width:17px;height:17px}
 #qLock:hover{color:var(--tx);background:var(--panel)}
@@ -12570,6 +12573,10 @@ html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{
 #pvQueue .qgrip[disabled]:hover{color:var(--dim);background:none}
 html[data-qunlock="1"] #pvQueue .qgrip{display:inline-flex}
 html[data-qunlock="1"] #pvQueue .favh{display:none}
+/* Rows above the playing one: already heard (or dragged there on purpose) — dimmed until the
+   pointer is on them, exactly like a normal row brightens on hover. */
+#pvQueue .row.qp{opacity:.5;transition:opacity .12s ease}
+#pvQueue .row.qp:hover{opacity:1}
 /* the lifted row, while it is being carried */
 #pvQueue .row.qdrag{background:var(--panel2);box-shadow:0 10px 26px rgba(0,0,0,.5);position:relative;z-index:2}
 #pvQueue.qdragging,#pvQueue.qdragging .row{cursor:grabbing}
@@ -12580,10 +12587,11 @@ html[data-qunlock="1"] #pvQueue .favh{display:none}
        its Like heart for the two-bar drag handle — ⋮ stays, one slot to the left, now the last
        button in the row. The state is a display preference only: it lives in localStorage and
        never touches `queue`, `seq` or `cur`.
-   (2) DRAG TO REORDER. The handle moves a track inside the UPCOMING part of the list: the playing
-       row is the divider (everything above it has been heard and cannot be moved, the playing row
-       is pinned), everything below is draggable. The drop rewrites `seq` — playback order — so the
-       next track follows exactly what the list shows.
+   (2) DRAG TO REORDER. Every row with a live handle can be dragged anywhere in the list — only the
+       playing row itself is pinned. Crossing it is what moves a song in or out of the part already
+       heard: a played song dropped below it plays again, an unplayed one dropped above it is
+       skipped, and rows above the playing row stay dimmed (brightening on hover) to say so. The
+       drop rewrites `seq` — playback order — so the next track follows exactly what the list shows.
    (3) The list itself now draws in seq order (see renderQueue): played rows stay above the now-
        playing row, and the panel parks that row at the top whenever the track changes, so the
        history is one scroll up rather than gone. */
@@ -12605,8 +12613,19 @@ function paintLock(){
   b.innerHTML = '<span class="ic">' + ic(unlocked ? 'i-lock-open' : 'i-lock') + '</span>';
 }
 
-/* Put a handle on every queue row and decide which of them may be dragged. Runs after each
-   renderQueue(), so it survives every repaint (a track change, a Like, a credit repair). */
+/* Rows before the playing one are the part of the queue that has already been heard: dim them (the
+   row brightens on hover) and let them dim/brighten live while a drag rewrites that boundary. */
+function markPast(){
+  var el = box(); if(!el) return;
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var ci = -1;
+  for(var i=0;i<rows.length;i++){ if(rows[i].classList.contains('cur')){ ci = i; break } }
+  rows.forEach(function(r, i){ r.classList.toggle('qp', ci >= 0 && i < ci) });
+}
+
+/* Put a handle on every queue row. Every song can be dragged — only the one that is playing right
+   now is pinned (moving it would move the ‘currently playing’ divider for no reason). Runs after
+   each renderQueue(), so it survives every repaint (a track change, a Like, a credit repair). */
 function decorate(){
   var el = box(); if(!el) return;
   var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
@@ -12623,12 +12642,11 @@ function decorate(){
       g.innerHTML = '<span class="ic">' + ic('i-grip') + '</span>';
       rr.appendChild(g);
     }
-    var movable = (ci < 0) || (i > ci);
+    var movable = (ci < 0) || (i !== ci);
     g.disabled = !movable;
-    g.title = movable ? 'Drag to move this song'
-            : (i === ci ? 'Playing now — drag the songs below it'
-                        : 'Already played — drag the songs below it');
+    g.title = movable ? 'Drag to move this song' : 'Playing now';
   });
+  markPast();
 }
 
 /* Park the now-playing row at the top of the panel. Only the panel's own scroll, only while the
@@ -12668,7 +12686,6 @@ try{
     unlocked = !unlocked;
     try{ LSset(KEY, unlocked) }catch(e){}
     paintLock();
-    toast(unlocked ? 'Queue unlocked — drag ☰ to reorder' : 'Queue locked');
   });
 }catch(e){}
 
@@ -12693,22 +12710,22 @@ document.addEventListener('pointermove', function(e){
   if(!dragRow || (dragPointer != null && e.pointerId !== dragPointer)) return;
   var el = box(); if(!el || !dragRow.parentNode) return;
   e.preventDefault();
+  /* WAVE 30 · 2 — the whole list is a drop zone now: a song can cross the playing row in either
+     direction. Dragging an unplayed song ABOVE it parks that song in the part already heard (it
+     will not play on its own), and dragging a played one BELOW it puts it back in the rotation. */
   var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
-  var ci = -1;
-  for(var i=0;i<rows.length;i++){ if(rows[i].classList.contains('cur')){ ci = i; break } }
-  var zone = (ci < 0) ? rows : rows.slice(ci + 1);       // upcoming only — history and the
-  if(zone.indexOf(dragRow) < 0) return;                   // now-playing row never move
   var y = e.clientY, target = null;
-  for(var j=0;j<zone.length;j++){
-    var r = zone[j]; if(r === dragRow) continue;
+  for(var j=0;j<rows.length;j++){
+    var r = rows[j]; if(r === dragRow) continue;
     var b = r.getBoundingClientRect();
     if(y < b.top + b.height / 2){ target = r; break }
   }
   if(target){ if(dragRow.nextElementSibling !== target) el.insertBefore(dragRow, target) }
   else {
-    var last = zone[zone.length - 1];
+    var last = rows[rows.length - 1];
     if(last && last !== dragRow && dragRow.nextElementSibling) el.appendChild(dragRow);
   }
+  markPast();
 }, { passive:false });
 
 function endDrag(commit){
