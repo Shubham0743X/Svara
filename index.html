@@ -1801,7 +1801,9 @@ $('#pvFab').onclick=()=>{
   if(queue.length)openPV();else toast('Play something first');
 };
 $('#pvMin').onclick=()=>closePV();
-$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;if(typeof AUTO_QUEUE_IDS!=='undefined')AUTO_QUEUE_IDS=[];audio.pause();audio.removeAttribute('src');if(typeof xfStopPreload==='function')xfStopPreload();$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue()};
+$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;if(typeof AUTO_QUEUE_IDS!=='undefined')AUTO_QUEUE_IDS=[];audio.pause();audio.removeAttribute('src');if(typeof xfStopPreload==='function')xfStopPreload();$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue();/* WAVE 31: clearing empties the page, so close it — the same transition #pvMin uses (body.pv
+   dropped: #pv fades and slides back down over .26s/.34s), never a blank frozen panel. */
+  if(typeof closePV==='function')closePV()};
 $('#mFav').onclick=()=>toggleFav(nowItem());
 $('#pvFav').onclick=()=>toggleFav(nowItem());
 $('#pvMenu').onclick=e=>{const it=nowItem();if(it){idItem[it.id]=it;openMenu(e,it.id)}};
@@ -12706,15 +12708,16 @@ document.addEventListener('pointerdown', function(e){
   try{ g.setPointerCapture(e.pointerId) }catch(err){}
 }, true);
 
-document.addEventListener('pointermove', function(e){
-  if(!dragRow || (dragPointer != null && e.pointerId !== dragPointer)) return;
-  var el = box(); if(!el || !dragRow.parentNode) return;
-  e.preventDefault();
+/* Put the carried row where the pointer is. Split out of the pointermove handler so the auto-
+   scroller can re-run it every frame: the list moves under a still pointer, and the row has to
+   follow that movement (and the dim boundary be repainted) without a fresh pointermove. */
+function placeAt(y){
+  var el = box(); if(!el || !dragRow || !dragRow.parentNode) return;
   /* WAVE 30 · 2 — the whole list is a drop zone now: a song can cross the playing row in either
      direction. Dragging an unplayed song ABOVE it parks that song in the part already heard (it
      will not play on its own), and dragging a played one BELOW it puts it back in the rotation. */
   var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
-  var y = e.clientY, target = null;
+  var target = null;
   for(var j=0;j<rows.length;j++){
     var r = rows[j]; if(r === dragRow) continue;
     var b = r.getBoundingClientRect();
@@ -12726,10 +12729,53 @@ document.addEventListener('pointermove', function(e){
     if(last && last !== dragRow && dragRow.nextElementSibling) el.appendChild(dragRow);
   }
   markPast();
+}
+
+document.addEventListener('pointermove', function(e){
+  if(!dragRow || (dragPointer != null && e.pointerId !== dragPointer)) return;
+  var el = box(); if(!el || !dragRow.parentNode) return;
+  e.preventDefault();
+  dragY = e.clientY;
+  placeAt(dragY);
+  startAutoScroll();
 }, { passive:false });
+
+/* ---------- auto-scroll while the pointer is held at an edge ----------
+   Holding the carried row against the top (or bottom) of the panel scrolls the list on its own, so
+   a song can be taken from far down the queue to the very top in one gesture. The speed ramps up
+   over the last EDGE pixels and is time-based, so it feels the same on a slow and a fast display. */
+var EDGE = 72, MAX_STEP = 19, dragY = 0, scrollRaf = 0, scrollT = 0;
+
+function autoScrollFrame(t){
+  scrollRaf = 0;
+  if(!dragRow) return;
+  var el = box(); if(!el) return;
+  var r = el.getBoundingClientRect(), d = 0;
+  if(dragY < r.top + EDGE) d = -(r.top + EDGE - dragY) / EDGE;             /* -1 … 0 */
+  else if(dragY > r.bottom - EDGE) d = (dragY - (r.bottom - EDGE)) / EDGE; /*  0 … 1 */
+  if(d){
+    var dt = scrollT ? Math.min(64, t - scrollT) : 16;
+    var step = Math.sign(d) * Math.max(2.5, Math.min(1, Math.abs(d)) * MAX_STEP) * (dt / 16);
+    var before = el.scrollTop;
+    el.scrollTop = before + step;
+    if(el.scrollTop !== before) placeAt(dragY);   /* the row rides the scroll, no pointer input */
+  }
+  scrollT = t;
+  scrollRaf = requestAnimationFrame(autoScrollFrame);
+}
+function startAutoScroll(){
+  if(scrollRaf || !dragRow) return;
+  scrollT = 0;
+  scrollRaf = requestAnimationFrame(autoScrollFrame);
+}
+function stopAutoScroll(){
+  if(scrollRaf) cancelAnimationFrame(scrollRaf);
+  scrollRaf = 0;
+}
 
 function endDrag(commit){
   if(!dragRow) return;
+  stopAutoScroll();
   var row = dragRow; dragRow = null; dragPointer = null;
   row.classList.remove('qdrag');
   var el = box(); if(el) el.classList.remove('qdragging');
