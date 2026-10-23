@@ -1503,8 +1503,9 @@ function openMenu(ev,id){
     <button class="mi" data-a="${esc(id)}" data-act="fav"><span class="ic">${ic(fav?'i-heart-off':'i-heart-o')}</span>${fav?'Remove from Liked music':'Add to Liked music'}</button>
     ${!(cur&&cur.id===id)?`<button class="mi" data-a="${esc(id)}" data-act="now"><span class="ic">${ic('i-play')}</span>Play now</button>`:''}
     <button class="mi" data-a="${esc(id)}" data-act="next"><span class="ic">${ic('i-next')}</span>Play next</button>
-    <button class="mi" data-a="${esc(id)}" data-act="qadd"><span class="ic">${ic('i-plus')}</span>Add to queue</button>
-    ${queued?`<button class="mi dim" data-a="${esc(id)}" data-act="qrm"><span class="ic">${ic('i-x')}</span>Remove from queue</button>`:''}
+    ${queued
+      ?`<button class="mi dim" data-a="${esc(id)}" data-act="qrm"><span class="ic">${ic('i-x')}</span>Remove from queue</button>`
+      :`<button class="mi" data-a="${esc(id)}" data-act="qadd"><span class="ic">${ic('i-plus')}</span>Add to queue</button>`}
     ${plName?`<button class="mi dim" data-a="${esc(id)}" data-act="plrm" data-pl="${esc(plName)}"><span class="ic">${ic('i-x')}</span>Remove from “${esc(plName)}”</button>`:''}
     ${(typeof tasteExcluded==='function'&&tasteExcluded(id))
       ?`<button class="mi" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-plus')}</span>Add back to taste</button>`
