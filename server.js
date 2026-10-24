@@ -77,6 +77,20 @@ function noStore(res){
 }
 
 /* ================= helpers ================= */
+/* Outbound requests get a deadline. These routes answer a request the renderer is waiting on,
+   so a hung upstream connection must fail (and let the caller's own retry run) instead of
+   holding the response open indefinitely. */
+function fetchT(url, opts, ms){
+  return fetch(url, Object.assign({}, opts, { signal: AbortSignal.timeout(ms || 12000) }));
+}
+/* Same, for a request whose BODY is streamed to the client (artwork, audio): the deadline covers
+   the handshake only. Aborting after the headers would cut a song off mid-playback. */
+async function fetchHead(url, opts, ms){
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms || 12000);
+  try { return await fetch(url, Object.assign({}, opts, { signal: ac.signal })); }
+  finally { clearTimeout(timer); }
+}
 function txt(v, seen = new WeakSet()) {
   if (v == null) return '';
   if (typeof v === 'string' || typeof v === 'number') return String(v);
@@ -1073,17 +1087,23 @@ function artistVariants(a){
 }
 async function lrGet(params){
   const p = new URLSearchParams(params);
-  const r = await fetch('https://lrclib.net/api/get?' + p, {
-    headers: { 'User-Agent': 'Svara/2.0 (music player)' }
-  });
+  let r;
+  try {
+    r = await fetchT('https://lrclib.net/api/get?' + p, {
+      headers: { 'User-Agent': 'Svara/2.0 (music player)' }
+    }, 7000);
+  } catch (e) { return null; }        // timeout / network: treated as "no match", the lookup goes on
   if (!r.ok) return null;
   try { return await r.json(); } catch (e) { return null; }
 }
 async function lrSearch(params){
   const p = new URLSearchParams(params);
-  const r = await fetch('https://lrclib.net/api/search?' + p, {
-    headers: { 'User-Agent': 'Svara/2.0 (music player)' }
-  });
+  let r;
+  try {
+    r = await fetchT('https://lrclib.net/api/search?' + p, {
+      headers: { 'User-Agent': 'Svara/2.0 (music player)' }
+    }, 7000);
+  } catch (e) { return []; }
   if (!r.ok) return [];
   try { const j = await r.json(); return Array.isArray(j) ? j : []; } catch (e) { return []; }
 }
@@ -1305,7 +1325,10 @@ function safeName(s, fallback){
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, ' ')   // Windows-illegal characters
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 120);
+    .slice(0, 120)
+    /* Windows silently strips trailing dots/spaces from a filename, so "Song ." would be saved
+       as "Song" while the header promises "Song .m4a" — trim them here so both agree. */
+    .replace(/[. ]+$/, '');
   return out || fallback;
 }
 async function runYtdlp(args, timeout){
@@ -1321,10 +1344,20 @@ function pickAudioFile(dir){
   if (!files.length) return null;
   return path.join(dir, files.sort((a, b) => fs.statSync(path.join(dir, b)).size - fs.statSync(path.join(dir, a)).size)[0]);
 }
+/* A download runs yt-dlp (up to two 420s attempts) in its own temp dir, so a burst of clicks
+   must not spawn a process each. Two at a time is plenty for a single-user app; the rest are
+   told to wait rather than piling up. */
+const DOWNLOAD_MAX = 2;
+let downloadsActive = 0;
 app.get('/api/download', async (req, res) => {
   noStore(res);                     // 4AK: a downloaded file is never cached by the proxy
   const id = String(req.query.id || '');
   if (!id || !/^[\w-]{6,}$/.test(id)) return res.status(400).json({ error: 'bad id' });
+  if (downloadsActive >= DOWNLOAD_MAX) return res.status(429).json({ error: 'A download is already running — try again in a moment' });
+  downloadsActive++;
+  let released = false;
+  const release = () => { if (!released) { released = true; downloadsActive--; } };
+  res.on('close', release);         // also covers an aborted download / a streamed file
   const wantTitle = String(req.query.title || '');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'svara-'));
   const url = 'https://www.youtube.com/watch?v=' + id;
@@ -1365,18 +1398,24 @@ app.get('/api/download', async (req, res) => {
 });
 
 /* ================= thumbnail proxy (album-art theming) ================= */
+/* the artwork hosts this proxy will talk to — used for the requested URL AND for the URL a
+   redirect actually landed on (following redirects unchecked is a host-allowlist bypass). */
+function thumbHostAllowed(u){
+  const host = u.hostname;
+  return u.protocol === 'https:' && (
+    host === 'i.ytimg.com' || host.endsWith('.ytimg.com') ||
+    host === 'yt3.googleusercontent.com' || host.endsWith('.googleusercontent.com') ||
+    host.endsWith('.ggpht.com')
+  );
+}
+const THUMB_MAX = 12 * 1024 * 1024;      // album art is ~100KB; a 12MB ceiling is only a guard
 app.get('/api/thumb', async (req, res) => {
   try {
     const u = new URL(String(req.query.url || ''));
+    if (!thumbHostAllowed(u)) return res.status(400).json({ error: 'blocked host' });
     const host = u.hostname;
-    const allowed = u.protocol === 'https:' && (
-      host === 'i.ytimg.com' || host.endsWith('.ytimg.com') ||
-      host === 'yt3.googleusercontent.com' || host.endsWith('.googleusercontent.com') ||
-      host.endsWith('.ggpht.com')
-    );
-    if (!allowed) return res.status(400).json({ error: 'blocked host' });
     const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
-    let r = await fetch(u, { headers: { 'User-Agent': UA } });
+    let r = await fetchHead(u, { headers: { 'User-Agent': UA } }, 15000);
     /* 4AG — one bounded retry, and only for the recoverable case. Measured live: the artwork host
        answers a burst of concurrent asks for the SAME url with `429 text/html` (24/60 at 60-way
        concurrency) and sends NO Retry-After header; the very same url returns `200 image/jpeg` on
@@ -1386,7 +1425,7 @@ app.get('/api/thumb', async (req, res) => {
     if (r.status === 429) {
       const ra = parseInt(r.headers.get('retry-after'), 10);   // absent in the field; honour it if sent
       await new Promise(s => setTimeout(s, ra > 0 ? Math.min(ra * 1000, 3000) : 900));
-      r = await fetch(u, { headers: { 'User-Agent': UA } });
+      r = await fetchHead(u, { headers: { 'User-Agent': UA } }, 15000);
     }
     if (!r.ok) {
       /* 4AG: never an empty 502 again — carry the upstream status so a failed artwork request is
@@ -1397,13 +1436,35 @@ app.get('/api/thumb', async (req, res) => {
       console.error('thumb: upstream ' + r.status + ' for ' + host);
       return res.status(502).json({ error: 'upstream ' + r.status });
     }
+    /* the allow-list above vetted the URL WE asked for; redirects are followed, so check where
+       the request actually landed before a byte of it is forwarded. */
+    let landed = null;
+    try { landed = new URL(r.url) } catch (e) { landed = null; }
+    if (!landed || !thumbHostAllowed(landed)) {
+      try { if (r.body) r.body.cancel() } catch (e) {}
+      return res.status(400).json({ error: 'blocked host' });
+    }
+    const len = parseInt(r.headers.get('content-length') || '0', 10);
+    if (len > THUMB_MAX) {
+      try { if (r.body) r.body.cancel() } catch (e) {}
+      return res.status(502).json({ error: 'upstream too large' });
+    }
     res.status(200);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
-    Readable.fromWeb(r.body).on('error', () => res.destroy()).pipe(res);
+    const body = Readable.fromWeb(r.body);
+    let sent = 0;
+    body.on('data', chunk => {
+      sent += chunk.length;
+      if (sent > THUMB_MAX) { try { body.destroy(); } catch (e) {} try { res.destroy(); } catch (e) {} }
+    });
+    body.on('error', () => res.destroy());
+    /* a client that goes away (or a capped body) must not leave the upstream download running */
+    res.on('close', () => { try { body.destroy(); } catch (e) {} });
+    body.pipe(res);
   } catch (e) {
-    res.status(400).json({ error: String(e.message || e) });
+    if (!res.headersSent) res.status(400).json({ error: String(e.message || e) }); else res.destroy();
   }
 });
 
@@ -1436,12 +1497,21 @@ async function resolveStreamUrl(videoId, variant){
     const oldest = streamCache.keys().next().value;
     if (oldest !== undefined && oldest !== videoId) streamCache.delete(oldest);
   }
+  /* delete first: set() on an EXISTING key keeps its old position, so a refreshed URL would
+     otherwise stay at the front of the Map and be the next one evicted. */
+  streamCache.delete(videoId);
   streamCache.set(videoId, { url, expires: Date.now() + STREAM_TTL });
   return url;
 }
 function getStreamUrl(videoId, variant){
   const hit = streamCache.get(videoId);
-  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.url);
+  if (hit && hit.expires > Date.now()) {
+    /* LRU touch — same reason as above: reading an entry must move it to the back, or a hot
+       track can be evicted while a cold one sits in front of it. */
+    streamCache.delete(videoId);
+    streamCache.set(videoId, hit);
+    return Promise.resolve(hit.url);
+  }
   const key = videoId + '#' + (variant ? 1 : 0);          // the two clients resolve independently
   const inflight = streamResolving.get(key);
   if (inflight) return inflight;
@@ -1472,7 +1542,7 @@ async function verifyWarmUrl(id){
   const url = await getStreamUrl(id);
   let up;
   try {
-    up = await fetch(url, { headers: { Range: 'bytes=0-1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+    up = await fetchHead(url, { headers: { Range: 'bytes=0-1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }, 15000);
   } catch (e) {
     console.error(`prefetch: ${id} probe failed (${e.message}) — re-resolving`);
     streamCache.delete(id);
@@ -1523,7 +1593,8 @@ app.get('/api/stream', async (req, res) => {
        cache entry. A dead URL answers 403/410, so drop the stale entry, resolve a fresh URL
        ONCE and retry the upstream fetch ONCE. No loop; the retry's failure carries a reason. */
     const hostOf = u => { try { return new URL(u).host; } catch (e) { return 'unknown'; } };
-    const grab = u => fetch(u, { headers: { Range: range, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+    /* handshake-only deadline: the body is the song, so it must not be aborted on a timer */
+    const grab = u => fetchHead(u, { headers: { Range: range, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }, 20000);
     let url = await getStreamUrl(id);
     let up = await grab(url);
     if (!up.ok) {
@@ -1554,7 +1625,12 @@ app.get('/api/stream', async (req, res) => {
       const hv = up.headers.get(k);
       if (hv) res.setHeader(v, hv);
     }
-    Readable.fromWeb(up.body).on('error', () => res.destroy()).pipe(res);
+    const body = Readable.fromWeb(up.body);
+    body.on('error', () => res.destroy());
+    /* the renderer aborts a seek by dropping the response — without this the upstream
+       download (and the socket) keeps going for the rest of the song. */
+    res.on('close', () => { try { body.destroy(); } catch (e) {} });
+    body.pipe(res);
   } catch (e) {
     console.error('stream error:', e.message);
     const reason = String(e.message || e).split('\n').map(s => s.trim()).filter(Boolean).pop();

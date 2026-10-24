@@ -141,9 +141,6 @@ img{display:block}
 .row.cur .rtitle{color:var(--acc)}
 .rsub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .rr{display:flex;align-items:center;gap:2px;flex-shrink:0}
-.likedH{width:18px;height:18px;color:var(--acc);display:inline-flex}
-.likedH .ic{width:18px;height:18px}
-.likedH svg{fill:var(--acc);stroke:none}
 .dots{padding:7px;border-radius:50%;color:var(--dim)}
 .dots:hover{color:var(--tx);background:var(--panel)}
 .dots .ic{width:17px;height:17px}
@@ -227,27 +224,15 @@ body.pv #mini{display:none}
 .tab{flex:1;padding:13px 8px 11px;font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent;border-radius:0}
 .tab:hover{color:var(--tx)}
 .tab.on{color:var(--tx);border-bottom-color:var(--acc)}
-.tabrow{display:flex;padding:0 6px;border-bottom:1px solid var(--line)}
-.tab{flex:1;padding:13px 8px 11px;font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent;border-radius:0}
-.tab:hover{color:var(--tx)}
-.tab.on{color:var(--tx);border-bottom-color:var(--acc)}
-.pvctx{padding:8px 16px 4px;font-size:12px;color:var(--dim)}
 .pvhead{display:flex;align-items:center;padding:8px 14px 6px}
 .pvhead .go{font-size:12px;color:var(--dim);margin-left:auto}
 .pvhead .go:hover{color:var(--acc)}
 #pvQueue{flex:1;overflow-y:auto;padding:4px 8px 10px}
 #pvLyrics{flex:1;overflow-y:auto;padding:10px 16px}
-.lyrseg{display:flex;gap:6px;background:var(--panel);border-radius:999px;padding:3px;margin-bottom:12px}
-.lyrseg button{flex:1;padding:6px 8px;border-radius:999px;font-size:12px;color:var(--dim)}
-.lyrseg button.on{background:var(--panel2);color:var(--tx)}
 #lyrBody{font-size:14.5px;line-height:1.85;color:var(--dim);white-space:pre-wrap}
 #lyrBody .l{transition:color .15s}
 #lyrBody .l.on{color:#fff;font-weight:700}
 .lyrmissing{color:var(--dim);font-size:13.5px;padding:20px 0;line-height:1.8}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
 /* floating menu + modal */
 #menu{position:fixed;z-index:90;background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:5px;min-width:190px;box-shadow:0 16px 50px rgba(0,0,0,.55)}
 #menu .mi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border-radius:8px;font-size:13.5px;color:var(--tx)}
@@ -352,8 +337,8 @@ html[data-fs="s3"]{--fss:1.15}
    `html[data-fs] #lyrBody` (0,1,2) outranks a plain id selector (0,1,0) wherever it sits in the
    document, so merely having the type scale ON silently shrank the lyrics to 14.5px × step and
    stacked them on their 14px line margins — a wrong-rhythm wall of text instead of the tall
-   karaoke lines. NO lyric surface appears in this block any more (#lyrBody, .lyrseg/.lyrchip
-   buttons, .lyrt, .lyrbar .lyra, .lyrmissing, .lyrnote, #lyrJump): the lyrics tab is byte-for-byte
+   karaoke lines. NO lyric surface appears in this block any more (#lyrBody, .lyrchip buttons,
+   .lyrbar .lyra, .lyrmissing, .lyrnote, #lyrJump): the lyrics tab is byte-for-byte
    the tab it was before the type scale existed, at every step. */
 html[data-fs] .paget{font-size:calc(26px * var(--fss))}
 html[data-fs] .logo,#pv .pvT{font-size:calc(23px * var(--fss))}
@@ -364,10 +349,10 @@ html[data-fs] .navit,html[data-fs] #q,html[data-fs] .rtitle,html[data-fs] .list 
 html[data-fs] .plrow,html[data-fs] .mt,html[data-fs] #menu .mi,html[data-fs] #shist .shr{font-size:calc(14.5px * var(--fss))}
 html[data-fs] .pvtitle,html[data-fs] .gobtn,html[data-fs] .chip,html[data-fs] #searchFilters .fchip,html[data-fs] .rname,html[data-fs] .libgrid .rname,html[data-fs] #setPanel .setLbl,html[data-fs] .hbar .setAct,html[data-fs] #scroll:has(#dynSec:not([hidden]) .hbar) #pgSub{font-size:calc(14px * var(--fss))}
 html[data-fs] .empty,html[data-fs] #artSec .art-desc,html[data-fs] .sec h2 .go{font-size:calc(13.5px * var(--fss))}
-html[data-fs] .hgrp,html[data-fs] .newpl,html[data-fs] .sub,html[data-fs] .np button,html[data-fs] #toast,html[data-fs] #pvTransport .mtT,html[data-fs] #pgTitle.pgNP,html[data-fs] .art-back,html[data-fs] #artSec .art-count,html[data-fs] #albSec .art-count,html[data-fs] .art-acts .pact,html[data-fs] .art-relcard .nm,html[data-fs] #setPanel .setAbout,html[data-fs] .topres .traud,html[data-fs] .topres .trbtn,html[data-fs] .libfoot,html[data-fs] #setPanel .setSeg > label > span,html[data-fs] #setPanel .setSeg .segGhost > span{font-size:calc(13px * var(--fss))}
+html[data-fs] .hgrp,html[data-fs] .newpl,html[data-fs] .sub,html[data-fs] .np button,html[data-fs] #toast,html[data-fs] #pgTitle.pgNP,html[data-fs] .art-back,html[data-fs] #artSec .art-count,html[data-fs] #albSec .art-count,html[data-fs] .art-acts .pact,html[data-fs] .art-relcard .nm,html[data-fs] #setPanel .setAbout,html[data-fs] .topres .traud,html[data-fs] .topres .trbtn,html[data-fs] .libfoot,html[data-fs] #setPanel .setSeg > label > span,html[data-fs] #setPanel .setSeg .segGhost > span{font-size:calc(13px * var(--fss))}
 html[data-fs] .hdate,html[data-fs] #artSec .art-showall,html[data-fs] #artSec .artdur,html[data-fs] #setPanel .setCfmTx,html[data-fs] #setPanel .setHint,html[data-fs] #setPanel .setVal{font-size:calc(12.5px * var(--fss))}
-html[data-fs] #shist .clear,html[data-fs] .rsub,html[data-fs] .pvctx,html[data-fs] .pvhead .go,html[data-fs] .ptime,html[data-fs] .v3sent,html[data-fs] #artSec .artalb,html[data-fs] #setPanel .setLink,html[data-fs] #setPanel .setAct,html[data-fs] #aboutCard .abBtn,html[data-fs] .libsorts .lbl,html[data-fs] .libgrid .rsub2{font-size:calc(12px * var(--fss))}
-html[data-fs] .rsub2,html[data-fs] .ms,html[data-fs] .tab,html[data-fs] #pvTransport .mtS,html[data-fs] #shist .shr .subx,html[data-fs] #artSec .art-more,html[data-fs] .art-relcard .ad,html[data-fs] #setPanel .setNum,html[data-fs] #aboutCard .abRole,html[data-fs] #plList .sbt{font-size:calc(11.5px * var(--fss))}
+html[data-fs] #shist .clear,html[data-fs] .rsub,html[data-fs] .pvhead .go,html[data-fs] .ptime,html[data-fs] .v3sent,html[data-fs] #artSec .artalb,html[data-fs] #setPanel .setAct,html[data-fs] #aboutCard .abBtn,html[data-fs] .libsorts .lbl,html[data-fs] .libgrid .rsub2{font-size:calc(12px * var(--fss))}
+html[data-fs] .rsub2,html[data-fs] .ms,html[data-fs] .tab,html[data-fs] #shist .shr .subx,html[data-fs] #artSec .art-more,html[data-fs] .art-relcard .ad,html[data-fs] #setPanel .setNum,html[data-fs] #aboutCard .abRole,html[data-fs] #plList .sbt{font-size:calc(11.5px * var(--fss))}
 html[data-fs] .plrow .cnt,html[data-fs] .ptimes,html[data-fs] .psTip{font-size:calc(11px * var(--fss))}
 html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp h3,html[data-fs] #setPanel .setPill,html[data-fs] #aboutCard .abPill,html[data-fs] #aboutCard .abGrpH{font-size:calc(10.5px * var(--fss))}
 </style>
@@ -1380,21 +1365,10 @@ function paintFavs(){
 function paintRowCursor(){document.querySelectorAll('.row.cur').forEach(r=>{if(!r.closest('#pvQueue'))r.classList.remove('cur')})}
 
 /* queue ui */
-function renderQueue(){
-  const el=$('#pvQueue');
-  const it=nowItem();
-  if(!queue.length){el.innerHTML='<div class="empty">Queue is empty — add songs from ⋮ → “Add to queue”.</div>';return}
-  el.innerHTML=queue.map((x,i)=>{
-    const isCur=it&&it.id===x.id;
-    return `<div class="row ${isCur?'cur':''}" data-q="${i}">
-      <div class="rt"><img loading="lazy" src="${esc(thumb(x))}" onerror="this.style.display='none'">
-        <div class="ov"><span class="ic">${ic(isCur?'i-vol':'i-play')}</span></div></div>
-      <div class="rm"><div class="rtitle">${esc(x.title)}</div><div class="rsub">${isCur&&startingNow()?'Starting…':esc(subOf(x))}</div></div>
-      <div class="rr"><button class="dots" data-menu="${esc(x.id)}"><span class="ic">${ic('i-dots')}</span></button></div></div>`;
-  }).join('');
-  register(queue);
-  if($('#pvFab'))syncFab();
-}
+/* Forward declaration: the play-order renderer is INSTALLED by the v3/v30 layers below
+   (`renderQueue = function(){…}` inside their strict-mode blocks), so the global binding has
+   to exist here or that assignment throws and the rest of the layer never runs. */
+var renderQueue;
 function addQueue(it,start){
   if(!it)return;
   queue.push(it);
@@ -1471,21 +1445,8 @@ function removeFromPlaylist(name,it){
 function closeModal(){$('#modal').classList.remove('show')}
 
 /* ============ download ============ */
-async function downloadTrack(it){
-  if(!it)return;
-  try{
-    toast('Downloading “'+it.title+'”…');
-    const r=await fetch('/api/download?id='+it.id);
-    if(!r.ok){const j=await r.json().catch(()=>null);throw new Error(j?.error||'download failed')}
-    const blob=await r.blob();
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download=(it.title||'track').replace(/[\\/:*?"<>|]/g,'')+'.m4a';
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-    toast('Downloaded');
-  }catch(e){toast('Download failed: '+e.message)}
-}
+/* installed by the later download layers below (strict-mode assignment) */
+var downloadTrack;
 
 /* ============ ⋮ menu ============ */
 function openMenu(ev,id){
@@ -1650,88 +1611,10 @@ function resetLyrics(){
   if(lyr.timer){clearInterval(lyr.timer);lyr.timer=null}
   lyr={plain:'',synced:'',cur:-1,timer:null,loadedFor:null};
   const pl=$('#pvLyrics');
-  if(pl&&!pl.hidden){ensureLyricsUI();renderLyricsState();loadLyrics()}
+  if(pl&&!pl.hidden){ensureLyricsUI();loadLyrics()}
 }
-async function loadLyrics(){
-  const it=nowItem();if(!it)return;
-  const p=lyrPref;
-  const lt=$('#lyrT');if(lt)lt.innerHTML=esc(it.title)+'<span>'+esc(it.artist||'')+'</span>';
-  lyr.loadedFor=it.id+':'+p;
-  $('#lyrBody').innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
-  /* 4AP: a title-only artist string must not be sent as an identity — lrclib would match a
-     same-title DIFFERENT recording. Normalise both and drop the artist when they are equal. */
-  const _nc=s=>String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
-  const lyrArtist=(it.artist && _nc(it.artist)!==_nc(it.title)) ? it.artist : '';
-  const qs=p==='ytm'
-    ?'/api/lyrics?provider=ytm&id='+encodeURIComponent(it.id)
-    :'/api/lyrics?provider=lrclib&id='+encodeURIComponent(it.id)+'&title='+encodeURIComponent(it.title)+'&artist='+encodeURIComponent(lyrArtist)+'&duration='+Math.round(audio.duration||0);
-  try{
-    const r=await fetch(qs);const j=await r.json();
-    if(j.error){
-      // auto fallback ytm -> lrclib
-      if(p==='ytm'&&lyrPref==='ytm'){
-        lyrPref='lrclib';saveAll();$('#lYT').classList.remove('on');$('#lLR').classList.add('on');
-        lyr.loadedFor=null;loadLyrics();return;
-      }
-      $('#lyrBody').innerHTML=`<div class="lyrmissing">${esc(j.error)}<br><br>Tip: switch provider above or try another track.</div>`;
-      return;
-    }
-    lyr.plain=j.plain||'';lyr.synced=j.synced||'';lyr.cur=-1;
-    renderLyricsBody();
-  }catch(e){$('#lyrBody').innerHTML='<div class="lyrmissing">Lyrics failed to load.</div>'}
-}
-function renderLyricsState(){
-  const body=$('#lyrBody');
-  if(!body)return;
-  const it=nowItem();
-  if(!it){body.innerHTML='<div class="lyrmissing">Nothing playing.</div>';return}
-  body.innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
-}
-function renderLyricsBody(){
-  const body=$('#lyrBody');
-  if(!body)return;
-  clearInterval(lyr.timer);lyr.timer=null;
-  const it=nowItem();
-  if(!it){body.innerHTML='<div class="lyrmissing">Nothing playing.</div>';return}
-  if(lyr.synced){
-    const lines=parseLrc(lyr.synced);
-    if(lines.length){
-      body.innerHTML=lines.map((_,i)=>`<div class="l" id="l${i}"></div>`).join('');
-      lyr.cur=-1;
-      const paint=()=>{
-        const t=audio.currentTime||0;
-        let idx=lines.length-1;for(let i=0;i<lines.length;i++){if(t>=lines[i].t)idx=i;else break}
-        if(idx!==lyr.cur){
-          if(lyr.cur>=0)body.children[lyr.cur]?.classList.remove('on');
-          lyr.cur=idx;
-          const el=body.children[idx];if(el){el.classList.add('on');el.textContent=lines[idx].x;if(el.scrollIntoView)el.scrollIntoView({block:'center',behavior:'smooth'})}
-        }
-      };
-      paint();
-      lyr.timer=setInterval(()=>{if(!$('#pv').classList.contains?true:document.body.classList.contains('pv'))paint()},500);
-      body.style.whiteSpace='';
-      return;
-    }
-  }
-  body.innerHTML=lyr.plain
-    ?lyr.plain.split('\n').map(l=>`<div class="l">${esc(l)||'&nbsp;'}</div>`).join('')
-    :'<div class="lyrmissing">No lyrics found for this track.</div>';
-}
-function parseLrc(s){
-  const out=[];
-  (s||'').split('\n').forEach(line=>{
-    const re=/\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]\s*(.*)/;
-    let m=re.exec(line),off=0;
-    while(m){
-      let ms=m[3]?+(m[3].length===2?m[3]+'0':m[3].padEnd(3,'0')):0;
-      out.push({t:(+m[1])*60+(+m[2])+ms/1000,x:m[4]});
-      off=m[0].length;
-      const rest=line.slice(off);m=re.exec(rest);if(!rest)break;
-      if(!m)break;
-    }
-  });
-  return out;
-}
+/* Installed by the lyrics layers below (strict-mode assignments), so the globals must exist: */
+var loadLyrics, renderLyricsBody, ensureLyricsUI;
 
 /* ============ dice (personalized radio) ============ */
 async function diceRadio(){
@@ -1756,7 +1639,6 @@ onAudio('timeupdate',()=>{
   const d=audio.duration||0,ct=audio.currentTime||0;
   const pct=d?ct/d*100:0;
   $('#progFill').style.width=pct+'%';
-  {const tf=$('#trProgFill');if(tf)tf.style.width=pct+'%'}
   $('#pseek').style.setProperty('--v',pct+'%');$('#pseek').value=pct*10;
   $('#tCur').textContent=fmt(ct);$('#tDur').textContent=fmt(d);
 });
@@ -1824,17 +1706,6 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   $('#pvLyrics').hidden=!lyrOn;$('#pvQueue').hidden=lyrOn;$('#pvHead').hidden=lyrOn;
   if(lyrOn){ensureLyricsUI();if(!lyr.loadedFor)loadLyrics()}
 });
-/* lyrics provider seg (built on first open of lyrics) */
-function ensureLyricsUI(){
-  if($('#lyrSeg'))return;
-  $('#pvLyrics').innerHTML=`<div class="lyrt" id="lyrT"></div>
-    <div class="lyrseg" id="lyrSeg">
-    <button id="lYT" class="${lyrPref==='ytm'?'on':''}">YouTube Music</button>
-    <button id="lLR" class="${lyrPref==='lrclib'?'on':''}">LRClib</button></div>
-    <div id="lyrBody"></div>`;
-  $('#lYT').onclick=()=>{lyrPref='ytm';saveAll();$('#lYT').classList.add('on');$('#lLR').classList.remove('on');resetLyrics();loadLyrics()};
-  $('#lLR').onclick=()=>{lyrPref='lrclib';saveAll();$('#lLR').classList.add('on');$('#lYT').classList.remove('on');resetLyrics();loadLyrics()};
-}
 /* keyboard */
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'){if(e.key==='Escape')e.target.blur();return}
@@ -1869,7 +1740,7 @@ document.addEventListener('click',async e=>{
 </script>
 <style id="v2css">
 /* ================= Svara v2 layer ================= */
-:root{--acc-tx:#9DF0D8;--on-acc:0,0,0}
+:root{--on-acc:0,0,0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 /* animated mini <-> player (#28) */
 #pv{display:flex;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(20px) scale(.985);
@@ -1944,17 +1815,12 @@ body.lyrfull #pvLyrics{position:fixed;inset:0;z-index:80;background:rgba(6,6,10,
 body.lyrfull .pvleft{display:none}
 body.lyrfull .pvbody{padding:0}
 body.lyrfull .pvright{width:auto;flex:1;background:none;border:0;border-radius:0;min-height:0}
-body.lyrfull .tabrow,body.lyrfull .pvctx,body.lyrfull .pvhead,body.lyrfull #pvQueue{display:none!important}
+body.lyrfull .tabrow,body.lyrfull .pvhead,body.lyrfull #pvQueue{display:none!important}
 body.lyrfull .lyrbar{position:fixed;top:0;left:6vw;right:6vw;z-index:86;border-bottom:0;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"t s f" "a s f";gap:6px 12px;padding:18px 0 14px;background:linear-gradient(to bottom,rgba(6,6,10,.92),rgba(6,6,10,0))}
 body.lyrfull .lyrchip{width:auto}
 body.lyrfull .lyrchip button{flex:0 0 auto;padding:6px 12px}
 body.lyrfull #lyrJump{bottom:88px}
 body.lyrfull #lyrBody{font-size:clamp(24px,3.4vw,44px);line-height:1.45;max-width:900px;margin-left:0;margin-right:auto;padding:var(--lpad,44vh) 0 var(--lpad,46vh)}
-#pvTransport{position:fixed;left:0;right:0;bottom:0;z-index:85;display:none;align-items:center;gap:12px;padding:12px 26px;background:rgba(10,10,14,.84);backdrop-filter:blur(16px);border-top:1px solid var(--line)}
-#trProg{position:absolute;top:0;left:0;right:0;height:2px;background:var(--line);cursor:pointer}
-#trProg::after{content:"";position:absolute;left:0;right:0;top:-7px;bottom:-7px}
-#trProgFill{height:100%;width:0%;background:var(--grad)}
-body.lyrfull #pvTransport{display:flex}
 /* ===== Wave 4AO-c — reveal the player page during the fullscreen-lyrics CLOSE ramp =====
    body.lyrfull hides the page (.pvleft/.pvbody padding/.pvright/.tabrow) for the WHOLE ~380 ms
    retract, so only #pvArtBg (the blurred album art) + the .pvtop header were visible — the
@@ -1965,8 +1831,6 @@ body.lyrfull.lyrreveal .pvleft{display:flex}
 body.lyrfull.lyrreveal .pvbody{padding:4px 30px 34px}   /* UI-8: the base padding, re-read */
 body.lyrfull.lyrreveal .pvright{width:var(--pvrail,420px);flex:0 0 auto;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px}
 body.lyrfull.lyrreveal .tabrow{display:flex!important}
-#pvTransport .mtT{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#pvTransport .mtS{font-size:11.5px;color:var(--dim)}
 /* search suggestions (#21) */
 #shist{max-height:min(470px,64vh);overflow-y:auto;padding:6px}
 .shgrp{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);padding:9px 12px 4px;opacity:.75}
@@ -2084,7 +1948,6 @@ function themeAnimate(acc,acc2,accTx){
     s.setProperty('--grad','rgb('+A.join(',')+')');
     s.setProperty('--amb',A.join(','));
     s.setProperty('--amb2',A.join(','));
-    s.setProperty('--acc-tx','rgb('+T.join(',')+')');
     /* UI-1e: the accent is rewritten per album and spans near-black to pale yellow, so a static
        foreground fails at one end. SNAP --on-acc to whichever extreme contrasts with THIS frame's
        accent — never interpolated, so no grey mid-tones are ever painted. */
@@ -2334,6 +2197,10 @@ function paintLyrChip(){
   var a=$('#lYT'), b=$('#lLR'); if(!a||!b)return;
   a.classList.toggle('on',lyrPref==='ytm');
   b.classList.toggle('on',lyrPref==='lrclib');
+  /* WAVE 32 — the Auto pill lives in this same row, so it is painted here, synchronously.
+     It used to be inserted and repainted by a 600ms timer, which let "Auto" stay lit for up
+     to 0.6s after a click and kept a permanent interval alive for the whole session. */
+  if(typeof window.svPaintAuto==='function')window.svPaintAuto();
 }
 /* 4AO-b: the padding that lets the FIRST and LAST lines reach the centre is exactly half of the
    visible scrollport — computed, because the panel and fullscreen scrollers differ in height. */
@@ -2504,8 +2371,6 @@ loadLyrics=async function(){
   if(!it){lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Nothing playing.</div>'; sizeLyrPad(); return}
   var token=++lyrToken;
   lyr.loadedFor=it.id+':'+(lyrPref||'auto');
-  var t=$('#lyrT'); if(t)t.textContent=it.title||'';
-  var a=$('#lyrA'); if(a)a.textContent=it.artist||'';
   lyr.mode='loading'; lyr.lines=[]; lyr.cur=-1; clearInterval(lyr.timer); lyr.timer=null;
   body.innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
   sizeLyrPad();
@@ -2589,36 +2454,6 @@ document.addEventListener('click',function(e){
   audio.currentTime=t;
   paintLyrics(true); paintSeek();
 });
-function buildTransport(){
-  if($('#pvTransport'))return;
-  var d=document.createElement('div'); d.id='pvTransport';
-  d.innerHTML='<div id="trProg"><div id="trProgFill"></div></div>'+
-    '<div style="min-width:0;flex:1"><div class="mtT" id="trT"></div><div class="mtS" id="trS"></div></div>'+
-    '<button class="lyrbtn" id="trPrev"><span class="ic">'+ic('i-prev')+'</span></button>'+
-    '<button class="lyrbtn" id="trPlay"><span class="ic">'+ic('i-play')+'</span></button>'+
-    '<button class="lyrbtn" id="trNext"><span class="ic">'+ic('i-next')+'</span></button>';
-  document.body.appendChild(d);
-  $('#trPrev').onclick=function(){prevTrack()};
-  $('#trNext').onclick=function(){nextTrack(true)};
-  $('#trPlay').onclick=function(){togglePlay()};
-  $('#trProg').onclick=function(e){
-    if(!audio.duration)return;
-    var r=e.currentTarget.getBoundingClientRect();
-    var ratio=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
-    audio.currentTime=ratio*audio.duration;
-    var f=$('#trProgFill'); if(f)f.style.width=(ratio*100)+'%';
-  };
-  var pf=$('#trProgFill'); if(pf&&audio.duration)pf.style.width=(audio.currentTime/audio.duration*100)+'%';
-  paintTransport(); setInterval(paintTransport,600);
-}
-function paintTransport(){
-  var T=$('#trT'); if(!T)return;
-  var it=nowItem();
-  T.textContent=it?it.title:'Nothing playing';
-  var S=$('#trS'); if(S)S.textContent=it?(it.artist||''):'';
-  var b=$('#trPlay'); if(b)b.innerHTML='<span class="ic">'+ic(audio.paused?'i-play':'i-pause')+'</span>';
-  var pf=$('#trProgFill'); if(pf&&audio.duration)pf.style.width=(audio.currentTime/audio.duration*100)+'%';
-}
 /* ===== Wave 4AM — fullscreen lyrics open/close animation =====
    The fullscreen LAYOUT is untouched: this only controls how #pvLyrics enters and leaves.
    Open  = cross-fade (opacity .22s) + horizontal stretch from the RIGHT edge leftward to full
@@ -2633,15 +2468,14 @@ function lfIcon(open){ var b=$('#lyrFull'); if(b)b.innerHTML='<span class="ic">'
 function lyrFullOpen(){
   var tab=document.querySelector('.tab[data-tab="lyr"]');
   if(tab)tab.click();
-  ensureLyricsUI(); buildTransport(); paintTransport();
+  ensureLyricsUI();
   if(!lyr.loadedFor)loadLyrics();
-  var el=$('#pvLyrics'), tr=$('#pvTransport');
+  var el=$('#pvLyrics');
   if(!el){ document.body.classList.add('lyrfull'); document.body.classList.remove('lyrreveal'); LF.open=true; lfIcon(true); return }
   var already=document.body.classList.contains('lyrfull');   // reopen during the close ramp: retarget, no snap
   if(!already){
     if(!lfReduced()){
       el.style.transition='none'; el.style.clipPath='inset(0 0 0 100%)'; el.style.opacity='0';
-      if(tr){ tr.style.transition='none'; tr.style.opacity='0' }
     }
     document.body.classList.add('lyrfull');
   }
@@ -2651,18 +2485,17 @@ function lyrFullOpen(){
     sizeLyrPad(); lyrRecenter();
     updateLyrJump();
   });
-  if(lfReduced()){ document.body.classList.remove('lyrreveal'); lfClear(el); lfClear(tr); return }
+  if(lfReduced()){ document.body.classList.remove('lyrreveal'); lfClear(el); return }
   void el.offsetWidth;                                       // ONE forced reflow: the jump is never seen
   el.style.transition='opacity .22s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';
   el.style.clipPath='inset(0 0 0 0)'; el.style.opacity='1';
-  if(tr){ tr.style.transition='opacity .22s ease'; tr.style.opacity='1' }
   var token=++LF.token;
-  LF.timer=setTimeout(function(){ if(token!==LF.token)return; document.body.classList.remove('lyrreveal'); lfClear(el); lfClear(tr) },380);
+  LF.timer=setTimeout(function(){ if(token!==LF.token)return; document.body.classList.remove('lyrreveal'); lfClear(el) },380);
 }
 function lyrFullClose(){
   if(!LF.open && !document.body.classList.contains('lyrfull'))return;   // idempotent
   LF.open=false;
-  var el=$('#pvLyrics'), tr=$('#pvTransport'), reduced=lfReduced();
+  var el=$('#pvLyrics'), reduced=lfReduced();
   document.body.classList.add('lyrreveal');   // 4AO-c: reveal the page for the whole retract (overlay still fully covers here)
   if(!reduced){
     if(el){
@@ -2673,20 +2506,18 @@ function lyrFullClose(){
          interpolates to the target on its own, so a rapid reopen/close stays smooth. */
       if(getComputedStyle(el).clipPath==='none'){
         el.style.transition='none'; el.style.clipPath='inset(0 0 0 0)'; el.style.opacity='1';
-        if(tr){ tr.style.transition='none'; tr.style.opacity='1' }
         void el.offsetWidth;
       }
       el.style.transition='opacity .34s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';   // 4AO-c: close only — frost survives the whole retract
       el.style.clipPath='inset(0 0 0 100%)'; el.style.opacity='0';
     }
-    if(tr){ tr.style.transition='opacity .34s ease'; tr.style.opacity='0' }   // 4AO-c: close only — matches the clip
   }
   var token=++LF.token;
   function finish(){
     if(token!==LF.token)return;
     document.body.classList.remove('lyrfull');
     document.body.classList.remove('lyrreveal');
-    lfClear(el); lfClear(tr);
+    lfClear(el);
     sizeLyrPad(); updateLyrJump();
     lfIcon(false);
     try{ var b=$('#lyrFull'); if(b)b.focus() }catch(e){}
@@ -2699,7 +2530,7 @@ function lyrFullKill(){
   LF.token++; clearTimeout(LF.timer); LF.open=false;
   document.body.classList.remove('lyrfull');
   document.body.classList.remove('lyrreveal');
-  lfClear($('#pvLyrics')); lfClear($('#pvTransport'));
+  lfClear($('#pvLyrics'));
   sizeLyrPad(); updateLyrJump();
   lfIcon(false);
 }
@@ -2802,30 +2633,6 @@ document.addEventListener('click',function(e){
 });
 
 /* 10) correct download extension (#41) */
-downloadTrack=async function(it){
-  if(!it)return;
-  try{
-    toast('Downloading “'+it.title+'”…');
-    var r=await fetch('/api/download?id='+it.id);
-    if(!r.ok){var j=await r.json().catch(function(){return null});throw new Error((j&&j.error)||'download failed')}
-    var name=it.title||'track';
-    var cd=r.headers.get('content-disposition')||'';
-    var m=cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-    if(m){name=decodeURIComponent(m[1])}
-    else{
-      var ct=(r.headers.get('content-type')||'').toLowerCase();
-      var ext=ct.indexOf('webm')>=0?'webm':ct.indexOf('ogg')>=0?'opus':ct.indexOf('mpeg')>=0?'mp3':'m4a';
-      name=name+'.'+ext;
-    }
-    var blob=await r.blob();
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download=name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){URL.revokeObjectURL(a.href)},4000);
-    toast('Downloaded');
-  }catch(e){toast('Download failed: '+e.message)}
-};
-
 /* 11) startup */
 updatePlRows();
 paintLyrChip();
@@ -2915,22 +2722,32 @@ if(!$('#homeSec').hidden)renderHome();
       localStorage.setItem('sv_lyr_v2','1');
     }catch(e){}
   }
-  setInterval(function(){
-    var chip=document.getElementById('lyrSeg'); if(!chip)return;
+  /* WAVE 32 — the pill used to be inserted and painted by a 600ms interval: it could lag up to
+     0.6s behind a click, and the timer ran for the life of the app. Both steps now happen inside
+     paintLyrChip(), which every lyrics control already goes through. */
+  function build(){
+    var chip=document.getElementById('lyrSeg'); if(!chip) return null;
     if(!document.getElementById('lAU')){
       var b=document.createElement('button');
       b.id='lAU'; b.textContent='Auto';
       b.onclick=function(){
+        /* paintLyrChip() lives in the lyrics layer's closure and is NOT reachable from here —
+           the global painter it publishes is (and it repaints all three pills anyway). */
         lyrPref='auto'; saveAll(); lyr.loadedFor=null; loadLyrics();
-        Array.prototype.forEach.call(chip.children,function(x){x.classList.toggle('on',x.id==='lAU')});
+        if(typeof window.svPaintAuto==='function')window.svPaintAuto();
       };
       chip.insertBefore(b,chip.firstChild);
     }
+    return chip;
+  }
+  window.svPaintAuto=function(){
+    var chip=build(); if(!chip) return;
     var explicit=(lyrPref==='ytm'||lyrPref==='lrclib');
     Array.prototype.forEach.call(chip.children,function(x){
       x.classList.toggle('on', explicit ? (x.id===(lyrPref==='ytm'?'lYT':'lLR')) : (x.id==='lAU'));
     });
-  },600);
+  };
+  window.svPaintAuto();
 })();
 </script>
 <style id="v3css">
@@ -3064,8 +2881,6 @@ if(!$('#homeSec').hidden)renderHome();
 #setPanel .setPill{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim);flex-shrink:0}
 #setPanel .setPill.ok{color:#7ef0b0;border-color:rgba(126,240,176,.35)}
 #setPanel .setPill.no{color:var(--acc);border-color:rgba(var(--amb),.35)}
-#setPanel .setLink{font-size:12px;color:var(--acc2);text-decoration:none;flex-shrink:0}
-#setPanel .setLink:hover{text-decoration:underline}
 /* Wave 5 (UI-2) — the old .setSeg / .setSw rules that used to live here were REPLACED by the two
    dedicated port blocks at the end of the document (#v5segcss, #v5swcss), so each control has a
    single source of truth. Same tokens in, same rows out; nothing else in the panel moved. */
@@ -3110,8 +2925,6 @@ if(!$('#homeSec').hidden)renderHome();
 #aboutCard .abCardTop{display:flex;align-items:center;gap:12px}
 #aboutCard .abMark{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:8px;color:#f4f4f7}
 #aboutCard .abMark svg{display:block;flex:0 1 auto;min-width:0;height:20px;width:auto;aspect-ratio:370/69}
-#aboutCard .abGlyphBox{flex:0 0 auto}
-#aboutCard .abGlyphBox .abGlyph{width:22px;height:22px}
 #aboutCard .abGlyph{display:block;width:30px;height:30px;background-size:contain;background-position:center;background-repeat:no-repeat;
   filter:drop-shadow(0 -1.5px 2.5px rgba(43,231,166,.55))}
 #aboutCard .abName{font-size:22px;font-weight:800;line-height:1.25;color:#f4f4f7}
@@ -3187,7 +3000,6 @@ var LS = {
 };
 
 /* ---------- BUG #1: recent searches ---------- */
-var _renderSHist = renderSHist;
 renderSHist = function(){
   var el = $('#shist'); if(!el) return;
   if(!shist || !shist.length){ el.hidden = true; return }
@@ -3242,7 +3054,7 @@ renderQueue = function(){
     var isCur = (curQi>=0 && qi===curQi);
     var A = artistLinksHTML(x);   // 4Z-b: computed once — an empty artist must not leave a stray " • "
     if(isCur && startingNow()) A = 'Starting…';   // 4AE: the now-playing row mirrors the stream state
-    return '<div class="row '+(isCur?'cur':'')+'" data-q="'+qi+'" data-qid="'+esc(x.id)+'">'+
+    return '<div class="row '+(isCur?'cur':'')+'" data-q="'+qi+'">'+
       '<div class="rt"><img loading="lazy" src="'+esc(thumb(x))+'" onerror="this.style.display=\'none\'">'+
         '<div class="ov"><span class="ic">'+ic(isCur?'i-vol':'i-play')+'</span></div></div>'+
       '<div class="rm"><div class="rtitle">'+esc(x.title)+'</div>'+
@@ -3256,11 +3068,15 @@ renderQueue = function(){
 (function bindQueueClicks(){
   var q = document.getElementById('pvQueue'); if(!q) return;
   q.addEventListener('click', function(e){
+    /* these three own their own click/pointer behaviour — without the guard the capture
+       handler below would "play this row" instead of liking it / starting a drag. */
     if(e.target.closest('[data-menu]')) return;              // ⋮ still works
-    var row = e.target.closest('[data-qid]'); if(!row) return;
+    if(e.target.closest('[data-fav]')) return;               // heart keeps its own toggle
+    if(e.target.closest('[data-qgrip]')) return;             // drag handle never plays the row
+    var row = e.target.closest('[data-q]'); if(!row) return;
     e.preventDefault(); e.stopPropagation();
-    var id = row.getAttribute('data-qid');
-    var qi = queue.findIndex(function(x){ return x.id===id }); if(qi<0) return;
+    var qi = parseInt(row.getAttribute('data-q'), 10);
+    if(!(qi >= 0) || !queue[qi]) return;
     var pos = seq.indexOf(qi); if(pos<0){ seq.push(qi); pos=seq.length-1 }
     cur = pos; loadAt(pos, true); renderQueue();
   }, true);
@@ -3410,10 +3226,9 @@ function artSongRowHTML(it){
     '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
 }
 function artSongsHTML(items){ return '<div class="list">'+(items||[]).map(artSongRowHTML).join('')+'</div>' }
-/* rowHTML lives in the base layer and is used by search results, home rows,
-   liked/playlists and the artist top-songs list. Same markup, artist names
+/* The row renderer used by search results, home rows, liked/playlists and the artist
+   top-songs list. It REPLACES the base layer's plain-text row: same markup, artist names
    become links. */
-var _rowHTML = rowHTML;
 rowHTML = function(it){
   var cur = (typeof nowItem === 'function') && nowItem() && nowItem().id === it.id;
   return '<div class="row ' + (cur ? 'cur' : '') + '" data-play="1" data-id="'+esc(it.id)+'">'+
@@ -3423,14 +3238,12 @@ rowHTML = function(it){
     '<div class="rr">'+'<button class="favh'+(favs[it.id]?' on':'')+'" type="button" data-fav="'+esc(it.id)+'" aria-label="'+(favs[it.id]?'Remove from Liked music':'Add to Liked music')+'"><span class="ic">'+ic(favs[it.id]?'i-heart':'i-heart-o')+'</span></button>'+
     '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
 };
-/* railCard lives in the base layer and is used by the Home rails ("Listen again",
-   "Albums for you", the trending rail) — and by railHTML(). Same markup, the artist
-   line under each cover becomes links. Same delegated handler as rows/search/pvA. */
-var _railCard = railCard;
-/* WAVE 13: this wrapper is the card the Home rails actually use, so it must forward the base
-   layer's new optional SIZE argument — without it the Trending row kept asking for the 256px rail
-   token (the pixelated hero) however the base railCard was called. Undefined still means THUMB_RAIL
-   for every other row. */
+/* The Home-rail card ("Listen again", "Albums for you", the trending rail) and what railHTML()
+   draws. It REPLACES the base layer's card: same markup, the artist line under each cover becomes
+   links. Same delegated handler as rows/search/pvA. */
+/* WAVE 13: it must forward the optional SIZE argument — without it the Trending row kept asking for
+   the 256px rail token (the pixelated hero) however railCard was called. Undefined still means
+   THUMB_RAIL for every other row. */
 railCard = function(it, ctx, size){
   var sz = size || THUMB_RAIL;
   var ph = thumb(it,sz) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
@@ -4533,7 +4346,7 @@ downloadTrack = async function(it){
 /* Every localStorage key this app owns (WAVE0-NOTES inventory) + the frozen settings
    keys (PLAN §8). Export/import use this list; nothing else is accepted on import. */
 var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto','sv_liked_albums','sv_taste_excluded'];   /* 4AQ + 4AR */
-var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_crossfade','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_set_gfxLevel','sv_set_typeScale','sv_logo'];   /* UI-5: crossfade · UI-7: text size */
+var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_crossfade','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_set_gfxLevel','sv_set_typeScale'];   /* UI-5: crossfade · UI-7: text size */
 var SET_KEYS = SET_LIVE.concat(SET_NEW);
 var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null, aboutOpen = false;
 
@@ -4867,7 +4680,6 @@ function setProvider(p){
   var b = document.getElementById(p==='auto' ? 'lAU' : p==='ytm' ? 'lYT' : 'lLR');
   if(b) b.click();
   else { lyrPref = p; saveAll() }    // chips not built yet: same state, no fetch to redo
-  setPut('sv_set_lyricsProvider', lyrPref);
 }
 function setClearHist(){
   hist = {};
@@ -6536,19 +6348,17 @@ try{ if(typeof curPage !== 'undefined' && curPage === 'home') renderHome() }catc
 .hrm{width:30px;height:30px;border-radius:50%;color:var(--dim);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .hrm:hover{color:#ffb3c1;background:var(--panel2)}
 .hrm .ic{width:15px;height:15px}
-/* STEP 2 - a bigger fullscreen toggle, on BOTH surfaces (panel + fullscreen). Only #lyrFull,
-   never the transport's .lyrbtn buttons. */
+/* STEP 2 - a bigger fullscreen toggle, on BOTH surfaces (panel + fullscreen). */
 #lyrFull{width:38px;height:38px}
 #lyrFull .ic{width:20px;height:20px}
 /* STEP 3 - in FULLSCREEN only, the header keeps nothing but the collapse button. The side
-   panel (.lyrbar at rest) is untouched: title, artist and chips stay exactly as before. */
-body.lyrfull #lyrT,body.lyrfull #lyrA,body.lyrfull #lyrSeg{display:none}
+   panel (.lyrbar at rest) is untouched: the provider pills stay exactly as before. */
+body.lyrfull #lyrSeg{display:none}
 body.lyrfull .lyrbar{display:flex;align-items:center;justify-content:flex-end;padding:18px 0 14px}
 /* STEP 4 - the REAL mini player (art, clickable title/artist, live progress, transport)
-   at the bottom of the fullscreen lyrics view; the old text-only #pvTransport is hidden.
-   Overrides the v2css "hidden while player open" state and sits ABOVE #pvLyrics (80)/#pvTransport (85). */
+   at the bottom of the fullscreen lyrics view.
+   Overrides the v2css "hidden while player open" state and sits ABOVE #pvLyrics (80). */
 body.lyrfull #mini{display:flex;opacity:1;transform:none;pointer-events:auto;left:0;right:0;z-index:90}
-body.lyrfull #pvTransport{display:none!important}
 /* keep the lyrics scroller - and its bottom fade - clear of the bar */
 body.lyrfull #pvLyrics{padding-bottom:76px}
 /* during the 4AO-c close ramp, fade the mini with the retracting overlay */
@@ -6767,12 +6577,12 @@ function animShuffle(btn){
 
 /* ---------- skip / shuffle button wiring ---------- */
 var SKIP_TARGETS={
-  prevBtn:SKIP_BACK, pPrev:SKIP_BACK, trPrev:SKIP_BACK,
-  nextBtn:SKIP_FWD,  pNext:SKIP_FWD,  trNext:SKIP_FWD,
+  prevBtn:SKIP_BACK, pPrev:SKIP_BACK,
+  nextBtn:SKIP_FWD,  pNext:SKIP_FWD,
   pShuffle:SHUFFLE,  miniShuf:SHUFFLE
 };
-var ANIM={ prevBtn:animSkipBack, pPrev:animSkipBack, trPrev:animSkipBack,
-           nextBtn:animSkipForward, pNext:animSkipForward, trNext:animSkipForward,
+var ANIM={ prevBtn:animSkipBack, pPrev:animSkipBack,
+           nextBtn:animSkipForward, pNext:animSkipForward,
            pShuffle:animShuffle, miniShuf:animShuffle };
 function applyOne(id){
   var b=document.getElementById(id); if(!b) return;
@@ -7375,7 +7185,8 @@ body{font-family:'Svara UI',system-ui,'Segoe UI',Roboto,Arial,sans-serif}
    the shader's own shape sizing. Route (c) (u_shape:0 + u_scale:2) removed the gap but the visible
    2px band sits where the shader's alpha fades, so it stayed dark (max luminance ~99/255) — it did
    not read as chrome. Per the wave addendum we therefore SHIPPED THE CSS CHROME RING (A1+ fallback):
-   `@property --lm-angle` + a conic silver/white gradient masked to the outer 2px, with sv-lm-spin. */
+   `@property --lm-angle` + a conic silver/white gradient masked to the outer 2px. The angle is
+   fixed: the ring is chrome, not a spinner (the old sv-lm-spin class was never applied to it). */
 @property --lm-angle{ syntax:"<angle>"; inherits:false; initial-value:0deg; }
 .lm{position:relative;isolation:isolate;border-radius:999px;background:linear-gradient(180deg,#202020 0%,#000 100%);border:0}
 #setPanel .setAbout.lm{border-radius:999px;border:0;background:linear-gradient(180deg,#202020 0%,#000 100%)}
@@ -7394,9 +7205,6 @@ body{font-family:'Svara UI',system-ui,'Segoe UI',Roboto,Arial,sans-serif}
   mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
   mask-composite:exclude;
   transition:transform .14s ease}
-.sv-lm-ring.sv-lm-spin{animation:sv-lm-spin 6s linear infinite}
-@keyframes sv-lm-spin{ to{ --lm-angle:360deg; } }
-@media (prefers-reduced-motion:reduce){ .sv-lm-ring.sv-lm-spin{ animation:none; } }
 .lm-ripple-wrap{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none;z-index:1}
 .lm-ripple{position:absolute;width:20px;height:20px;border-radius:50%;pointer-events:none;
   background:radial-gradient(circle,rgba(255,255,255,.4) 0%,rgba(255,255,255,0) 70%);
@@ -9664,7 +9472,7 @@ html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
    plus a top light when selected), so they read as part of the same family without dissolving
    into the trough. Blur sits on the trough only, and the app's own chrome (#sb, #mini) keeps
    backdrop-filter at every level, so this is not a new exception to the low-power rule.
-   NOT part of the Text-size scale, by design: no rule for .lyrt/.lyra/.lyrchip exists in
+   NOT part of the Text-size scale, by design: no rule for .lyra/.lyrchip exists in
    #v5typecss, so Settings -> Appearance -> Text size cannot resize these pills.
 
    (2) THE MINI PLAYER. "Nothing playing" is not a state the bar should occupy: it is now HIDDEN
@@ -11226,7 +11034,7 @@ html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvHead.svPanR
    did. Reduced motion never adds the class at all: lyrFullClose() then finishes in one step. */
 @keyframes svXfadeIn{from{opacity:0}to{opacity:1}}
 body.lyrfull.svxcross #pvLyrics{display:flex!important}
-body.lyrfull.svxcross .pvctx,body.lyrfull.svxcross #pvQueue{display:block!important;animation:svXfadeIn .3s ease both}
+body.lyrfull.svxcross #pvQueue{display:block!important;animation:svXfadeIn .3s ease both}
 body.lyrfull.svxcross .pvhead{display:flex!important;animation:svXfadeIn .3s ease both}
 </style>
 
@@ -12048,8 +11856,6 @@ loadLyrics=async function(){
   if(!it){ lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Nothing playing.</div>'; pad(); return }
   var token=++TOKEN, p=prov(), d=durNow(it);
   lyr.loadedFor=it.id+':'+p;
-  var t=$('#lyrT'); if(t)t.textContent=it.title||'';
-  var a=$('#lyrA'); if(a)a.textContent=it.artist||'';
   var c=hit(it,p,d);
   if(c){ apply(c); return }                          /* already fetched: paint, do not blink "Loading…" */
   lyr.mode='loading'; lyr.lines=[]; lyr.cur=-1; clearInterval(lyr.timer); lyr.timer=null;
