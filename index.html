@@ -12638,8 +12638,9 @@ html[data-qunlock="1"] #pvQueue .favh{display:none}
 /* ===== WAVE 30 — unlock the Up-next list =====
    (1) LOCK / UNLOCK. The padlock next to Clear is CLOSED by default. Unlocked, a queue row swaps
        its Like heart for the two-bar drag handle — ⋮ stays, one slot to the left, now the last
-       button in the row. The state is a display preference only: it lives in localStorage and
-       never touches `queue`, `seq` or `cur`.
+       button in the row. The state is a display preference for THIS RUN only: it is written
+       nowhere and never touches `queue`, `seq` or `cur`. Changing song, opening the player page
+       or leaving the queue unlocked all keep it, but every launch starts locked again.
    (2) DRAG TO REORDER. Every row with a live handle can be dragged anywhere in the list — only the
        playing row itself is pinned. Crossing it is what moves a song in or out of the part already
        heard: a played song dropped below it plays again, an unplayed one dropped above it is
@@ -12650,8 +12651,11 @@ html[data-qunlock="1"] #pvQueue .favh{display:none}
        history is one scroll up rather than gone. */
 (function(){
 'use strict';
-var KEY = 'sv_q_unlock';
-var unlocked = (function(){ try{ return LSget(KEY, false) === true }catch(e){ return false } })();
+/* UNLOCK IS PER RUN — it used to be persisted under 'sv_q_unlock', so a restart came back still
+   unlocked. The lock is now closed on every launch. The old key is cleared once so a profile
+   that unlocked before this change cannot carry the state into this build. */
+try{ localStorage.removeItem('sv_q_unlock') }catch(e){}
+var unlocked = false;
 var lastScrollId = null;
 
 function box(){ return document.getElementById('pvQueue') }
@@ -12661,8 +12665,7 @@ function paintLock(){
   var b = document.getElementById('qLock'); if(!b) return;
   b.classList.toggle('un', unlocked);
   b.setAttribute('aria-pressed', unlocked ? 'true' : 'false');
-  b.title = unlocked ? 'Queue unlocked — drag the ☰ handle to reorder'
-                     : 'Queue locked — unlock to reorder songs';
+  b.title = unlocked ? 'Queue unlocked' : 'Queue locked';
   b.innerHTML = '<span class="ic">' + ic(unlocked ? 'i-lock-open' : 'i-lock') + '</span>';
 }
 
@@ -12737,7 +12740,6 @@ try{
   var lockBtn = document.getElementById('qLock');
   if(lockBtn) lockBtn.addEventListener('click', function(){
     unlocked = !unlocked;
-    try{ LSset(KEY, unlocked) }catch(e){}
     paintLock();
   });
 }catch(e){}
