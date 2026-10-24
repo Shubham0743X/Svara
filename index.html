@@ -1910,7 +1910,7 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
 /* the clipper is a plain box: the bar's own padding + border would keep the 0fr track from
    collapsing to 0 (an item's padding is part of its minimum contribution) */
 #lyrHead>.lyrclip{min-height:0;overflow:hidden}
-.lyrbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.lyrbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
 .lyrchip{display:flex;flex:0 0 auto;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:2px;width:auto}
 /* layout only — the pill's type, colours and ring come from the v5 provider-pill layer */
 .lyrchip button{flex:0 0 auto;white-space:nowrap;border-radius:99px}
@@ -1918,8 +1918,11 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
 .lyrbtn{width:30px;height:30px;flex:0 0 auto;border-radius:50%;color:var(--dim);display:flex;align-items:center;justify-content:center}
 .lyrbtn:hover{background:var(--panel2);color:var(--tx)}
 .lyrbtn .ic{width:16px;height:16px}
-/* the scroller: soft top/bottom fade instead of hard clipping */
-#lyrScroll{flex:1;min-height:0;overflow-y:auto;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 88%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 88%,transparent 100%)}
+/* the scroller: soft fade at BOTH ends instead of hard clipping. The ramps are a fixed pixel
+   length, not a percentage — the old 9%/12% bands shrank to a few pixels on the short side rail
+   and grew huge in fullscreen. The bottom one is the longer of the two, because that is the edge
+   the next line creeps out of while you read down the list. */
+#lyrScroll{flex:1;min-height:0;overflow-y:auto;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 52px,#000 calc(100% - 104px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 52px,#000 calc(100% - 104px),transparent 100%)}
 /* jump-to-current pill: does not scroll with the content */
 #lyrJump{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:5;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);color:var(--tx);font-size:12px;font-weight:600;padding:7px 14px;border-radius:999px;box-shadow:0 8px 26px rgba(0,0,0,.5);cursor:pointer}
 #lyrJump:not([hidden]){display:inline-flex}
@@ -2348,14 +2351,26 @@ function sizeLyrPad(){
   else { top='10px'; bot=Math.round(h/3)+'px'; }
   if(body.style.paddingTop!==top)body.style.paddingTop=top;
   if(body.style.paddingBottom!==bot)body.style.paddingBottom=bot;
-  /* 4AO-e: line 0 sits at the top, so the top fade would dim it — the mask is fully opaque at
-     the top in EVERY state; the bottom fade is kept. */
-  var grad='linear-gradient(to bottom,#000 0,#000 88%,transparent 100%)';
-  if(sc.style.maskImage!==grad){ sc.style.maskImage=grad; sc.style.webkitMaskImage=grad; }
+  paintLyrMask();
   if(!synced){
     if(sc.scrollTop!==0)sc.scrollTop=0;
     var j=$('#lyrJump'); if(j&&!j.hidden)j.hidden=true;
   }
+}
+/* The scroller's edge fade, written here because it depends on the scroll position.
+   TOP is the top ramp and BOT the bottom one, both a fixed number of pixels (the old 12% band was
+   a few px on a short panel and a third of the screen on a tall one). The top ramp GROWS with the
+   first 52px of scrolling instead of fading in at once: at rest (song start) the first line is
+   anchored at the very top and must stay at full strength, but as soon as the list has scrolled
+   under the header its cut-off top line gets the same soft edge as the bottom. That also makes the
+   header's slide honest — nothing pops when the pointer leaves. */
+function paintLyrMask(){
+  var sc=$('#lyrScroll'); if(!sc)return;
+  var TOP=52, BOT=104;
+  var t=sc.scrollTop; if(!(t>0))t=0;
+  var tf=Math.min(TOP, Math.round(t/8)*8);   /* steps of 8px: at most a handful of rewrites */
+  var grad='linear-gradient(to bottom,transparent 0,#000 '+tf+'px,#000 calc(100% - '+BOT+'px),transparent 100%)';
+  if(sc.style.maskImage!==grad){ sc.style.maskImage=grad; sc.style.webkitMaskImage=grad; }
 }
 /* 4AO-e: the anchored scroll target. The active line sits at the TOP while it is above the centre
    (target clamps to 0 -> no scrolling at song start) and then follows at the CENTRE once it
@@ -2436,7 +2451,7 @@ ensureLyricsUI=function(){
   $('#lLR').onclick=function(){lyrPref='lrclib';saveAll();paintLyrChip();lyr.loadedFor=null;loadLyrics()};
   $('#lyrFull').onclick=toggleLyrFull;
   var j=$('#lyrJump'); if(j)j.onclick=lyrJumpToCurrent;
-  var sc=$('#lyrScroll'); if(sc)sc.addEventListener('scroll',updateLyrJump,{passive:true});
+  var sc=$('#lyrScroll'); if(sc)sc.addEventListener('scroll',function(){ updateLyrJump(); paintLyrMask() },{passive:true});
   lyrReopen();
 }
 /* track change: follow again (never leave a stale scroll position / pill) */
@@ -12744,6 +12759,33 @@ document.addEventListener('pointerdown', function(e){
   try{ g.setPointerCapture(e.pointerId) }catch(err){}
 }, true);
 
+/* FLIP for the rows that give way. Before the list is re-ordered, every row's DRAWN top is
+   remembered; after the DOM change, each row that moved is animated from that old position back
+   to its new one — so the list slides into its new shape instead of snapping. Rows still gliding
+   from the previous swap are read where they are DRAWN (a running transform is part of the rect);
+   then every animation is cancelled before the new delta is taken, so a quick drag continues from
+   the current picture rather than yanking a half-finished row back to its slot. The carried row
+   is skipped on purpose: it has to stay under the pointer, not lag behind it. */
+function flipRows(rows, from, skip){
+  if(!rows.length) return;
+  var calm = false;
+  try{ calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches }catch(e){}
+  rows.forEach(function(r){ if(r._flip){ r._flip.cancel(); r._flip = null } });
+  if(calm) return;
+  rows.forEach(function(r){
+    if(r === skip) return;
+    var a = from.get(r); if(a == null) return;
+    var dy = a - r.getBoundingClientRect().top;
+    if(!(Math.abs(dy) > 0.5)) return;
+    try{
+      var an = r.animate([{transform:'translateY(' + dy.toFixed(2) + 'px)'},{transform:'translateY(0)'}],
+        {duration:220, easing:'cubic-bezier(.22,1,.36,1)'});
+      an.onfinish = function(){ if(r._flip === an) r._flip = null };
+      r._flip = an;
+    }catch(e){}
+  });
+}
+
 /* Put the carried row where the pointer is. Split out of the pointermove handler so the auto-
    scroller can re-run it every frame: the list moves under a still pointer, and the row has to
    follow that movement (and the dim boundary be repainted) without a fresh pointermove. */
@@ -12753,17 +12795,19 @@ function placeAt(y){
      direction. Dragging an unplayed song ABOVE it parks that song in the part already heard (it
      will not play on its own), and dragging a played one BELOW it puts it back in the rotation. */
   var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
-  var target = null;
+  var from = new Map(), target = null, moved = false;
+  rows.forEach(function(r){ from.set(r, r.getBoundingClientRect().top) });
   for(var j=0;j<rows.length;j++){
     var r = rows[j]; if(r === dragRow) continue;
     var b = r.getBoundingClientRect();
     if(y < b.top + b.height / 2){ target = r; break }
   }
-  if(target){ if(dragRow.nextElementSibling !== target) el.insertBefore(dragRow, target) }
+  if(target){ if(dragRow.nextElementSibling !== target){ el.insertBefore(dragRow, target); moved = true } }
   else {
     var last = rows[rows.length - 1];
-    if(last && last !== dragRow && dragRow.nextElementSibling) el.appendChild(dragRow);
+    if(last && last !== dragRow && dragRow.nextElementSibling){ el.appendChild(dragRow); moved = true }
   }
+  if(moved) flipRows(rows, from, dragRow);
   markPast();
 }
 
@@ -12864,21 +12908,19 @@ try{ if(box() && box().querySelector('.row[data-q]')) decorate() }catch(e){}
    rule is for the side panel only, so this must outrank `#pvLyrics:hover #lyrHead` without an
    !important (two ids beat id + pseudo-class + id). */
 body.lyrfull #pvLyrics #lyrHead{grid-template-rows:1fr;opacity:1;transform:none}
-/* The pill sits on the SAME line as the fullscreen button, so its box is trimmed to that button's
-   38px: 30px of button + 3px trough padding + 1px border on each side. The buttons keep the v5
-   family look (font, ring, glow) — only the box height and the horizontal padding change, and the
-   fullscreen button itself is not touched. */
-#lyrBar .lyrchip button{height:30px;display:inline-flex;align-items:center;padding:0 11px;flex:0 1 auto;min-width:0;overflow:hidden}
-/* the rail can go as narrow as 290px (the --pvrail floor), where pill + gap + button no longer fit:
-   let the trough give way instead of pushing the button off the panel. At every normal width the
-   pill is content-sized and nothing shrinks. */
-#lyrBar .lyrchip{flex:0 1 auto;min-width:0}
-/* Below ~1170px the rail (27.5vw) is too narrow for the three full labels next to the button, so
-   the pill tightens instead of clipping them; from 1170px up nothing is touched. */
-@media (max-width:1170px){
-  #lyrBar .lyrchip{padding:2px;gap:2px}
-  #lyrBar .lyrchip button{padding:0 7px;font-size:11.5px}
-}
+/* The pill now OWNS the row's free width: it starts at the panel's left edge and runs to the
+   fullscreen button, and the three providers split it into equal thirds. Longer box, taller box,
+   larger type — the fullscreen button keeps its exact 38px box, it is only the row around it that
+   grew. Its height is 34px of button + 3px trough padding + 1px border on each side = 42px. */
+#lyrBar .lyrchip{flex:1 1 auto;min-width:0;padding:3px}
+#lyrBar .lyrchip button{height:34px;display:inline-flex;align-items:center;justify-content:center;
+  padding:0 8px;font-size:13px;letter-spacing:.2px;flex:1 1 0;min-width:0;overflow:hidden}
+/* The rail is 27.5vw (290px floor / 560px ceiling), so the room per button shrinks with the
+   WINDOW: step the type down as it does instead of ellipsising a provider name. */
+@media (max-width:1500px){#lyrBar .lyrchip button{font-size:12px;padding:0 6px}}
+@media (max-width:1380px){#lyrBar .lyrchip button{font-size:11px;padding:0 4px;letter-spacing:.1px}}
+@media (max-width:1250px){#lyrBar .lyrchip button{font-size:10px;padding:0 3px;letter-spacing:0}}
+@media (max-width:1140px){#lyrBar .lyrchip{padding:2px;gap:2px}#lyrBar .lyrchip button{font-size:9px;padding:0 2px}}
 </style>
 </body>
 </html>
