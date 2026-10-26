@@ -35,7 +35,13 @@ async function getYt(){ if (!yt) yt = await Innertube.create(); return yt; }
    Failures are NEVER cached: a non-200, a body carrying `error`, or an empty result is sent with
    `no-store`, so 4AF's "Search failed" state can never become sticky. */
 const CACHE_TTL = {
-  '/api/lyrics': 86400,        // lyrics do not change
+  /* WAVE 34b — NOT a day any more. The payload depends on the requested `duration` (it steers the
+     LRClib row pick) and on the normaliser in THIS file, so a 24h browser copy outlived both: a
+     file fetched before the audio length was known kept the weaker row, and a shape fix shipped
+     in an update stayed invisible for a day (measured: the old range-form line survived a reload).
+     The client keeps its own in-memory cache for the session, so this costs at most one refetch
+     per track and provider. */
+  '/api/lyrics': 0,           // never: duration-dependent, and the parser can change with a build
   '/api/album': 1800,
   '/api/artist': 1800,
   '/api/artist/songs': 1800,
@@ -1169,6 +1175,10 @@ async function lrclibBest({ title, artist, album, duration }){
     let score = 0.5 * tScore + 0.3 * aScore + 0.2 * dScore;
     if (row._how.startsWith('exact')) score += 0.05;
     if (row.syncedLyrics) score += 0.06;                 // timed lyrics win near-ties
+    /* WAVE 34: an entry whose own length is the track's length, to within a few seconds, is the
+       same recording — it beats a longer/shorter cut that merely sits inside the tolerance above
+       (the AZUL case: a 152s upload's timings vs the 138s master both pass `agree`). */
+    if (duration > 0 && row.duration && Math.abs(row.duration - duration) <= 3) score += 0.08;
     ranked.push({ row, score });
   }
   ranked.sort((a, b) => b.score - a.score);
@@ -1222,17 +1232,9 @@ async function lrclibBest({ title, artist, album, duration }){
   return best.row;
 }
 /* the LAST timestamp in a synced file (seconds), 0 when it carries none — see the coverage test
-   above. Every [mm:ss], [mm:ss.x] and [mm:ss.xxx] tag on a line counts, not just the first. */
+   above. Every stamp of ANY shape counts (see normalizeLrc below), not just the bracketed ones. */
 function lastStamp(lrc){
-  let last = 0;
-  const re = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
-  let m;
-  while ((m = re.exec(String(lrc || '')))) {
-    const frac = m[3] ? Number(m[3]) / (m[3].length === 3 ? 1000 : m[3].length === 2 ? 100 : 10) : 0;
-    const t = Number(m[1]) * 60 + Number(m[2]) + frac;
-    if (t > last) last = t;
-  }
-  return Math.round(last);
+  return Math.round(normalizeLrc(lrc).last);
 }
 /* m:ss for a duration in seconds — used by the wave 19 mismatch note, and empty for 0/absent so a
    sentence can never read "the  version". */
@@ -1240,14 +1242,340 @@ function clock(sec){
   const s = Math.round(Number(sec) || 0);
   return s > 0 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '';
 }
-/* a synced file rendered as plain text: the [mm:ss.xx] tags are strip-only, the words are kept. */
-function stripLrcTags(s){
-  return String(s || '').split('\n')
-    .map(l => l.replace(/^\s*(\[[^\]]*\]\s*)+/, ''))
-    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+/* ===== WAVE 34 — EVERY TIMESTAMP SHAPE A CONTRIBUTOR CAN PASTE =================================
+   Reported: playing "AZUL" showed the lyrics tab full of "00:01:37.290 ~ 00:01:39.770 Ni dell mull
+   wangu tarsayi janni ae/" — numbers, not karaoke. LRClib files that row as SYNCED, but its lines
+   are not LRC: they read `00:00:11.610 ~ 00:00:13.790  words` (start ~ end, no brackets at all).
+   The client's parser looks for `[mm:ss]`, found none, fell through to the plain text — which is
+   the same file, numbers and all. Nothing was wrong with the fetch; the shape was simply unknown.
+
+   normalizeLrc() rewrites every shape into the one the client can highlight, word for word:
+     [00:12.34] words · [01:02:03.456] words · 00:12.34 words · 00:00:12.340 words
+     00:00:12.340 ~ 00:00:15.100 words · 00:12.34 - words
+   A bare `mm:ss` INSIDE the words is never a stamp — AZUL's own "Kholdi ae dino pure 7:45" keeps
+   its time — because a leading stamp only counts with a fraction, with hours, or when a range
+   separator follows it. Header tags ([ar:], [ti:], [offset:]) and any untimed line are dropped:
+   they cannot be placed on the clock, and an untimed duplicate is what the raw-number screen was.
+   A file left with fewer than two timed lines is NOT synced; /api/lyrics then answers plain text
+   with its "no timed lyrics" note, so one stray stamp can never drive the highlight. */
+const TS3 = /^\s*\[?\s*(\d{1,3}):(\d{2}):(\d{2})(?:[.,](\d{1,3}))?\s*\]?\s*/;
+const TS2 = /^\s*\[?\s*(\d{1,3}):(\d{2})(?:[.,](\d{1,3}))?\s*\]?\s*/;
+function fracSec(f){
+  if (!f) return 0;
+  return Number(f) / (f.length === 3 ? 1000 : f.length === 2 ? 100 : 10);
+}
+function lrcClock(sec){
+  const s = Math.max(0, Number(sec) || 0);
+  const m = Math.floor(s / 60), r = s - m * 60;
+  return String(m).padStart(2, '0') + ':' + (r < 10 ? '0' : '') + r.toFixed(2);
+}
+/* the leading "start [~ end]" of one line → { t, text }; t is null when the line has no stamp */
+function leadStamp(line){
+  let s = String(line || ''), t = null;
+  for (let i = 0; i < 2; i++) {
+    const m3 = s.match(TS3);
+    const m = m3 || s.match(TS2);
+    if (!m) break;
+    const hasFrac = m3 ? m[4] !== undefined : m[3] !== undefined;
+    const after = s.slice(m[0].length);
+    const isRange = /^[~\u2013\u2014]\s*/.test(after) || /^-(?:\s|>)/.test(after);
+    /* "pure 7:45" is words, not a stamp: no fraction, no hours, no range after it */
+    if (!hasFrac && !m3 && !isRange) break;
+    if (t === null) {
+      t = m3 ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + fracSec(m[4])
+             : Number(m[1]) * 60 + Number(m[2]) + fracSec(m[3]);
+    }
+    if (!isRange) { s = after; break }
+    s = after.replace(/^[~\u2013\u2014]\s*|^-(?:\s|>)\s*/, '');   /* then consume the END stamp */
+  }
+  return { t, text: s.replace(/\s+/g, ' ').trim() };
+}
+function normalizeLrc(src){
+  const lines = [];
+  let last = 0;
+  String(src || '').split(/\r\n|\r|\n/).forEach(raw => {
+    const line = raw.replace(/^\uFEFF/, '').trim();
+    if (!line) return;
+    const tags = [...line.matchAll(/\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
+    let stamps = [], text = line;
+    if (tags.length) {
+      text = line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+      stamps = tags.map(m => Number(m[1]) * 60 + Number(m[2]) + fracSec(m[3]));
+      /* WAVE 34b — the HYBRID line: a bracket stamp followed by an inline range, as in
+         `[01:39.77] 00:01:37.290 ~ 00:01:39.770 Ni dell mull…` (AZUL's 36-line entry). Stripping
+         the brackets alone left the range in the words, which is the raw-number screen again.
+         The inner range is the finer clock (its end can equal the bracket stamp), so it wins. */
+      const inner = leadStamp(text);
+      if (inner.t !== null) { text = inner.text; stamps = [inner.t]; }
+    } else {
+      const lead = leadStamp(line);
+      if (lead.t === null) return;
+      stamps = [lead.t]; text = lead.text;
+    }
+    stamps.forEach(t => {
+      if (!isFinite(t)) return;
+      lines.push({ t, text });
+      if (t > last) last = t;
+    });
+  });
+  lines.sort((a, b) => a.t - b.t);
+  const lrc = lines.map(l => '[' + lrcClock(l.t) + '] ' + l.text).join('\n');
+  return { lrc, n: lines.length, first: lines.length ? lines[0].t : 0, last, lines };
+}
+/* plain lyrics with any timestamp debris removed. Applies to BOTH providers: the untimed text can
+   arrive with the same prefixes a synced file uses (the AZUL row's plainLyrics is its synced text),
+   and a line that is nothing BUT a stamp is dropped rather than painted as a number. */
+function sanitizePlain(s){
+  const out = [];
+  String(s || '').split(/\r\n|\r|\n/).forEach(raw => {
+    let line = raw.replace(/^\uFEFF/, '').trim();
+    if (!line) { if (out.length && out[out.length - 1] !== '') out.push(''); return }
+    line = line.replace(/^(?:\[[^\]]*\]\s*)+/, '');       /* [00:12.34] / [Verse] prefixes */
+    const lead = leadStamp(line);
+    if (lead.t !== null) line = lead.text;
+    line = line.replace(/\s+/g, ' ').trim();
+    if (!line) return;
+    out.push(line);
+  });
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// provider=auto (default) | ytm | lrclib   → auto prefers SYNCED lyrics
+/* ===== WAVE 35 — THE SYNCED POOL ==============================================================
+   The two timed pills used to be two names for the same lookup: "LRClib" asked LRClib, and
+   "Auto" asked LRClib and then fell back to YouTube Music. LRClib answers with whatever its
+   contributors uploaded — sometimes plain text, sometimes a file that starts half a minute in
+   because it was written against a music video with an intro, sometimes nothing at all — so a
+   song the app knows could still open on a blank panel.
+
+   Both timed pills now read from ONE pool, in a fixed order of preference:
+       LRClib  ->  Better Lyrics (Apple TTML)  ->  LyricsPlus (Apple / Musixmatch KPOE)
+   The first candidate that passes the checks below wins. The pills differ only in what happens
+   when the whole pool is empty: LRClib shows the best plain text, Auto shows YouTube Music's
+   plain text, and the YouTube Music pill never consults the pool at all.
+
+   A candidate is ACCEPTED only when
+     · it parses to at least two timed lines (normalizeLrc — every stamp shape, see WAVE 34), and
+     · its own recording length agrees with this track's within SYNC_DUR_TOL. The API cannot hear
+       the song, so length is the only honest guard against a match from a different cut; that is
+       also why every adapter sends the duration it was asked for.
+   A LATE first line does not disqualify a candidate — it only loses to one that keeps the intro
+   (SYNC_LATE), which is the whole point of asking all three in order.
+
+   Every request is deadline-bounded and every failure returns null: a provider that is down, slow
+   or rate-limited can cost its own turn in the waterfall and nothing else. */
+const SYNC_LATE = 20;      // s — a first timed line after this is missing the intro
+const SYNC_DUR_TOL = 5;    // s — an accepted file must agree with the track on length by this
+const LYR_UA = 'Svara/2.0 (music player)';
+
+/* "9.615" | "00:09.615" | "4:28.165" → seconds */
+function secOf(v){
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return 0;
+  if (/^\d+(?:\.\d+)?$/.test(s)) return parseFloat(s);
+  const p = s.split(':').map(Number);
+  if (p.some(n => !isFinite(n))) return 0;
+  if (p.length === 2) return p[0] * 60 + p[1];
+  if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
+  return 0;
+}
+/* the handful of entities both providers actually emit */
+function xmlText(s){
+  return String(s || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (m, d) => String.fromCodePoint(Number(d)))
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ').trim();
+}
+/* Apple-style TTML → lines. <body dur="4:28.165"> states the matched recording's own length;
+   each <p begin="9.615"> is a line and its <span> children are syllables, flattened into text. */
+function ttmlLines(xml){
+  const src = String(xml || '');
+  const dm = src.match(/<body\b[^>]*\bdur="([^"]+)"/);
+  const lines = [];
+  const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/g;
+  let m;
+  while ((m = re.exec(src))) {
+    const bm = m[1].match(/\bbegin="([^"]+)"/);
+    if (!bm) continue;
+    const t = secOf(bm[1]);
+    const text = xmlText(m[2]);
+    if (!isFinite(t) || !text) continue;
+    lines.push({ t, text });
+  }
+  lines.sort((a, b) => a.t - b.t);
+  return { lines, dur: dm ? secOf(dm[1]) : 0 };
+}
+/* LyricsPlus /v2 "KPOE" JSON → lines. time/duration are MILLISECONDS, and the matched recording's
+   length is metadata.totalDuration (same "m:ss.mmm" shape TTML uses) — or, when it is absent, the
+   end of the last line. */
+function kpoeLines(j){
+  const src = (j && Array.isArray(j.lyrics)) ? j.lyrics : [];
+  const lines = [];
+  let end = 0;
+  src.forEach(l => {
+    const t = (Number(l && l.time) || 0) / 1000;
+    const text = xmlText(String((l && l.text) || '').replace(/\n/g, ' '));
+    const e = t + (Number(l && l.duration) || 0) / 1000;
+    if (e > end) end = e;
+    if (!text || !isFinite(t)) return;
+    lines.push({ t, text });
+  });
+  lines.sort((a, b) => a.t - b.t);
+  const md = (j && j.metadata) || {};
+  const dur = secOf(md.totalDuration) || end;
+  return { lines, dur };
+}
+/* Apple's pools sometimes put a CREDIT where the first lyric would be — LyricsPlus opens Zaalima
+   with `0.00 "Zaalima - Arijit Singh (…)/Harshdeep Kaur"`, which looks like a file that keeps the
+   intro and then is not one at all. A leading line that is just the song and the artist, or a
+   "Provided to YouTube by…"/"Lyrics:" banner, is dropped before anything is measured, so `first`
+   means the first LYRIC — the thing the intro test is about — and the panel never opens on a
+   credit. Only the first few seconds are inspected: a dash inside a real lyric is left alone. */
+function stripCredits(lines, q){
+  const title = String((q && q.title) || '');
+  return lines.filter(l => {
+    if (l.t > 5) return true;
+    const s = l.text;
+    if (/^(provided to youtube|lyrics\s*:|song\s*:|auto-generated)/i.test(s)) return false;
+    const sep = /^.{0,90}\s[-\u2013\u2014|\u00b7\u2022]\s.{0,90}$/.test(s);
+    /* "Zaalima - Arijit Singh/Harshdeep Kaur" scores only 0.2 against the bare title (the artist
+       words dominate the set), so the test is on the part BEFORE the dash: a line that opens with
+       the song's own name is a credit, whatever is written after it. */
+    if (sep){
+      const head = s.split(/\s[-\u2013\u2014|]\s/)[0];
+      if (jaccard(head, title) >= 0.85 || jaccard(s, title) >= 0.3) return false;
+    }
+    return true;
+  });
+}
+/* one candidate, in the shape /api/lyrics publishes. null when there is nothing to highlight. */
+function packLines(source, lines, dur, q){
+  lines = stripCredits((lines || []).slice(), q).sort((a, b) => a.t - b.t);
+  if (!lines || lines.length < 2) return null;
+  return {
+    source,
+    n: lines.length,
+    dur: dur || 0,
+    first: lines[0].t,
+    synced: lines.map(l => '[' + lrcClock(l.t) + '] ' + l.text).join('\n'),
+    plain: sanitizePlain(lines.map(l => l.text).join('\n'))
+  };
+}
+/* ---- adapter: Better Lyrics (api.betterlyrics.org) --------------------------------------------
+   The public endpoint is a CACHE, not a search: a keyless request is only answered when all four
+   lookup parameters match an entry someone already asked for — s (title), a (artist), al (album)
+   and d (length in WHOLE SECONDS). Anything else is 401 "Uncached queries require a valid API
+   key", which is a MISS and nothing more.
+   MEASURED, and it matters: al is part of that cache key, so `al=<the track title>` (the old
+   fallback here) turned every album-less track into a guaranteed 401 — this adapter never once
+   returned lyrics in production. Unknown album is sent as an EMPTY al, which is the shape the
+   cache was filled with; d is rounded (`Math.round`), and a 1 s difference still hits. No duration
+   means no request at all: the pool is asked before the audio element knows its length, and a
+   request without d can only ever miss (and would be cached as that miss upstream). */
+async function syncedBetterLyrics(q){
+  if (!q.title) return null;
+  const dur = Math.round(Number(q.duration) || 0);
+  if (!(dur > 0)) return null;
+  /* The artist is part of the key too, and our search rows credit everyone ('Arijit Singh,
+     Harshdeep Kaur') where the cache was filled with the lead act alone. A 401 is cheap and
+     comes back in milliseconds, so the credit string is tried first and the LEAD artist second —
+     measured: Zaalima's joined credit misses, 'Arijit Singh' hits the same entry. */
+  const full = String(q.artist || '');
+  const lead = full.split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b|\bx\b)\s*/i)[0].trim();
+  const artists = (lead && lead !== full) ? [full, lead] : [full];
+  let j = null;
+  for (const a of artists) {
+    const p = new URLSearchParams({ s: q.title, a, al: q.album || '', d: String(dur) });
+    try {
+      const r = await fetchT('https://api.betterlyrics.org/getLyrics?' + p,
+        { headers: { 'User-Agent': LYR_UA } }, 5000);
+      if (r.status === 401) {                   /* cache miss — the normal answer, not an error */
+        if (process.env.LYR_DEBUG) console.log('betterlyrics: 401 cache miss for', p.toString());
+        continue;
+      }
+      if (!r.ok) continue;
+      const body = await r.json();
+      if (body && body.ttml) { j = body; break }
+    } catch (e) { /* deadline or bad JSON: try the next credit string, never throw */ }
+  }
+  if (!j) return null;
+  const t = ttmlLines(j.ttml);
+  if (q.duration > 0 && t.dur > 0 && Math.abs(t.dur - q.duration) > SYNC_DUR_TOL) return null;
+  return packLines('betterlyrics', t.lines, t.dur, q);
+}
+/* ---- adapter: LyricsPlus (lyricsplus.prjktla.my.id) ---- */
+async function syncedLyricsPlus(q){
+  if (!q.title) return null;
+  const p = new URLSearchParams({ title: q.title, artist: q.artist || '' });
+  if (q.album) p.set('album', q.album);
+  if (q.duration > 0) p.set('duration', String(Math.round(q.duration)));
+  let j;
+  try {
+    const r = await fetchT('https://lyricsplus.prjktla.my.id/v2/lyrics/get?' + p,
+      { headers: { 'User-Agent': LYR_UA, 'X-Client-Package': 'Svara <https://github.com/Shubham0743X/Svara>' } }, 6500);
+    if (!r.ok) return null;
+    j = await r.json();
+  } catch (e) { return null }
+  const t = kpoeLines(j);
+  if (q.duration > 0 && t.dur > 0 && Math.abs(t.dur - q.duration) > SYNC_DUR_TOL) return null;
+  return packLines('lyricsplus', t.lines, t.dur, q);
+}
+/* Resolve a track through the pool. Returns { best, lr }: `best` is a packed timed candidate (or
+   null) and `lr` is the raw LRClib row, whose WORDS are the plain-text fallback even when its
+   timings were refused. */
+/* A resolved pool answer is reused for a while: the client asks twice per track (before and after
+   the audio's length is known) and again on every pill switch, and each cold answer can cost a
+   handful of upstream round-trips. Keyed by the request, bounded, and versioned so a build that
+   changes what the pool means never serves the old shape. */
+const POOL_V = '36a';
+const POOL_CACHE = new Map();
+function poolKey(q){
+  return [POOL_V, q.title || '', q.artist || '', q.album || '', Math.round(q.duration || 0)].join('|').toLowerCase();
+}
+function poolGet(k){
+  const e = POOL_CACHE.get(k);
+  if (!e) return undefined;
+  if (Date.now() - e.at > 15 * 60 * 1000) { POOL_CACHE.delete(k); return undefined }
+  return e.v;
+}
+function poolPut(k, v){
+  POOL_CACHE.set(k, { at: Date.now(), v });
+  while (POOL_CACHE.size > 120) POOL_CACHE.delete(POOL_CACHE.keys().next().value);
+}
+async function syncedPool(q){
+  const key = poolKey(q), memo = poolGet(key);
+  if (memo) return memo;
+  const lr = await lrclibBest(q);
+  let best = null;
+  if (lr && lr.syncedLyrics && !lr._durMismatch) {
+    const f = normalizeLrc(lr.syncedLyrics);
+    const lines = stripCredits(f.lines.slice(), q);
+    if (lines.length >= 2) {
+      best = { source: 'lrclib', n: lines.length, dur: lr.duration || 0, first: lines[0].t,
+               synced: lines.map(l => '[' + lrcClock(l.t) + '] ' + l.text).join('\n'),
+               plain: sanitizePlain(lr.plainLyrics || f.lrc) };
+    }
+  }
+  /* the intro is there: first verified result wins, and nothing else is even asked */
+  if (best && best.first <= SYNC_LATE) return { best, lr };
+  /* missing / untimed / starts late — ask the other two. They are fetched TOGETHER (the panel is
+     waiting and neither can answer without the other's network time) but chosen in preference
+     order, so Better Lyrics still wins a tie and LyricsPlus is only the last word. */
+  const [bl, lp] = await Promise.all([syncedBetterLyrics(q), syncedLyricsPlus(q)]);
+  for (const c of [bl, lp]) {
+    if (!c) continue;
+    if (!best || c.first < best.first - 3) best = c;
+    if (best.first <= SYNC_LATE) break;
+  }
+  const out = { best, lr };
+  poolPut(key, out);
+  return out;
+}
+
+// provider=auto (default) | ytm | lrclib
 app.get('/api/lyrics', async (req, res) => {
   cacheHeaders(res, '/api/lyrics');
   const want = ['ytm', 'lrclib'].includes(req.query.provider) ? req.query.provider : 'auto';
@@ -1258,41 +1586,47 @@ app.get('/api/lyrics', async (req, res) => {
   const duration = parseFloat(req.query.duration) || 0;
   const out = { provider: '', plain: '', synced: '', hasSync: false, note: '', error: '' };
   try {
-    let lr = null, ytText = '';
-    if (want !== 'ytm') lr = await lrclibBest({ title, artist, album, duration });
+    /* WAVE 35: the YouTube Music pill never consults the pool (it is plain text by definition). */
+    const pool = (want === 'ytm') ? { best: null, lr: null } : await syncedPool({ title, artist, album, duration });
+    const cand = pool.best;
+    const lr = pool.lr;
 
-    // 1) timed LRClib lyrics win — the only ones we can highlight. WAVE 19: a match that failed
-    //    lrclibBest's length / coverage tests is NOT one of them (it is published as plain text in
-    //    branch 3 instead — its words are the right song's, its clock is another recording's).
-    if (want !== 'ytm' && lr && lr.syncedLyrics && !lr._durMismatch) {
-      out.provider = 'lrclib';
-      out.synced = lr.syncedLyrics;
-      out.plain = lr.plainLyrics || lr.syncedLyrics;
+    // 1) a TIMED file from the pool — the only ones that can be highlighted. WAVE 19: an LRClib
+    //    match that failed its length / coverage tests is not one of them (its words are the right
+    //    song's, its clock is another recording's); its text is published in branch 3 instead.
+    if (want !== 'ytm' && cand) {
+      out.provider = cand.source;
+      out.synced = cand.synced;
+      out.plain = cand.plain;
       out.hasSync = true;
-      if (lr.trackName && jaccard(title, lr.trackName) >= 0.5) out.note = '';
       return res.json(out);
     }
 
-    // 2) YouTube Music (curated, untimed)
+    // 2) YouTube Music (curated, untimed). Under Auto it is the waterfall's answer when no provider
+    //    had timings; on its own pill it is the requested answer. Either way it carries a note:
+    //    what the user is looking at is not karaoke, and the pill that is one click away says so.
     if (want !== 'lrclib') {
-      ytText = await ytmLyrics(id);
+      const ytText = await ytmLyrics(id);
       if (ytText) {
         out.provider = 'ytm';
-        out.plain = ytText;
-        out.note = 'YouTube Music lyrics are not time-synced — switch to LRClib for karaoke highlighting.';
+        out.plain = sanitizePlain(ytText);
+        out.note = want === 'ytm'
+          ? 'YouTube Music lyrics are not time-synced — switch to LRCLIB for karaoke highlighting.'
+          : 'No timed lyrics for this track — showing YouTube Music’s plain text.';
         return res.json(out);
       }
     }
 
-    // 3) LRClib plain lyrics as the last resort
+    // 3) plain text as the last resort — LRClib's WORDS, never its refused clock
     if (lr && (lr.plainLyrics || lr.syncedLyrics)) {
       /* WAVE 19 — a match that failed lrclibBest's duration test keeps its WORDS and loses its
-         timings: highlighting it would run this recording's clock on another recording's words. */
+         timings: highlighting it would run this recording's clock on another recording's words.
+         WAVE 35 — anything arriving here has no timed candidate from ANY of the three. */
       const mismatch = !!lr._durMismatch;
       out.provider = 'lrclib';
-      out.synced = mismatch ? '' : (lr.syncedLyrics || '');
-      out.plain = lr.plainLyrics || (mismatch ? stripLrcTags(lr.syncedLyrics) : (lr.syncedLyrics || '')) || '';
-      out.hasSync = !!out.synced;
+      out.synced = '';
+      out.plain = sanitizePlain(lr.plainLyrics || lr.syncedLyrics || '');
+      out.hasSync = false;
       if (mismatch) {
         const was = clock(lr._durOf), is = clock(duration), to = clock(lr._spanTo);
         /* which test sent it down here decides what the note says — a recording of a different
@@ -1307,7 +1641,7 @@ app.get('/api/lyrics', async (req, res) => {
               + ' — they were written for a shorter cut, so they are shown without highlighting.'
             : 'These words are from another version of this song — LRClib has no timed lyrics that match this one, so the lines are not highlighted.';
       }
-      else if (!out.hasSync) out.note = 'LRClib has no timed lyrics for this track — lines are not clickable.';
+      else out.note = 'No timed lyrics found for this track — showing plain text.';
       return res.json(out);
     }
 

@@ -646,7 +646,7 @@ let hist=LSget('ml_history',{});          // your listening history (kept from b
 let favs=LSget('sv_favs',{});
 let pls=LSget('sv_pls',{});
 let shist=LSget('sv_shist',[]);
-let lyrPref=LSget('sv_lyr','lrclib');   /* WAVE 14 — LRClib is the first-run default (was 'ytm') */
+let lyrPref=LSget('sv_lyr','auto');   /* WAVE 35 — Auto is the first-run default: the synced pool first, YouTube Music's words after it */
 const idItem={};
 let toastT;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
@@ -695,22 +695,11 @@ function setNav(on){
    in its idle state and every later visit is repainted by the showDyn/goHome wrapper (which calls
    homeLine() in the same tick as this function), so nothing has to blank it any more. */
 function goHome(){plCtx=null;curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
-/* WAVE 14 — a dyn page can now say HOW to rebuild itself. `list` = {head, cls}: the page's own bar
-   (if it has one) plus the class its listHTML() list was built with. A repaint — a Like, an unlike,
-   anything that calls refreshHearts() — then rebuilds the page the user is actually looking at.
-   Without it, refreshHearts() fell back to a bare listHTML(curList): that is exactly what turned
-   the Quick picks page's grid back into a plain list and dropped its Back / Play all bar. */
-var dynList=null;
-function showDyn(title,sub,html,list){plCtx=null;dynList=(list&&typeof list==='object')?list:null;curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
-/* Rebuild the current dyn page from the same recipe it was built with. Returns false when the page
-   never registered one, so the caller keeps the rebuild it had before this wave. */
-function repaintDyn(){
-  if(!dynList||!curList||!curList.length) return false;
-  var h=(typeof dynList.head==='function')?dynList.head():(dynList.head||'');
-  $('#dynSec').innerHTML=h+listHTML(curList,dynList.cls||'');
-  register(curList);
-  return true;
-}
+/* WAVE 34 — the WAVE 14 "how to rebuild myself" recipe (`list` = {head, cls}) is gone with the
+   rebuild it fed: repaintDyn() was its only reader, its only caller was the like-triggered
+   refreshHearts() repaint that WAVE 34 removed, and no page passes a 4th argument any more.
+   A Like only changes a glyph now (see refreshHearts), so there is no recipe to hand over. */
+function showDyn(title,sub,html){plCtx=null;curPage='dyn';window.__songListPage='';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
 
 /* ============ sidebar playlists ============ */
 function updatePlRows(){
@@ -721,7 +710,7 @@ function updatePlRows(){
   names.forEach(n=>{h+=`<button class="plrow" data-lib="pl:${esc(n)}"><span class="ic">${ic('i-list')}</span>${esc(n)}<span class="cnt">${pls[n].length}</span></button>`});
   $('#plList').innerHTML=h+'<div class="sbt" style="opacity:.35">Library opens here</div>';
 }
-function openLiked(){const items=Object.values(favs).filter(x=>x&&x.id);if(!items.length){toast('No liked songs yet — tap the ♥');return}showDyn('Liked music',items.length+' songs',listHTML(items));curList=items;register(items);}
+function openLiked(){const items=Object.values(favs).filter(x=>x&&x.id);if(!items.length){toast('No liked songs yet — tap the ♥');return}showDyn('Liked music',items.length+' songs',listHTML(items));curList=items;register(items);window.__songListPage='liked';}
 function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlist is empty');return}
   showDyn(esc(name),items.length+' songs · '+esc('click ⋮ to remove'),listHTML(items));
   plCtx=name;                                   /* showDyn cleared it; this page is the playlist */
@@ -1405,13 +1394,41 @@ function toggleFav(it){
   saveAll();paintFavs();updatePlRows();refreshHearts();
   toast(favs[it.id]?'Added to Liked music':'Removed from Liked music');
 }
+/* WAVE 34 — A LIKE IS A FLAG, NOT A RELOAD.
+   Reported: tapping ♥ on a Trending card or a Quick picks row (or liking the same song from a row
+   further down Home) threw the page back to the top. Root cause: liking is a global state change,
+   so refreshHearts() rebuilt whatever was on screen — on Home that is renderHome(), whose first
+   write replaces #homeSec wholesale. WAVE 19 tried to keep the carousel offsets across that
+   rebuild, which fixed how far a RAIL was scrolled but not the page itself: the sections still
+   went through a skeleton/refetch cycle and #scroll still jumped. Liking an ALBUM never did this
+   because that path repaints its hearts in place (repaintAlbumHearts).
+   THE FIX — repaint the hearts, not the page. Every visible [data-fav] button is repainted from
+   `favs` (class, glyph, label), and Home keeps its DOM, its scroll and its already-painted rails.
+   The ONE page whose CONTENT depends on likes is the Liked music list (a row must disappear when
+   its song is unliked), so only that page is rebuilt — and it is a list, not a feed, so nothing it
+   shows is lost. Every other page (playlist, artist, album, search, queue) only needs the glyph. */
+function paintFavHeart(b){
+  if(!b||!b.getAttribute)return;
+  var id=b.getAttribute('data-fav'); if(!id)return;
+  var on=!!favs[id];
+  b.classList.toggle('on',on);
+  b.setAttribute('aria-label',on?'Remove from Liked music':'Add to Liked music');
+  b.innerHTML='<span class="ic">'+ic(on?'i-heart':'i-heart-o')+'</span>';
+}
 function refreshHearts(){
-  if(!$('#homeSec').hidden){renderHome()}
-  else if(!$('#dynSec').hidden&&curList.length){
-    /* WAVE 14: a page that knows how to rebuild itself keeps its own look (its grid class, its
-       header bar); every other page keeps the plain-list rebuild it always had. */
-    if(!repaintDyn()){ $('#dynSec').innerHTML=listHTML(curList); register(curList) }
+  var nodes=document.querySelectorAll('[data-fav]');
+  for(var i=0;i<nodes.length;i++)paintFavHeart(nodes[i]);
+  if($('#homeSec')&&!$('#homeSec').hidden)return;      // Home: hearts only, never a rebuild
+  if($('#dynSec')&&!$('#dynSec').hidden&&window.__songListPage==='liked'){
+    var sc=$('#scroll'), y=sc?sc.scrollTop:0;
+    var items=Object.values(favs).filter(function(x){return x&&x.id});
+    if(!items.length){ goHome(); return }
+    showDyn('Liked music',items.length+(items.length===1?' song':' songs'),listHTML(items));
+    curList=items; register(items);
+    window.__songListPage='liked';
+    if(sc)sc.scrollTop=y;
   }
+  /* a page that knows how to rebuild itself keeps its own look; the rest only needed the glyphs */
 }
 function addToPlaylist(name,it){
   if(!pls[name])pls[name]=[];
@@ -2308,7 +2325,7 @@ ensureLyricsUI=function(){
      side. The song title / artist are gone (the player page already shows them, and the lyrics tab
      needs the room); the row slides down on hover and retracts when the pointer leaves (#lyrHead). */
   host.innerHTML='<div id="lyrHead"><div class="lyrclip"><div class="lyrbar" id="lyrBar">'+
-      '<div class="lyrchip" id="lyrSeg"><button id="lYT">YouTube Music</button><button id="lLR">LRClib</button></div>'+
+      '<div class="lyrchip" id="lyrSeg"><button id="lYT">YouTube Music</button><button id="lLR">LRCLIB</button></div>'+
       '<button class="lyrbtn" id="lyrFull" title="Fullscreen lyrics"><span class="ic">'+ic('i-expand')+'</span></button>'+
     '</div></div></div>'+
     '<div id="lyrScroll"><div id="lyrBody"></div></div>'+
@@ -2378,6 +2395,7 @@ loadLyrics=async function(){
   qs.set('provider',(lyrPref==='ytm'||lyrPref==='lrclib')?lyrPref:'auto');
   qs.set('id',it.id); qs.set('title',it.title||''); qs.set('artist',it.artist||'');
   var dur=audio.duration||0; if(dur>0)qs.set('duration',String(Math.round(dur)));
+  qs.set('v','36a');                        /* WAVE 34b: see urlFor — keeps old cached JSON away */
   try{
     var r=await fetch('/api/lyrics?'+qs.toString());
     var j=await r.json();
@@ -3089,9 +3107,7 @@ showDyn = function(t,s,h){
      immediately before this call; every other showDyn() caller (liked music, playlists, the
      artist “show all” list) leaves it down, so the chips stay hidden on those views. */
   sView = _sPaint; _sPaint = false;
-  /* WAVE 14: this wrapper used to call through with (t,s,h) only, which silently dropped a page's
-     own rebuild recipe (the 4th argument) and left repaintDyn() with nothing to rebuild from. */
-  _showDyn(t,s,h,arguments[3]);
+  _showDyn(t,s,h);
   hideArtist();
   hideAlbum();                                // 4AL: the album page is its own section
   try{ document.title = String(t).replace(/<[^>]+>/g,'') + ' · Svara' }catch(e){}
@@ -4445,7 +4461,7 @@ function setRender(){
      column beside it. setRow's `stack` variant already existed (#setPanel .setRow.stack); the only
      new CSS is the 10px gap above the control (v5segcss). Playback / Downloads rows are unchanged. */
   h += '<div class="setGrp"><h3>Lyrics</h3>'+
-    setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRClib']], setLive('provider')), true)+
+    setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRCLIB']], setLive('provider')), true)+
   '</div>';
   /* ===== Wave 5 — Appearance / graphics level =====
      The ONLY entry point for the graphics level: no top-bar button, no Home card, no shortcut.
@@ -9345,9 +9361,13 @@ html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
     var items = pls[n] || [], cov = items.length ? thumb(items[0], THUMB_RAIL) : '';
     var ph = cov ? '' : '<div class="ph"><span class="ic">'+ic('i-list')+'</span></div>';
     var pinned = pinList().indexOf(n) >= 0;
+    /* WAVE 34 — the hover badge is a PLAY button, like every other card's. It used to be i-list,
+       a STROKE glyph, inside .rail .ov .pb — whose rule paints the icon with fill and stroke:none
+       for i-play's solid triangle. That killed the three lines and left only the three little
+       dots, so a playlist card showed ":" instead of play (the reported three-dots icon). */
     return '<div class="rail" data-lib="pl:'+esc(n)+'" data-title="'+esc(n)+'">'+
       '<div class="art libart">'+ph+(cov ? '<img loading="lazy" alt="" src="'+esc(cov)+'" onerror="this.style.display=\'none\'">' : '')+
-      '<div class="ov"><span class="pb">'+ic('i-list')+'</span></div></div>'+
+      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
       '<div class="rname">'+esc(n)+'</div>'+
       '<div class="rsub2">'+(pinned?'Pinned · ':'')+'Playlist · '+items.length+(items.length===1?' song':' songs')+'</div></div>';
   }
@@ -10655,7 +10675,11 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   text-shadow:0 1px 10px rgba(0,0,0,.55)}
 .heroSec .rail .rname{bottom:31px;font-size:17px;font-weight:750}
 .heroSec .rail .rsub2{bottom:14px;font-size:12.5px;color:rgba(255,255,255,.72)}
-.heroSec .rail .ov{padding:12px}
+/* WAVE 34 — THE PLAY BUTTON SITS ON TOP OF THE FADE, NOT UNDER IT. .art::after (the bottom
+   gradient that keeps the title legible) is the last child of .art, so it paints AFTER the .ov
+   overlay that holds the play button: the button was washed out by its own card's shadow. The text
+   lines already lift themselves above it (z-index:2); the button gets 3 so it is always crisp. */
+.heroSec .rail .ov{padding:12px;z-index:3}
 .heroSec .rail .ov .pb{width:40px;height:40px}
 @media(max-width:1000px){.heroSec .railwrap{--herocols:2.2}}
 @media(max-width:660px){.heroSec .railwrap{--herocols:1.2}}
@@ -11327,84 +11351,13 @@ body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,
 .oncPill[aria-pressed="true"]:hover{background:rgba(var(--amb),.20);border-color:var(--acc2);color:var(--acc2)}
 </style>
 
-<script id="v19oncui">
-/* ================================================================================================
-   WAVE 19 — AND THE OTHER THING A LIKE DOES: it must not throw the user back to the start of a rail.
-   Reported: scrolling a long way into the Quick picks carousel on Home, tapping ♥ on a song, and
-   landing back at the FIRST card with the whole carousel reset — every time. Root cause: liking is a
-   GLOBAL state change (the same track can sit in Listen again, a picked shelf and the queue at once),
-   so refreshHearts() rebuilds the current page, and on Home that is renderHome(), whose first write
-   is sec.innerHTML = h: #homeSec is replaced wholesale, and a fresh grid/rail starts at scrollLeft 0
-   by definition — which is exactly where the user found themselves, every time.
-   THE FIX — put the offsets back, not the markup back. Before the rebuild this reads every scrolled
-   or scrollable node (.railwrap, .list, .chiprow) in each section, keyed by the section’s own <h2>
-   text, which survives a rebuild because it is what renderHome writes; after it, the same nodes are
-   found again by that key and their offsets are written back. renderHome paints its synchronous half
-   (the Quick picks grid among it) before it returns, so one restore call covers the reported case,
-   and the three discovery rails — which fill AFTER their fetch settles — are covered by the two
-   follow-ups below. Nothing is keyed by index alone: a section whose scrollers changed shape is
-   simply skipped (its node is missing) rather than restoring an unrelated offset.
-   ONLY the like/unlike path is wrapped: a repaint the user ASKED for (a chip, a sort) is still free
-   to start its rows where it likes, because it is the same wrapper renderHome()/goHome() call. */
-(function(){
-  var SCROLLERS = ".railwrap,.list,.chiprow";
-  function textKey(sec){
-    var h = sec.querySelector("h2"); if(!h) return "";
-    var first = h.firstChild;                                   /* skips the Play all / Show more buttons */
-    var t = (first && first.nodeType === 3) ? first.textContent : h.textContent;
-    return String(t || "").replace(/s+/g, " ").trim();
-  }
-  function scrollers(sec){
-    var out = [];
-    Array.prototype.forEach.call(sec.querySelectorAll(SCROLLERS), function(n){
-      if(n.scrollWidth - n.clientWidth > 2 || n.scrollTop) out.push(n);
-    });
-    return out;
-  }
-  function snapshot(rootEl){
-    var snap = [];
-    if(!rootEl) return snap;
-    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
-      var key = textKey(sec); if(!key) return;
-      var list = scrollers(sec); if(!list.length) return;
-      snap.push({ key:key, at:list.map(function(n){ return { l:n.scrollLeft, t:n.scrollTop } }) });
-    });
-    return snap;
-  }
-  function restore(rootEl, snap){
-    if(!rootEl || !snap || !snap.length) return 0;
-    var byKey = {};
-    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
-      var k = textKey(sec); if(k && !byKey[k]) byKey[k] = sec;
-    });
-    var n = 0;
-    snap.forEach(function(s){
-      var sec = byKey[s.key]; if(!sec) return;
-      var list = scrollers(sec);
-      s.at.forEach(function(p, i){
-        var node = list[i]; if(!node) return;
-        if(node.scrollLeft !== p.l){ node.scrollLeft = p.l; n++ }
-        if(p.t && node.scrollTop !== p.t) node.scrollTop = p.t;
-      });
-    });
-    return n;
-  }
-  var inner = (typeof refreshHearts === "function") ? refreshHearts : null;
-  if(!inner) return;
-  refreshHearts = function(){
-    var home = document.getElementById("homeSec");
-    if(!home || home.hidden || typeof renderHome !== "function") return inner.apply(this, arguments);
-    var snap = snapshot(home);
-    var out = renderHome();
-    restore(home, snap);
-    var again = function(){ restore(home, snap) };
-    if(out && typeof out.then === "function") out.then(again, again);
-    setTimeout(again, 60); setTimeout(again, 260);
-    return out;
-  };
-  window.svaraRailScroll = { keep: function(){ var h=document.getElementById("homeSec"); return snapshot(h) },
-                             put: function(s){ return restore(document.getElementById("homeSec"), s) } };
-})();
+<script id="v34likejs">
+/* WAVE 34 — the WAVE 19 rail-offset restore is gone with the rebuild it protected.
+   It existed to put a Home carousel back where the user left it after a like-triggered
+   renderHome(). WAVE 34 removed that renderHome() (see refreshHearts: a Like now repaints the
+   hearts in place), so there is no rebuild left to restore an offset after — keeping the wrapper
+   would reintroduce the very page rebuild this fixes. Verified: liking on Home leaves #homeSec
+   untouched, every rail at its offset and #scroll where it was. */
 </script>
 <style id="v20cwcss">
 /* ================= WAVE 20 — arrows on every horizontal carousel =================
@@ -11799,6 +11752,12 @@ function urlFor(it,p,d){
   qs.set('provider',p);
   qs.set('id',it.id); qs.set('title',it.title||''); qs.set('artist',it.artist||'');
   if(d>0) qs.set('duration',String(d));
+  /* WAVE 34b — a cache axis, not a parameter the server reads. Lyrics responses used to be sent
+     with max-age=86400, so a browser/Electron profile that fetched a track before this build keeps
+     serving that old JSON for a day: the range-form raw line and the no-duration row both survived
+     a server fix in testing. A new `v` makes every older entry unreachable without clearing the
+     user's cache. Bump it whenever the shape of /api/lyrics changes. */
+  qs.set('v','36a');
   return '/api/lyrics?'+qs.toString();
 }
 function remember(k,d,j){
@@ -11808,12 +11767,16 @@ function remember(k,d,j){
 }
 function hit(it,p,d){
   var e=CACHE[keyOf(it,p)]; if(!e) return null;
+  /* WAVE 34b: a payload fetched before the audio length was known was never re-asked, so the
+     weaker no-duration row (AZUL: 36 lines, range-form) stayed on screen where the duration-aware
+     pick has the full 52. Once the length is known, that entry is stale. */
+  if(d>0&&!(e.d>0)) return null;
   if(d>0&&e.d>0&&Math.abs(e.d-d)>8) return null;   /* a different recording — refetch */
   return e.j;
 }
 function ask(it,p,d){
   var k=keyOf(it,p), e=CACHE[k];
-  if(e&&!(d>0&&e.d>0&&Math.abs(e.d-d)>8)) return Promise.resolve(e.j);
+  if(e&&!(d>0&&!(e.d>0))&&!(d>0&&e.d>0&&Math.abs(e.d-d)>8)) return Promise.resolve(e.j);
   if(PENDING[k]) return PENDING[k];
   var pr=fetch(urlFor(it,p,d)).then(function(r){ return r.json() }).then(function(j){
     delete PENDING[k];
