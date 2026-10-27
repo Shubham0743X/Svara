@@ -10,24 +10,24 @@ your library on your own PC.
 
 Svara ships two ways. Same app, same music — pick whichever suits you.
 
-### ▶ [Download the Svara installer](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara-Setup-1.2.0.exe)
+### ▶ [Download the Svara installer](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara-Setup-1.3.0.exe)
 
 A normal Windows install: a Start Menu entry, a desktop shortcut, and an uninstaller, so Svara
 updates and leaves like anything else on your PC. **This is the one to pick** unless you want a
 file you can carry around.
 
-1. Click the link above — you get `Svara-Setup-1.2.0.exe` (about 128 MB).
+1. Click the link above — you get `Svara-Setup-1.3.0.exe` (about 128 MB).
 2. Run it. It asks where to put Svara, installs in a few seconds, and can open the app for you when
    it finishes.
 3. Start playing.
 
 To remove it later: **Settings → Apps → Installed apps → Svara → Uninstall**.
 
-### ▶ [Download Svara portable](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara.1.2.0.exe)
+### ▶ [Download Svara portable](https://github.com/Shubham0743X/Svara/releases/latest/download/Svara.1.3.0.exe)
 
 One file, no installer, no admin prompt — handy for a USB stick or a PC you don't want to change.
 
-1. Click the link above — you get `Svara.1.2.0.exe` (about 114 MB).
+1. Click the link above — you get `Svara.1.3.0.exe` (about 114 MB).
 2. Put it wherever you like (Desktop, a folder, a USB stick) and double-click it.
 3. Start playing.
 
