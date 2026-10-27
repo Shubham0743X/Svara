@@ -773,6 +773,9 @@ function topArtists(n){
   return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n||3).map(x=>x[0]);
 }
 function topRecent(n){return Object.values(hist).sort((a,b)=>b.last-a.last).slice(0,n||12)}
+/* One history entry by id — what a rail card falls back to when the list it was painted from no
+   longer holds it (an id-less legacy entry simply resolves to null and nothing is played). */
+function histItem(id){return (id&&hist[id])?hist[id]:null}
 function topScored(n){
   const now=Date.now();
   return Object.values(hist)
@@ -1173,10 +1176,17 @@ window.svaraFeed={
   state:function(){ return { qpShown:qpShown, page:QP_PAGE, trend:(trendArr||[]).length, pop:(popArr||[]).length, cached:Object.keys(feedCache).length, trendQ:trendQueries(), win:popWindow() } }
 };
 var homeGen=0;
+/* WAVE 37 — the Listen again row AS PAINTED, and the list its clicks play. The handler used to
+   rebuild topRecent(12) at click time, but every play bumps that track's `last`: the fresh list
+   re-orders and can push the oldest card out of the 12 entirely. The id then missed, and the
+   fallback `playList(arr,0)` started index 0 — normally the song already playing, from the top.
+   A shifted index was the same bug in friendlier clothes: a neighbour played instead of the card. */
+var homeLaArr=[];
 async function renderHome(){
   var gen=++homeGen;
   const sec=$('#homeSec');
   const recent=topRecent(12),scored=topScored(qpShown),arts=topArtists(FEED_ARTISTS);
+  homeLaArr=recent;
   /* Home shows the row with NO active pill (the shared builder, no second copy of the markup). */
   let h=chipRowHTML(null);
   const none=!Object.keys(hist).length;
@@ -1539,9 +1549,14 @@ document.addEventListener('click',e=>{
     if(ctx==='al'){openAlbum(id,rail.dataset.title||'');return}
     /* Wave 7 adds two contexts of its own: 'pop' (Popular right now) and 'trend' (Trending songs).
        The legacy 'start' context is untouched — it is the welcome rail's own re-fetch path. */
-    const arr=ctx==='la'?topRecent(12):ctx==='start'?starterArr:ctx==='pop'?popArr:ctx==='trend'?trendArr:[];
+    /* 'la' plays the row that is on screen (homeLaArr), not a freshly rebuilt one — see its note
+       above renderHome(). A miss now plays the CLICKED track, never index 0. */
+    const arr=ctx==='la'?(homeLaArr.length?homeLaArr:topRecent(12)):ctx==='start'?starterArr:ctx==='pop'?popArr:ctx==='trend'?trendArr:[];
     if(!arr.length)return;
-    const idx=arr.findIndex(x=>x.id===id);playList(arr,idx>=0?idx:0,true);
+    const idx=arr.findIndex(x=>x.id===id);
+    if(idx>=0){playList(arr,idx,true);return}
+    const one=histItem(id);
+    if(one)playList([one].concat(arr),0,true);
   }
   const qr=e.target.closest('[data-q]');
   if(qr&&!e.target.closest('button')){const i=+qr.dataset.q;const np=seq.indexOf(i);if(np>=0)loadAt(np,true)}
@@ -2395,7 +2410,7 @@ loadLyrics=async function(){
   qs.set('provider',(lyrPref==='ytm'||lyrPref==='lrclib')?lyrPref:'auto');
   qs.set('id',it.id); qs.set('title',it.title||''); qs.set('artist',it.artist||'');
   var dur=audio.duration||0; if(dur>0)qs.set('duration',String(Math.round(dur)));
-  qs.set('v','36a');                        /* WAVE 34b: see urlFor — keeps old cached JSON away */
+  qs.set('v','37a');                        /* WAVE 34b: see urlFor — keeps old cached JSON away */
   try{
     var r=await fetch('/api/lyrics?'+qs.toString());
     var j=await r.json();
@@ -11757,7 +11772,7 @@ function urlFor(it,p,d){
      serving that old JSON for a day: the range-form raw line and the no-duration row both survived
      a server fix in testing. A new `v` makes every older entry unreachable without clearing the
      user's cache. Bump it whenever the shape of /api/lyrics changes. */
-  qs.set('v','36a');
+  qs.set('v','37a');
   return '/api/lyrics?'+qs.toString();
 }
 function remember(k,d,j){

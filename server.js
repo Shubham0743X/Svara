@@ -1229,6 +1229,27 @@ async function lrclibBest({ title, artist, album, duration }){
     return Object.assign({}, row, { _durMismatch: true, _durOf: row.duration || 0,
                                     _spanTo: row.syncedLyrics ? lastStamp(row.syncedLyrics) : 0 });
   }
+  /* WAVE 38 — THE EARLIEST LYRIC BEATS THE EXACT LENGTH. Among rows that already passed every
+     same-recording test (agree), take the one whose first LYRIC is earliest. Measured on "High On
+     You": LRClib holds a 2:25 upload that opens on "Holding things together in my life" at
+     0:00.27 and the exact 2:21 master whose first lyric is "Jind I'm here" at 0:21.90 — the
+     ranker picked the master, so the panel was blank for 22s while the complete file sat one row
+     below. Only rows within 0.15 of the winner's score are candidates (a different song cannot
+     land that close: the artist term alone is worth 0.3), and an equal first line keeps the better
+     score, so ties change nothing. A start within LEAD_TIE of the leader is a tie in practice: a
+     merged-line variant opening 0.17s earlier is not a more complete file, and it must not replace
+     the better-matched row over that. */
+  {
+    let lead = best, leadT = firstTimed(best.row.syncedLyrics, { title, artist });
+    const floor = best.score - 0.15;
+    for (const x of agree) {
+      if (x === best || !x.row.syncedLyrics || x.score < floor) continue;
+      const t = firstTimed(x.row.syncedLyrics, { title, artist });
+      if (t === null) continue;
+      if (leadT === null || t < leadT - LEAD_TIE) { lead = x; leadT = t }
+    }
+    best = lead;
+  }
   return best.row;
 }
 /* the LAST timestamp in a synced file (seconds), 0 when it carries none — see the coverage test
@@ -1347,23 +1368,28 @@ function sanitizePlain(s){
    because it was written against a music video with an intro, sometimes nothing at all — so a
    song the app knows could still open on a blank panel.
 
-   Both timed pills now read from ONE pool, in a fixed order of preference:
+   Both timed pills now read from ONE pool of three providers:
        LRClib  ->  Better Lyrics (Apple TTML)  ->  LyricsPlus (Apple / Musixmatch KPOE)
-   The first candidate that passes the checks below wins. The pills differ only in what happens
-   when the whole pool is empty: LRClib shows the best plain text, Auto shows YouTube Music's
-   plain text, and the YouTube Music pill never consults the pool at all.
+   That order is now a TIE-BREAK, not the rule: WAVE 38 picks the candidate whose first LYRIC comes
+   earliest, and only an equal start falls back to it (LRClib first). Reported on "High On You":
+   LRClib carried two credible entries — a 2:25 upload opening on "Holding things together in my
+   life" at 0:00.27, and the exact 2:21 master whose first lyric is "Jind I'm here" at 0:21.90. The
+   ranker preferred the exact length, so the panel sat dim for 22 seconds while the file WITH the
+   intro sat one row below. Picking by rank or by arrival can never fix that; picking the earliest
+   first line does. (Here Better Lyrics and LyricsPlus carry only the 0:23.3 recording, so they
+   could not have supplied the intro either.) A first line at 0:00.27 is the whole intro, so the
+   other two providers are not even asked.
 
    A candidate is ACCEPTED only when
      · it parses to at least two timed lines (normalizeLrc — every stamp shape, see WAVE 34), and
      · its own recording length agrees with this track's within SYNC_DUR_TOL. The API cannot hear
        the song, so length is the only honest guard against a match from a different cut; that is
        also why every adapter sends the duration it was asked for.
-   A LATE first line does not disqualify a candidate — it only loses to one that keeps the intro
-   (SYNC_LATE), which is the whole point of asking all three in order.
 
    Every request is deadline-bounded and every failure returns null: a provider that is down, slow
    or rate-limited can cost its own turn in the waterfall and nothing else. */
-const SYNC_LATE = 20;      // s — a first timed line after this is missing the intro
+const SYNC_EARLY = 2;      // s — a first lyric this close to 0:00 already has the whole intro
+const LEAD_TIE = 0.5;      // s — starts this close count as the SAME timestamp (incumbent wins)
 const SYNC_DUR_TOL = 5;    // s — an accepted file must agree with the track on length by this
 const LYR_UA = 'Svara/2.0 (music player)';
 
@@ -1451,6 +1477,14 @@ function stripCredits(lines, q){
     return true;
   });
 }
+/* Seconds of the first LYRIC in a synced file (credits already stripped), or null when the file
+   carries no usable timings. normalizeLrc() is the same parser the panel runs, so this measures
+   what the user would SEE rather than what the raw file claims. */
+function firstTimed(lrc, q){
+  if (!lrc) return null;
+  const lines = stripCredits(normalizeLrc(lrc).lines.slice(), q || {});
+  return lines.length ? lines[0].t : null;
+}
 /* one candidate, in the shape /api/lyrics publishes. null when there is nothing to highlight. */
 function packLines(source, lines, dur, q){
   lines = stripCredits((lines || []).slice(), q).sort((a, b) => a.t - b.t);
@@ -1530,7 +1564,7 @@ async function syncedLyricsPlus(q){
    the audio's length is known) and again on every pill switch, and each cold answer can cost a
    handful of upstream round-trips. Keyed by the request, bounded, and versioned so a build that
    changes what the pool means never serves the old shape. */
-const POOL_V = '36a';
+const POOL_V = '37a';
 const POOL_CACHE = new Map();
 function poolKey(q){
   return [POOL_V, q.title || '', q.artist || '', q.album || '', Math.round(q.duration || 0)].join('|').toLowerCase();
@@ -1559,16 +1593,18 @@ async function syncedPool(q){
                plain: sanitizePlain(lr.plainLyrics || f.lrc) };
     }
   }
-  /* the intro is there: first verified result wins, and nothing else is even asked */
-  if (best && best.first <= SYNC_LATE) return { best, lr };
+  /* already at the top of the song: nothing can start meaningfully earlier, so skip the other two */
+  if (best && best.first <= SYNC_EARLY) return { best, lr };
   /* missing / untimed / starts late — ask the other two. They are fetched TOGETHER (the panel is
-     waiting and neither can answer without the other's network time) but chosen in preference
-     order, so Better Lyrics still wins a tie and LyricsPlus is only the last word. */
+     waiting and neither can answer without the other's network time), then the EARLIEST first lyric
+     wins — measured with LEAD_TIE, so two files that open on the same beat are a TIE and the
+     incumbent keeps it. LRClib is asked first, so LRClib keeps ties (measured: Saiyaara's three
+     providers all open within 30ms — LRClib 23.80 vs LyricsPlus 23.77 — and LRClib should stay),
+     and Better Lyrics keeps a tie with LyricsPlus. */
   const [bl, lp] = await Promise.all([syncedBetterLyrics(q), syncedLyricsPlus(q)]);
   for (const c of [bl, lp]) {
     if (!c) continue;
-    if (!best || c.first < best.first - 3) best = c;
-    if (best.first <= SYNC_LATE) break;
+    if (!best || c.first < best.first - LEAD_TIE) best = c;
   }
   const out = { best, lr };
   poolPut(key, out);
