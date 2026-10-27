@@ -35,7 +35,13 @@ async function getYt(){ if (!yt) yt = await Innertube.create(); return yt; }
    Failures are NEVER cached: a non-200, a body carrying `error`, or an empty result is sent with
    `no-store`, so 4AF's "Search failed" state can never become sticky. */
 const CACHE_TTL = {
-  '/api/lyrics': 86400,        // lyrics do not change
+  /* WAVE 34b — NOT a day any more. The payload depends on the requested `duration` (it steers the
+     LRClib row pick) and on the normaliser in THIS file, so a 24h browser copy outlived both: a
+     file fetched before the audio length was known kept the weaker row, and a shape fix shipped
+     in an update stayed invisible for a day (measured: the old range-form line survived a reload).
+     The client keeps its own in-memory cache for the session, so this costs at most one refetch
+     per track and provider. */
+  '/api/lyrics': 0,           // never: duration-dependent, and the parser can change with a build
   '/api/album': 1800,
   '/api/artist': 1800,
   '/api/artist/songs': 1800,
@@ -77,6 +83,20 @@ function noStore(res){
 }
 
 /* ================= helpers ================= */
+/* Outbound requests get a deadline. These routes answer a request the renderer is waiting on,
+   so a hung upstream connection must fail (and let the caller's own retry run) instead of
+   holding the response open indefinitely. */
+function fetchT(url, opts, ms){
+  return fetch(url, Object.assign({}, opts, { signal: AbortSignal.timeout(ms || 12000) }));
+}
+/* Same, for a request whose BODY is streamed to the client (artwork, audio): the deadline covers
+   the handshake only. Aborting after the headers would cut a song off mid-playback. */
+async function fetchHead(url, opts, ms){
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms || 12000);
+  try { return await fetch(url, Object.assign({}, opts, { signal: ac.signal })); }
+  finally { clearTimeout(timer); }
+}
 function txt(v, seen = new WeakSet()) {
   if (v == null) return '';
   if (typeof v === 'string' || typeof v === 'number') return String(v);
@@ -1073,17 +1093,23 @@ function artistVariants(a){
 }
 async function lrGet(params){
   const p = new URLSearchParams(params);
-  const r = await fetch('https://lrclib.net/api/get?' + p, {
-    headers: { 'User-Agent': 'Svara/2.0 (music player)' }
-  });
+  let r;
+  try {
+    r = await fetchT('https://lrclib.net/api/get?' + p, {
+      headers: { 'User-Agent': 'Svara/2.0 (music player)' }
+    }, 7000);
+  } catch (e) { return null; }        // timeout / network: treated as "no match", the lookup goes on
   if (!r.ok) return null;
   try { return await r.json(); } catch (e) { return null; }
 }
 async function lrSearch(params){
   const p = new URLSearchParams(params);
-  const r = await fetch('https://lrclib.net/api/search?' + p, {
-    headers: { 'User-Agent': 'Svara/2.0 (music player)' }
-  });
+  let r;
+  try {
+    r = await fetchT('https://lrclib.net/api/search?' + p, {
+      headers: { 'User-Agent': 'Svara/2.0 (music player)' }
+    }, 7000);
+  } catch (e) { return []; }
   if (!r.ok) return [];
   try { const j = await r.json(); return Array.isArray(j) ? j : []; } catch (e) { return []; }
 }
@@ -1149,6 +1175,10 @@ async function lrclibBest({ title, artist, album, duration }){
     let score = 0.5 * tScore + 0.3 * aScore + 0.2 * dScore;
     if (row._how.startsWith('exact')) score += 0.05;
     if (row.syncedLyrics) score += 0.06;                 // timed lyrics win near-ties
+    /* WAVE 34: an entry whose own length is the track's length, to within a few seconds, is the
+       same recording — it beats a longer/shorter cut that merely sits inside the tolerance above
+       (the AZUL case: a 152s upload's timings vs the 138s master both pass `agree`). */
+    if (duration > 0 && row.duration && Math.abs(row.duration - duration) <= 3) score += 0.08;
     ranked.push({ row, score });
   }
   ranked.sort((a, b) => b.score - a.score);
@@ -1199,20 +1229,33 @@ async function lrclibBest({ title, artist, album, duration }){
     return Object.assign({}, row, { _durMismatch: true, _durOf: row.duration || 0,
                                     _spanTo: row.syncedLyrics ? lastStamp(row.syncedLyrics) : 0 });
   }
+  /* WAVE 38 — THE EARLIEST LYRIC BEATS THE EXACT LENGTH. Among rows that already passed every
+     same-recording test (agree), take the one whose first LYRIC is earliest. Measured on "High On
+     You": LRClib holds a 2:25 upload that opens on "Holding things together in my life" at
+     0:00.27 and the exact 2:21 master whose first lyric is "Jind I'm here" at 0:21.90 — the
+     ranker picked the master, so the panel was blank for 22s while the complete file sat one row
+     below. Only rows within 0.15 of the winner's score are candidates (a different song cannot
+     land that close: the artist term alone is worth 0.3), and an equal first line keeps the better
+     score, so ties change nothing. A start within LEAD_TIE of the leader is a tie in practice: a
+     merged-line variant opening 0.17s earlier is not a more complete file, and it must not replace
+     the better-matched row over that. */
+  {
+    let lead = best, leadT = firstTimed(best.row.syncedLyrics, { title, artist });
+    const floor = best.score - 0.15;
+    for (const x of agree) {
+      if (x === best || !x.row.syncedLyrics || x.score < floor) continue;
+      const t = firstTimed(x.row.syncedLyrics, { title, artist });
+      if (t === null) continue;
+      if (leadT === null || t < leadT - LEAD_TIE) { lead = x; leadT = t }
+    }
+    best = lead;
+  }
   return best.row;
 }
 /* the LAST timestamp in a synced file (seconds), 0 when it carries none — see the coverage test
-   above. Every [mm:ss], [mm:ss.x] and [mm:ss.xxx] tag on a line counts, not just the first. */
+   above. Every stamp of ANY shape counts (see normalizeLrc below), not just the bracketed ones. */
 function lastStamp(lrc){
-  let last = 0;
-  const re = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
-  let m;
-  while ((m = re.exec(String(lrc || '')))) {
-    const frac = m[3] ? Number(m[3]) / (m[3].length === 3 ? 1000 : m[3].length === 2 ? 100 : 10) : 0;
-    const t = Number(m[1]) * 60 + Number(m[2]) + frac;
-    if (t > last) last = t;
-  }
-  return Math.round(last);
+  return Math.round(normalizeLrc(lrc).last);
 }
 /* m:ss for a duration in seconds — used by the wave 19 mismatch note, and empty for 0/absent so a
    sentence can never read "the  version". */
@@ -1220,14 +1263,355 @@ function clock(sec){
   const s = Math.round(Number(sec) || 0);
   return s > 0 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '';
 }
-/* a synced file rendered as plain text: the [mm:ss.xx] tags are strip-only, the words are kept. */
-function stripLrcTags(s){
-  return String(s || '').split('\n')
-    .map(l => l.replace(/^\s*(\[[^\]]*\]\s*)+/, ''))
-    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+/* ===== WAVE 34 — EVERY TIMESTAMP SHAPE A CONTRIBUTOR CAN PASTE =================================
+   Reported: playing "AZUL" showed the lyrics tab full of "00:01:37.290 ~ 00:01:39.770 Ni dell mull
+   wangu tarsayi janni ae/" — numbers, not karaoke. LRClib files that row as SYNCED, but its lines
+   are not LRC: they read `00:00:11.610 ~ 00:00:13.790  words` (start ~ end, no brackets at all).
+   The client's parser looks for `[mm:ss]`, found none, fell through to the plain text — which is
+   the same file, numbers and all. Nothing was wrong with the fetch; the shape was simply unknown.
+
+   normalizeLrc() rewrites every shape into the one the client can highlight, word for word:
+     [00:12.34] words · [01:02:03.456] words · 00:12.34 words · 00:00:12.340 words
+     00:00:12.340 ~ 00:00:15.100 words · 00:12.34 - words
+   A bare `mm:ss` INSIDE the words is never a stamp — AZUL's own "Kholdi ae dino pure 7:45" keeps
+   its time — because a leading stamp only counts with a fraction, with hours, or when a range
+   separator follows it. Header tags ([ar:], [ti:], [offset:]) and any untimed line are dropped:
+   they cannot be placed on the clock, and an untimed duplicate is what the raw-number screen was.
+   A file left with fewer than two timed lines is NOT synced; /api/lyrics then answers plain text
+   with its "no timed lyrics" note, so one stray stamp can never drive the highlight. */
+const TS3 = /^\s*\[?\s*(\d{1,3}):(\d{2}):(\d{2})(?:[.,](\d{1,3}))?\s*\]?\s*/;
+const TS2 = /^\s*\[?\s*(\d{1,3}):(\d{2})(?:[.,](\d{1,3}))?\s*\]?\s*/;
+function fracSec(f){
+  if (!f) return 0;
+  return Number(f) / (f.length === 3 ? 1000 : f.length === 2 ? 100 : 10);
+}
+function lrcClock(sec){
+  const s = Math.max(0, Number(sec) || 0);
+  const m = Math.floor(s / 60), r = s - m * 60;
+  return String(m).padStart(2, '0') + ':' + (r < 10 ? '0' : '') + r.toFixed(2);
+}
+/* the leading "start [~ end]" of one line → { t, text }; t is null when the line has no stamp */
+function leadStamp(line){
+  let s = String(line || ''), t = null;
+  for (let i = 0; i < 2; i++) {
+    const m3 = s.match(TS3);
+    const m = m3 || s.match(TS2);
+    if (!m) break;
+    const hasFrac = m3 ? m[4] !== undefined : m[3] !== undefined;
+    const after = s.slice(m[0].length);
+    const isRange = /^[~\u2013\u2014]\s*/.test(after) || /^-(?:\s|>)/.test(after);
+    /* "pure 7:45" is words, not a stamp: no fraction, no hours, no range after it */
+    if (!hasFrac && !m3 && !isRange) break;
+    if (t === null) {
+      t = m3 ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + fracSec(m[4])
+             : Number(m[1]) * 60 + Number(m[2]) + fracSec(m[3]);
+    }
+    if (!isRange) { s = after; break }
+    s = after.replace(/^[~\u2013\u2014]\s*|^-(?:\s|>)\s*/, '');   /* then consume the END stamp */
+  }
+  return { t, text: s.replace(/\s+/g, ' ').trim() };
+}
+function normalizeLrc(src){
+  const lines = [];
+  let last = 0;
+  String(src || '').split(/\r\n|\r|\n/).forEach(raw => {
+    const line = raw.replace(/^\uFEFF/, '').trim();
+    if (!line) return;
+    const tags = [...line.matchAll(/\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
+    let stamps = [], text = line;
+    if (tags.length) {
+      text = line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+      stamps = tags.map(m => Number(m[1]) * 60 + Number(m[2]) + fracSec(m[3]));
+      /* WAVE 34b — the HYBRID line: a bracket stamp followed by an inline range, as in
+         `[01:39.77] 00:01:37.290 ~ 00:01:39.770 Ni dell mull…` (AZUL's 36-line entry). Stripping
+         the brackets alone left the range in the words, which is the raw-number screen again.
+         The inner range is the finer clock (its end can equal the bracket stamp), so it wins. */
+      const inner = leadStamp(text);
+      if (inner.t !== null) { text = inner.text; stamps = [inner.t]; }
+    } else {
+      const lead = leadStamp(line);
+      if (lead.t === null) return;
+      stamps = [lead.t]; text = lead.text;
+    }
+    stamps.forEach(t => {
+      if (!isFinite(t)) return;
+      lines.push({ t, text });
+      if (t > last) last = t;
+    });
+  });
+  lines.sort((a, b) => a.t - b.t);
+  const lrc = lines.map(l => '[' + lrcClock(l.t) + '] ' + l.text).join('\n');
+  return { lrc, n: lines.length, first: lines.length ? lines[0].t : 0, last, lines };
+}
+/* plain lyrics with any timestamp debris removed. Applies to BOTH providers: the untimed text can
+   arrive with the same prefixes a synced file uses (the AZUL row's plainLyrics is its synced text),
+   and a line that is nothing BUT a stamp is dropped rather than painted as a number. */
+function sanitizePlain(s){
+  const out = [];
+  String(s || '').split(/\r\n|\r|\n/).forEach(raw => {
+    let line = raw.replace(/^\uFEFF/, '').trim();
+    if (!line) { if (out.length && out[out.length - 1] !== '') out.push(''); return }
+    line = line.replace(/^(?:\[[^\]]*\]\s*)+/, '');       /* [00:12.34] / [Verse] prefixes */
+    const lead = leadStamp(line);
+    if (lead.t !== null) line = lead.text;
+    line = line.replace(/\s+/g, ' ').trim();
+    if (!line) return;
+    out.push(line);
+  });
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// provider=auto (default) | ytm | lrclib   → auto prefers SYNCED lyrics
+/* ===== WAVE 35 — THE SYNCED POOL ==============================================================
+   The two timed pills used to be two names for the same lookup: "LRClib" asked LRClib, and
+   "Auto" asked LRClib and then fell back to YouTube Music. LRClib answers with whatever its
+   contributors uploaded — sometimes plain text, sometimes a file that starts half a minute in
+   because it was written against a music video with an intro, sometimes nothing at all — so a
+   song the app knows could still open on a blank panel.
+
+   Both timed pills now read from ONE pool of three providers:
+       LRClib  ->  Better Lyrics (Apple TTML)  ->  LyricsPlus (Apple / Musixmatch KPOE)
+   That order is now a TIE-BREAK, not the rule: WAVE 38 picks the candidate whose first LYRIC comes
+   earliest, and only an equal start falls back to it (LRClib first). Reported on "High On You":
+   LRClib carried two credible entries — a 2:25 upload opening on "Holding things together in my
+   life" at 0:00.27, and the exact 2:21 master whose first lyric is "Jind I'm here" at 0:21.90. The
+   ranker preferred the exact length, so the panel sat dim for 22 seconds while the file WITH the
+   intro sat one row below. Picking by rank or by arrival can never fix that; picking the earliest
+   first line does. (Here Better Lyrics and LyricsPlus carry only the 0:23.3 recording, so they
+   could not have supplied the intro either.) A first line at 0:00.27 is the whole intro, so the
+   other two providers are not even asked.
+
+   A candidate is ACCEPTED only when
+     · it parses to at least two timed lines (normalizeLrc — every stamp shape, see WAVE 34), and
+     · its own recording length agrees with this track's within SYNC_DUR_TOL. The API cannot hear
+       the song, so length is the only honest guard against a match from a different cut; that is
+       also why every adapter sends the duration it was asked for.
+
+   Every request is deadline-bounded and every failure returns null: a provider that is down, slow
+   or rate-limited can cost its own turn in the waterfall and nothing else. */
+const SYNC_EARLY = 2;      // s — a first lyric this close to 0:00 already has the whole intro
+const LEAD_TIE = 0.5;      // s — starts this close count as the SAME timestamp (incumbent wins)
+const SYNC_DUR_TOL = 5;    // s — an accepted file must agree with the track on length by this
+const LYR_UA = 'Svara/2.0 (music player)';
+
+/* "9.615" | "00:09.615" | "4:28.165" → seconds */
+function secOf(v){
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return 0;
+  if (/^\d+(?:\.\d+)?$/.test(s)) return parseFloat(s);
+  const p = s.split(':').map(Number);
+  if (p.some(n => !isFinite(n))) return 0;
+  if (p.length === 2) return p[0] * 60 + p[1];
+  if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
+  return 0;
+}
+/* the handful of entities both providers actually emit */
+function xmlText(s){
+  return String(s || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (m, d) => String.fromCodePoint(Number(d)))
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ').trim();
+}
+/* Apple-style TTML → lines. <body dur="4:28.165"> states the matched recording's own length;
+   each <p begin="9.615"> is a line and its <span> children are syllables, flattened into text. */
+function ttmlLines(xml){
+  const src = String(xml || '');
+  const dm = src.match(/<body\b[^>]*\bdur="([^"]+)"/);
+  const lines = [];
+  const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/g;
+  let m;
+  while ((m = re.exec(src))) {
+    const bm = m[1].match(/\bbegin="([^"]+)"/);
+    if (!bm) continue;
+    const t = secOf(bm[1]);
+    const text = xmlText(m[2]);
+    if (!isFinite(t) || !text) continue;
+    lines.push({ t, text });
+  }
+  lines.sort((a, b) => a.t - b.t);
+  return { lines, dur: dm ? secOf(dm[1]) : 0 };
+}
+/* LyricsPlus /v2 "KPOE" JSON → lines. time/duration are MILLISECONDS, and the matched recording's
+   length is metadata.totalDuration (same "m:ss.mmm" shape TTML uses) — or, when it is absent, the
+   end of the last line. */
+function kpoeLines(j){
+  const src = (j && Array.isArray(j.lyrics)) ? j.lyrics : [];
+  const lines = [];
+  let end = 0;
+  src.forEach(l => {
+    const t = (Number(l && l.time) || 0) / 1000;
+    const text = xmlText(String((l && l.text) || '').replace(/\n/g, ' '));
+    const e = t + (Number(l && l.duration) || 0) / 1000;
+    if (e > end) end = e;
+    if (!text || !isFinite(t)) return;
+    lines.push({ t, text });
+  });
+  lines.sort((a, b) => a.t - b.t);
+  const md = (j && j.metadata) || {};
+  const dur = secOf(md.totalDuration) || end;
+  return { lines, dur };
+}
+/* Apple's pools sometimes put a CREDIT where the first lyric would be — LyricsPlus opens Zaalima
+   with `0.00 "Zaalima - Arijit Singh (…)/Harshdeep Kaur"`, which looks like a file that keeps the
+   intro and then is not one at all. A leading line that is just the song and the artist, or a
+   "Provided to YouTube by…"/"Lyrics:" banner, is dropped before anything is measured, so `first`
+   means the first LYRIC — the thing the intro test is about — and the panel never opens on a
+   credit. Only the first few seconds are inspected: a dash inside a real lyric is left alone. */
+function stripCredits(lines, q){
+  const title = String((q && q.title) || '');
+  return lines.filter(l => {
+    if (l.t > 5) return true;
+    const s = l.text;
+    if (/^(provided to youtube|lyrics\s*:|song\s*:|auto-generated)/i.test(s)) return false;
+    const sep = /^.{0,90}\s[-\u2013\u2014|\u00b7\u2022]\s.{0,90}$/.test(s);
+    /* "Zaalima - Arijit Singh/Harshdeep Kaur" scores only 0.2 against the bare title (the artist
+       words dominate the set), so the test is on the part BEFORE the dash: a line that opens with
+       the song's own name is a credit, whatever is written after it. */
+    if (sep){
+      const head = s.split(/\s[-\u2013\u2014|]\s/)[0];
+      if (jaccard(head, title) >= 0.85 || jaccard(s, title) >= 0.3) return false;
+    }
+    return true;
+  });
+}
+/* Seconds of the first LYRIC in a synced file (credits already stripped), or null when the file
+   carries no usable timings. normalizeLrc() is the same parser the panel runs, so this measures
+   what the user would SEE rather than what the raw file claims. */
+function firstTimed(lrc, q){
+  if (!lrc) return null;
+  const lines = stripCredits(normalizeLrc(lrc).lines.slice(), q || {});
+  return lines.length ? lines[0].t : null;
+}
+/* one candidate, in the shape /api/lyrics publishes. null when there is nothing to highlight. */
+function packLines(source, lines, dur, q){
+  lines = stripCredits((lines || []).slice(), q).sort((a, b) => a.t - b.t);
+  if (!lines || lines.length < 2) return null;
+  return {
+    source,
+    n: lines.length,
+    dur: dur || 0,
+    first: lines[0].t,
+    synced: lines.map(l => '[' + lrcClock(l.t) + '] ' + l.text).join('\n'),
+    plain: sanitizePlain(lines.map(l => l.text).join('\n'))
+  };
+}
+/* ---- adapter: Better Lyrics (api.betterlyrics.org) --------------------------------------------
+   The public endpoint is a CACHE, not a search: a keyless request is only answered when all four
+   lookup parameters match an entry someone already asked for — s (title), a (artist), al (album)
+   and d (length in WHOLE SECONDS). Anything else is 401 "Uncached queries require a valid API
+   key", which is a MISS and nothing more.
+   MEASURED, and it matters: al is part of that cache key, so `al=<the track title>` (the old
+   fallback here) turned every album-less track into a guaranteed 401 — this adapter never once
+   returned lyrics in production. Unknown album is sent as an EMPTY al, which is the shape the
+   cache was filled with; d is rounded (`Math.round`), and a 1 s difference still hits. No duration
+   means no request at all: the pool is asked before the audio element knows its length, and a
+   request without d can only ever miss (and would be cached as that miss upstream). */
+async function syncedBetterLyrics(q){
+  if (!q.title) return null;
+  const dur = Math.round(Number(q.duration) || 0);
+  if (!(dur > 0)) return null;
+  /* The artist is part of the key too, and our search rows credit everyone ('Arijit Singh,
+     Harshdeep Kaur') where the cache was filled with the lead act alone. A 401 is cheap and
+     comes back in milliseconds, so the credit string is tried first and the LEAD artist second —
+     measured: Zaalima's joined credit misses, 'Arijit Singh' hits the same entry. */
+  const full = String(q.artist || '');
+  const lead = full.split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b|\bx\b)\s*/i)[0].trim();
+  const artists = (lead && lead !== full) ? [full, lead] : [full];
+  let j = null;
+  for (const a of artists) {
+    const p = new URLSearchParams({ s: q.title, a, al: q.album || '', d: String(dur) });
+    try {
+      const r = await fetchT('https://api.betterlyrics.org/getLyrics?' + p,
+        { headers: { 'User-Agent': LYR_UA } }, 5000);
+      if (r.status === 401) {                   /* cache miss — the normal answer, not an error */
+        if (process.env.LYR_DEBUG) console.log('betterlyrics: 401 cache miss for', p.toString());
+        continue;
+      }
+      if (!r.ok) continue;
+      const body = await r.json();
+      if (body && body.ttml) { j = body; break }
+    } catch (e) { /* deadline or bad JSON: try the next credit string, never throw */ }
+  }
+  if (!j) return null;
+  const t = ttmlLines(j.ttml);
+  if (q.duration > 0 && t.dur > 0 && Math.abs(t.dur - q.duration) > SYNC_DUR_TOL) return null;
+  return packLines('betterlyrics', t.lines, t.dur, q);
+}
+/* ---- adapter: LyricsPlus (lyricsplus.prjktla.my.id) ---- */
+async function syncedLyricsPlus(q){
+  if (!q.title) return null;
+  const p = new URLSearchParams({ title: q.title, artist: q.artist || '' });
+  if (q.album) p.set('album', q.album);
+  if (q.duration > 0) p.set('duration', String(Math.round(q.duration)));
+  let j;
+  try {
+    const r = await fetchT('https://lyricsplus.prjktla.my.id/v2/lyrics/get?' + p,
+      { headers: { 'User-Agent': LYR_UA, 'X-Client-Package': 'Svara <https://github.com/Shubham0743X/Svara>' } }, 6500);
+    if (!r.ok) return null;
+    j = await r.json();
+  } catch (e) { return null }
+  const t = kpoeLines(j);
+  if (q.duration > 0 && t.dur > 0 && Math.abs(t.dur - q.duration) > SYNC_DUR_TOL) return null;
+  return packLines('lyricsplus', t.lines, t.dur, q);
+}
+/* Resolve a track through the pool. Returns { best, lr }: `best` is a packed timed candidate (or
+   null) and `lr` is the raw LRClib row, whose WORDS are the plain-text fallback even when its
+   timings were refused. */
+/* A resolved pool answer is reused for a while: the client asks twice per track (before and after
+   the audio's length is known) and again on every pill switch, and each cold answer can cost a
+   handful of upstream round-trips. Keyed by the request, bounded, and versioned so a build that
+   changes what the pool means never serves the old shape. */
+const POOL_V = '37a';
+const POOL_CACHE = new Map();
+function poolKey(q){
+  return [POOL_V, q.title || '', q.artist || '', q.album || '', Math.round(q.duration || 0)].join('|').toLowerCase();
+}
+function poolGet(k){
+  const e = POOL_CACHE.get(k);
+  if (!e) return undefined;
+  if (Date.now() - e.at > 15 * 60 * 1000) { POOL_CACHE.delete(k); return undefined }
+  return e.v;
+}
+function poolPut(k, v){
+  POOL_CACHE.set(k, { at: Date.now(), v });
+  while (POOL_CACHE.size > 120) POOL_CACHE.delete(POOL_CACHE.keys().next().value);
+}
+async function syncedPool(q){
+  const key = poolKey(q), memo = poolGet(key);
+  if (memo) return memo;
+  const lr = await lrclibBest(q);
+  let best = null;
+  if (lr && lr.syncedLyrics && !lr._durMismatch) {
+    const f = normalizeLrc(lr.syncedLyrics);
+    const lines = stripCredits(f.lines.slice(), q);
+    if (lines.length >= 2) {
+      best = { source: 'lrclib', n: lines.length, dur: lr.duration || 0, first: lines[0].t,
+               synced: lines.map(l => '[' + lrcClock(l.t) + '] ' + l.text).join('\n'),
+               plain: sanitizePlain(lr.plainLyrics || f.lrc) };
+    }
+  }
+  /* already at the top of the song: nothing can start meaningfully earlier, so skip the other two */
+  if (best && best.first <= SYNC_EARLY) return { best, lr };
+  /* missing / untimed / starts late — ask the other two. They are fetched TOGETHER (the panel is
+     waiting and neither can answer without the other's network time), then the EARLIEST first lyric
+     wins — measured with LEAD_TIE, so two files that open on the same beat are a TIE and the
+     incumbent keeps it. LRClib is asked first, so LRClib keeps ties (measured: Saiyaara's three
+     providers all open within 30ms — LRClib 23.80 vs LyricsPlus 23.77 — and LRClib should stay),
+     and Better Lyrics keeps a tie with LyricsPlus. */
+  const [bl, lp] = await Promise.all([syncedBetterLyrics(q), syncedLyricsPlus(q)]);
+  for (const c of [bl, lp]) {
+    if (!c) continue;
+    if (!best || c.first < best.first - LEAD_TIE) best = c;
+  }
+  const out = { best, lr };
+  poolPut(key, out);
+  return out;
+}
+
+// provider=auto (default) | ytm | lrclib
 app.get('/api/lyrics', async (req, res) => {
   cacheHeaders(res, '/api/lyrics');
   const want = ['ytm', 'lrclib'].includes(req.query.provider) ? req.query.provider : 'auto';
@@ -1238,41 +1622,47 @@ app.get('/api/lyrics', async (req, res) => {
   const duration = parseFloat(req.query.duration) || 0;
   const out = { provider: '', plain: '', synced: '', hasSync: false, note: '', error: '' };
   try {
-    let lr = null, ytText = '';
-    if (want !== 'ytm') lr = await lrclibBest({ title, artist, album, duration });
+    /* WAVE 35: the YouTube Music pill never consults the pool (it is plain text by definition). */
+    const pool = (want === 'ytm') ? { best: null, lr: null } : await syncedPool({ title, artist, album, duration });
+    const cand = pool.best;
+    const lr = pool.lr;
 
-    // 1) timed LRClib lyrics win — the only ones we can highlight. WAVE 19: a match that failed
-    //    lrclibBest's length / coverage tests is NOT one of them (it is published as plain text in
-    //    branch 3 instead — its words are the right song's, its clock is another recording's).
-    if (want !== 'ytm' && lr && lr.syncedLyrics && !lr._durMismatch) {
-      out.provider = 'lrclib';
-      out.synced = lr.syncedLyrics;
-      out.plain = lr.plainLyrics || lr.syncedLyrics;
+    // 1) a TIMED file from the pool — the only ones that can be highlighted. WAVE 19: an LRClib
+    //    match that failed its length / coverage tests is not one of them (its words are the right
+    //    song's, its clock is another recording's); its text is published in branch 3 instead.
+    if (want !== 'ytm' && cand) {
+      out.provider = cand.source;
+      out.synced = cand.synced;
+      out.plain = cand.plain;
       out.hasSync = true;
-      if (lr.trackName && jaccard(title, lr.trackName) >= 0.5) out.note = '';
       return res.json(out);
     }
 
-    // 2) YouTube Music (curated, untimed)
+    // 2) YouTube Music (curated, untimed). Under Auto it is the waterfall's answer when no provider
+    //    had timings; on its own pill it is the requested answer. Either way it carries a note:
+    //    what the user is looking at is not karaoke, and the pill that is one click away says so.
     if (want !== 'lrclib') {
-      ytText = await ytmLyrics(id);
+      const ytText = await ytmLyrics(id);
       if (ytText) {
         out.provider = 'ytm';
-        out.plain = ytText;
-        out.note = 'YouTube Music lyrics are not time-synced — switch to LRClib for karaoke highlighting.';
+        out.plain = sanitizePlain(ytText);
+        out.note = want === 'ytm'
+          ? 'YouTube Music lyrics are not time-synced — switch to LRCLIB for karaoke highlighting.'
+          : 'No timed lyrics for this track — showing YouTube Music’s plain text.';
         return res.json(out);
       }
     }
 
-    // 3) LRClib plain lyrics as the last resort
+    // 3) plain text as the last resort — LRClib's WORDS, never its refused clock
     if (lr && (lr.plainLyrics || lr.syncedLyrics)) {
       /* WAVE 19 — a match that failed lrclibBest's duration test keeps its WORDS and loses its
-         timings: highlighting it would run this recording's clock on another recording's words. */
+         timings: highlighting it would run this recording's clock on another recording's words.
+         WAVE 35 — anything arriving here has no timed candidate from ANY of the three. */
       const mismatch = !!lr._durMismatch;
       out.provider = 'lrclib';
-      out.synced = mismatch ? '' : (lr.syncedLyrics || '');
-      out.plain = lr.plainLyrics || (mismatch ? stripLrcTags(lr.syncedLyrics) : (lr.syncedLyrics || '')) || '';
-      out.hasSync = !!out.synced;
+      out.synced = '';
+      out.plain = sanitizePlain(lr.plainLyrics || lr.syncedLyrics || '');
+      out.hasSync = false;
       if (mismatch) {
         const was = clock(lr._durOf), is = clock(duration), to = clock(lr._spanTo);
         /* which test sent it down here decides what the note says — a recording of a different
@@ -1287,7 +1677,7 @@ app.get('/api/lyrics', async (req, res) => {
               + ' — they were written for a shorter cut, so they are shown without highlighting.'
             : 'These words are from another version of this song — LRClib has no timed lyrics that match this one, so the lines are not highlighted.';
       }
-      else if (!out.hasSync) out.note = 'LRClib has no timed lyrics for this track — lines are not clickable.';
+      else out.note = 'No timed lyrics found for this track — showing plain text.';
       return res.json(out);
     }
 
@@ -1305,7 +1695,10 @@ function safeName(s, fallback){
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, ' ')   // Windows-illegal characters
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 120);
+    .slice(0, 120)
+    /* Windows silently strips trailing dots/spaces from a filename, so "Song ." would be saved
+       as "Song" while the header promises "Song .m4a" — trim them here so both agree. */
+    .replace(/[. ]+$/, '');
   return out || fallback;
 }
 async function runYtdlp(args, timeout){
@@ -1321,10 +1714,20 @@ function pickAudioFile(dir){
   if (!files.length) return null;
   return path.join(dir, files.sort((a, b) => fs.statSync(path.join(dir, b)).size - fs.statSync(path.join(dir, a)).size)[0]);
 }
+/* A download runs yt-dlp (up to two 420s attempts) in its own temp dir, so a burst of clicks
+   must not spawn a process each. Two at a time is plenty for a single-user app; the rest are
+   told to wait rather than piling up. */
+const DOWNLOAD_MAX = 2;
+let downloadsActive = 0;
 app.get('/api/download', async (req, res) => {
   noStore(res);                     // 4AK: a downloaded file is never cached by the proxy
   const id = String(req.query.id || '');
   if (!id || !/^[\w-]{6,}$/.test(id)) return res.status(400).json({ error: 'bad id' });
+  if (downloadsActive >= DOWNLOAD_MAX) return res.status(429).json({ error: 'A download is already running — try again in a moment' });
+  downloadsActive++;
+  let released = false;
+  const release = () => { if (!released) { released = true; downloadsActive--; } };
+  res.on('close', release);         // also covers an aborted download / a streamed file
   const wantTitle = String(req.query.title || '');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'svara-'));
   const url = 'https://www.youtube.com/watch?v=' + id;
@@ -1365,18 +1768,24 @@ app.get('/api/download', async (req, res) => {
 });
 
 /* ================= thumbnail proxy (album-art theming) ================= */
+/* the artwork hosts this proxy will talk to — used for the requested URL AND for the URL a
+   redirect actually landed on (following redirects unchecked is a host-allowlist bypass). */
+function thumbHostAllowed(u){
+  const host = u.hostname;
+  return u.protocol === 'https:' && (
+    host === 'i.ytimg.com' || host.endsWith('.ytimg.com') ||
+    host === 'yt3.googleusercontent.com' || host.endsWith('.googleusercontent.com') ||
+    host.endsWith('.ggpht.com')
+  );
+}
+const THUMB_MAX = 12 * 1024 * 1024;      // album art is ~100KB; a 12MB ceiling is only a guard
 app.get('/api/thumb', async (req, res) => {
   try {
     const u = new URL(String(req.query.url || ''));
+    if (!thumbHostAllowed(u)) return res.status(400).json({ error: 'blocked host' });
     const host = u.hostname;
-    const allowed = u.protocol === 'https:' && (
-      host === 'i.ytimg.com' || host.endsWith('.ytimg.com') ||
-      host === 'yt3.googleusercontent.com' || host.endsWith('.googleusercontent.com') ||
-      host.endsWith('.ggpht.com')
-    );
-    if (!allowed) return res.status(400).json({ error: 'blocked host' });
     const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
-    let r = await fetch(u, { headers: { 'User-Agent': UA } });
+    let r = await fetchHead(u, { headers: { 'User-Agent': UA } }, 15000);
     /* 4AG — one bounded retry, and only for the recoverable case. Measured live: the artwork host
        answers a burst of concurrent asks for the SAME url with `429 text/html` (24/60 at 60-way
        concurrency) and sends NO Retry-After header; the very same url returns `200 image/jpeg` on
@@ -1386,7 +1795,7 @@ app.get('/api/thumb', async (req, res) => {
     if (r.status === 429) {
       const ra = parseInt(r.headers.get('retry-after'), 10);   // absent in the field; honour it if sent
       await new Promise(s => setTimeout(s, ra > 0 ? Math.min(ra * 1000, 3000) : 900));
-      r = await fetch(u, { headers: { 'User-Agent': UA } });
+      r = await fetchHead(u, { headers: { 'User-Agent': UA } }, 15000);
     }
     if (!r.ok) {
       /* 4AG: never an empty 502 again — carry the upstream status so a failed artwork request is
@@ -1397,13 +1806,35 @@ app.get('/api/thumb', async (req, res) => {
       console.error('thumb: upstream ' + r.status + ' for ' + host);
       return res.status(502).json({ error: 'upstream ' + r.status });
     }
+    /* the allow-list above vetted the URL WE asked for; redirects are followed, so check where
+       the request actually landed before a byte of it is forwarded. */
+    let landed = null;
+    try { landed = new URL(r.url) } catch (e) { landed = null; }
+    if (!landed || !thumbHostAllowed(landed)) {
+      try { if (r.body) r.body.cancel() } catch (e) {}
+      return res.status(400).json({ error: 'blocked host' });
+    }
+    const len = parseInt(r.headers.get('content-length') || '0', 10);
+    if (len > THUMB_MAX) {
+      try { if (r.body) r.body.cancel() } catch (e) {}
+      return res.status(502).json({ error: 'upstream too large' });
+    }
     res.status(200);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
-    Readable.fromWeb(r.body).on('error', () => res.destroy()).pipe(res);
+    const body = Readable.fromWeb(r.body);
+    let sent = 0;
+    body.on('data', chunk => {
+      sent += chunk.length;
+      if (sent > THUMB_MAX) { try { body.destroy(); } catch (e) {} try { res.destroy(); } catch (e) {} }
+    });
+    body.on('error', () => res.destroy());
+    /* a client that goes away (or a capped body) must not leave the upstream download running */
+    res.on('close', () => { try { body.destroy(); } catch (e) {} });
+    body.pipe(res);
   } catch (e) {
-    res.status(400).json({ error: String(e.message || e) });
+    if (!res.headersSent) res.status(400).json({ error: String(e.message || e) }); else res.destroy();
   }
 });
 
@@ -1418,27 +1849,47 @@ const streamResolving = new Map();       // videoId → the in-flight resolve, s
    progressively (Range/206, piped straight through). So the URL is now resolved AHEAD of playback
    by /api/prefetch, and this function deduplicates: a prefetch that overlaps real playback must
    never spawn a second yt-dlp process for the same video. */
-async function resolveStreamUrl(videoId){
-  const { stdout } = await execFileP(YTDLP, ['-f', 'ba', '-g', 'https://www.youtube.com/watch?v=' + videoId], { timeout: 60000, windowsHide: true });
+/* WAVE 28 — `variant` 1 re-extracts with the download route's fallback pairing (default,web_safari).
+   MEASURED 2026-10-19 (yt-dlp 2026.08.19), so the comment tells the truth: web_safari alone answers
+   "Only images are available" for audio (it needs a GVS PO token), and web_embedded/tv/mweb resolve
+   a URL that goes on to 403, so neither can be used as a stand-in client. What the retry really
+   buys is a SECOND EXTRACTION — a freshly signed URL (new expire/ei/sig, often a different
+   googlevideo host) — which is what clears the burst 403s seen in the field. The stream route still
+   drops the dead entry before asking, so this can never hand back the URL that just failed. */
+async function resolveStreamUrl(videoId, variant){
+  const args = ['-f', 'ba', '-g'];
+  if (variant) args.push('--extractor-args', 'youtube:player_client=default,web_safari');
+  args.push('https://www.youtube.com/watch?v=' + videoId);
+  const { stdout } = await execFileP(YTDLP, args, { timeout: 60000, windowsHide: true });
   const url = (stdout || '').trim().split('\n').pop();
   if (!url) throw new Error('yt-dlp returned no URL for ' + videoId);
   if (streamCache.size >= STREAM_CACHE_MAX) {
     const oldest = streamCache.keys().next().value;
     if (oldest !== undefined && oldest !== videoId) streamCache.delete(oldest);
   }
+  /* delete first: set() on an EXISTING key keeps its old position, so a refreshed URL would
+     otherwise stay at the front of the Map and be the next one evicted. */
+  streamCache.delete(videoId);
   streamCache.set(videoId, { url, expires: Date.now() + STREAM_TTL });
   return url;
 }
-function getStreamUrl(videoId){
+function getStreamUrl(videoId, variant){
   const hit = streamCache.get(videoId);
-  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.url);
-  const inflight = streamResolving.get(videoId);
+  if (hit && hit.expires > Date.now()) {
+    /* LRU touch — same reason as above: reading an entry must move it to the back, or a hot
+       track can be evicted while a cold one sits in front of it. */
+    streamCache.delete(videoId);
+    streamCache.set(videoId, hit);
+    return Promise.resolve(hit.url);
+  }
+  const key = videoId + '#' + (variant ? 1 : 0);          // the two clients resolve independently
+  const inflight = streamResolving.get(key);
   if (inflight) return inflight;
-  const guarded = resolveStreamUrl(videoId).then(
-    url => { streamResolving.delete(videoId); return url },
-    err => { streamResolving.delete(videoId); throw err }
+  const guarded = resolveStreamUrl(videoId, variant).then(
+    url => { streamResolving.delete(key); return url },
+    err => { streamResolving.delete(key); throw err }
   );
-  streamResolving.set(videoId, guarded);
+  streamResolving.set(key, guarded);
   return guarded;
 }
 
@@ -1461,7 +1912,7 @@ async function verifyWarmUrl(id){
   const url = await getStreamUrl(id);
   let up;
   try {
-    up = await fetch(url, { headers: { Range: 'bytes=0-1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+    up = await fetchHead(url, { headers: { Range: 'bytes=0-1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }, 15000);
   } catch (e) {
     console.error(`prefetch: ${id} probe failed (${e.message}) — re-resolving`);
     streamCache.delete(id);
@@ -1512,15 +1963,28 @@ app.get('/api/stream', async (req, res) => {
        cache entry. A dead URL answers 403/410, so drop the stale entry, resolve a fresh URL
        ONCE and retry the upstream fetch ONCE. No loop; the retry's failure carries a reason. */
     const hostOf = u => { try { return new URL(u).host; } catch (e) { return 'unknown'; } };
-    const grab = u => fetch(u, { headers: { Range: range, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+    /* handshake-only deadline: the body is the song, so it must not be aborted on a timer */
+    const grab = u => fetchHead(u, { headers: { Range: range, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }, 20000);
     let url = await getStreamUrl(id);
     let up = await grab(url);
     if (!up.ok) {
       console.error(`stream: upstream ${up.status} for ${id} (host ${hostOf(url)}) — refreshing URL and retrying once`);
       streamCache.delete(id);
-      url = await getStreamUrl(id);
+      /* WAVE 28: wait out the blip, then re-extract (see resolveStreamUrl — the retry's value is a
+         fresh signature, not a different client). Only if that resolve itself fails does it fall
+         back to the default one. One extra attempt in total, no loop; the renderer owns the rest
+         (v28js retries twice more, 700 ms and 1.8 s later). */
+      await new Promise(s => setTimeout(s, 250));
+      let fresh = url;
+      try { fresh = await getStreamUrl(id, 1) }
+      catch(e){ try { fresh = await getStreamUrl(id, 0) } catch(e2){} }
+      url = fresh;
       up = await grab(url);
       if (!up.ok) {
+        /* the failing URL must not stay cached: the renderer's own retry (v28js) re-requests this
+           route a second later expecting a fresh resolve, and a cached 403-ing URL would just
+           repeat itself. */
+        streamCache.delete(id);
         console.error(`stream: upstream ${up.status} again for ${id} (host ${hostOf(url)}) — giving up`);
         return res.status(502).json({ error: `upstream ${up.status} after refreshing the stream URL` });
       }
@@ -1531,7 +1995,12 @@ app.get('/api/stream', async (req, res) => {
       const hv = up.headers.get(k);
       if (hv) res.setHeader(v, hv);
     }
-    Readable.fromWeb(up.body).on('error', () => res.destroy()).pipe(res);
+    const body = Readable.fromWeb(up.body);
+    body.on('error', () => res.destroy());
+    /* the renderer aborts a seek by dropping the response — without this the upstream
+       download (and the socket) keeps going for the rest of the song. */
+    res.on('close', () => { try { body.destroy(); } catch (e) {} });
+    body.pipe(res);
   } catch (e) {
     console.error('stream error:', e.message);
     const reason = String(e.message || e).split('\n').map(s => s.trim()).filter(Boolean).pop();

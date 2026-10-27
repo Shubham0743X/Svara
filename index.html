@@ -18,7 +18,7 @@ img{display:block}
 .ic svg .f{fill:currentColor;stroke:none}
 #theme{position:fixed;inset:0;z-index:-1;background:#07070a;transition:opacity .55s ease;pointer-events:none}
 /* sidebar */
-#sb{width:236px;flex-shrink:0;background:rgba(15,15,21,.72);backdrop-filter:blur(8px);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px;z-index:5}
+#sb{width:236px;flex-shrink:0;background:rgba(15,15,21,.72);backdrop-filter:blur(8px);display:flex;flex-direction:column;padding:18px 12px;z-index:5}
 .logo{font-size:23px;font-weight:800;letter-spacing:-.5px;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 #sb nav{margin-top:20px;display:flex;flex-direction:column;gap:2px}
 .navit{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;font-size:14px;color:var(--dim);transition:.15s}
@@ -141,9 +141,6 @@ img{display:block}
 .row.cur .rtitle{color:var(--acc)}
 .rsub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .rr{display:flex;align-items:center;gap:2px;flex-shrink:0}
-.likedH{width:18px;height:18px;color:var(--acc);display:inline-flex}
-.likedH .ic{width:18px;height:18px}
-.likedH svg{fill:var(--acc);stroke:none}
 .dots{padding:7px;border-radius:50%;color:var(--dim)}
 .dots:hover{color:var(--tx);background:var(--panel)}
 .dots .ic{width:17px;height:17px}
@@ -227,27 +224,15 @@ body.pv #mini{display:none}
 .tab{flex:1;padding:13px 8px 11px;font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent;border-radius:0}
 .tab:hover{color:var(--tx)}
 .tab.on{color:var(--tx);border-bottom-color:var(--acc)}
-.tabrow{display:flex;padding:0 6px;border-bottom:1px solid var(--line)}
-.tab{flex:1;padding:13px 8px 11px;font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent;border-radius:0}
-.tab:hover{color:var(--tx)}
-.tab.on{color:var(--tx);border-bottom-color:var(--acc)}
-.pvctx{padding:8px 16px 4px;font-size:12px;color:var(--dim)}
 .pvhead{display:flex;align-items:center;padding:8px 14px 6px}
 .pvhead .go{font-size:12px;color:var(--dim);margin-left:auto}
 .pvhead .go:hover{color:var(--acc)}
 #pvQueue{flex:1;overflow-y:auto;padding:4px 8px 10px}
 #pvLyrics{flex:1;overflow-y:auto;padding:10px 16px}
-.lyrseg{display:flex;gap:6px;background:var(--panel);border-radius:999px;padding:3px;margin-bottom:12px}
-.lyrseg button{flex:1;padding:6px 8px;border-radius:999px;font-size:12px;color:var(--dim)}
-.lyrseg button.on{background:var(--panel2);color:var(--tx)}
 #lyrBody{font-size:14.5px;line-height:1.85;color:var(--dim);white-space:pre-wrap}
 #lyrBody .l{transition:color .15s}
 #lyrBody .l.on{color:#fff;font-weight:700}
 .lyrmissing{color:var(--dim);font-size:13.5px;padding:20px 0;line-height:1.8}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
-.lyrt{font-size:14px;font-weight:700;margin:4px 2px 12px;color:var(--tx)}
 /* floating menu + modal */
 #menu{position:fixed;z-index:90;background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:5px;min-width:190px;box-shadow:0 16px 50px rgba(0,0,0,.55)}
 #menu .mi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border-radius:8px;font-size:13.5px;color:var(--tx)}
@@ -352,8 +337,8 @@ html[data-fs="s3"]{--fss:1.15}
    `html[data-fs] #lyrBody` (0,1,2) outranks a plain id selector (0,1,0) wherever it sits in the
    document, so merely having the type scale ON silently shrank the lyrics to 14.5px × step and
    stacked them on their 14px line margins — a wrong-rhythm wall of text instead of the tall
-   karaoke lines. NO lyric surface appears in this block any more (#lyrBody, .lyrseg/.lyrchip
-   buttons, .lyrt, .lyrbar .lyra, .lyrmissing, .lyrnote, #lyrJump): the lyrics tab is byte-for-byte
+   karaoke lines. NO lyric surface appears in this block any more (#lyrBody, .lyrchip buttons,
+   .lyrbar .lyra, .lyrmissing, .lyrnote, #lyrJump): the lyrics tab is byte-for-byte
    the tab it was before the type scale existed, at every step. */
 html[data-fs] .paget{font-size:calc(26px * var(--fss))}
 html[data-fs] .logo,#pv .pvT{font-size:calc(23px * var(--fss))}
@@ -364,10 +349,10 @@ html[data-fs] .navit,html[data-fs] #q,html[data-fs] .rtitle,html[data-fs] .list 
 html[data-fs] .plrow,html[data-fs] .mt,html[data-fs] #menu .mi,html[data-fs] #shist .shr{font-size:calc(14.5px * var(--fss))}
 html[data-fs] .pvtitle,html[data-fs] .gobtn,html[data-fs] .chip,html[data-fs] #searchFilters .fchip,html[data-fs] .rname,html[data-fs] .libgrid .rname,html[data-fs] #setPanel .setLbl,html[data-fs] .hbar .setAct,html[data-fs] #scroll:has(#dynSec:not([hidden]) .hbar) #pgSub{font-size:calc(14px * var(--fss))}
 html[data-fs] .empty,html[data-fs] #artSec .art-desc,html[data-fs] .sec h2 .go{font-size:calc(13.5px * var(--fss))}
-html[data-fs] .hgrp,html[data-fs] .newpl,html[data-fs] .sub,html[data-fs] .np button,html[data-fs] #toast,html[data-fs] #pvTransport .mtT,html[data-fs] #pgTitle.pgNP,html[data-fs] .art-back,html[data-fs] #artSec .art-count,html[data-fs] #albSec .art-count,html[data-fs] .art-acts .pact,html[data-fs] .art-relcard .nm,html[data-fs] #setPanel .setAbout,html[data-fs] .topres .traud,html[data-fs] .topres .trbtn,html[data-fs] .libfoot,html[data-fs] #setPanel .setSeg > label > span,html[data-fs] #setPanel .setSeg .segGhost > span{font-size:calc(13px * var(--fss))}
+html[data-fs] .hgrp,html[data-fs] .newpl,html[data-fs] .sub,html[data-fs] .np button,html[data-fs] #toast,html[data-fs] #pgTitle.pgNP,html[data-fs] .art-back,html[data-fs] #artSec .art-count,html[data-fs] #albSec .art-count,html[data-fs] .art-acts .pact,html[data-fs] .art-relcard .nm,html[data-fs] #setPanel .setAbout,html[data-fs] .topres .traud,html[data-fs] .topres .trbtn,html[data-fs] .libfoot,html[data-fs] #setPanel .setSeg > label > span,html[data-fs] #setPanel .setSeg .segGhost > span{font-size:calc(13px * var(--fss))}
 html[data-fs] .hdate,html[data-fs] #artSec .art-showall,html[data-fs] #artSec .artdur,html[data-fs] #setPanel .setCfmTx,html[data-fs] #setPanel .setHint,html[data-fs] #setPanel .setVal{font-size:calc(12.5px * var(--fss))}
-html[data-fs] #shist .clear,html[data-fs] .rsub,html[data-fs] .pvctx,html[data-fs] .pvhead .go,html[data-fs] .ptime,html[data-fs] .v3sent,html[data-fs] #artSec .artalb,html[data-fs] #setPanel .setLink,html[data-fs] #setPanel .setAct,html[data-fs] #aboutCard .abBtn,html[data-fs] .libsorts .lbl,html[data-fs] .libgrid .rsub2{font-size:calc(12px * var(--fss))}
-html[data-fs] .rsub2,html[data-fs] .ms,html[data-fs] .tab,html[data-fs] #pvTransport .mtS,html[data-fs] #shist .shr .subx,html[data-fs] #artSec .art-more,html[data-fs] .art-relcard .ad,html[data-fs] #setPanel .setNum,html[data-fs] #aboutCard .abRole,html[data-fs] #plList .sbt{font-size:calc(11.5px * var(--fss))}
+html[data-fs] #shist .clear,html[data-fs] .rsub,html[data-fs] .pvhead .go,html[data-fs] .ptime,html[data-fs] .v3sent,html[data-fs] #artSec .artalb,html[data-fs] #setPanel .setAct,html[data-fs] #aboutCard .abBtn,html[data-fs] .libsorts .lbl,html[data-fs] .libgrid .rsub2{font-size:calc(12px * var(--fss))}
+html[data-fs] .rsub2,html[data-fs] .ms,html[data-fs] .tab,html[data-fs] #shist .shr .subx,html[data-fs] #artSec .art-more,html[data-fs] .art-relcard .ad,html[data-fs] #setPanel .setNum,html[data-fs] #aboutCard .abRole,html[data-fs] #plList .sbt{font-size:calc(11.5px * var(--fss))}
 html[data-fs] .plrow .cnt,html[data-fs] .ptimes,html[data-fs] .psTip{font-size:calc(11px * var(--fss))}
 html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp h3,html[data-fs] #setPanel .setPill,html[data-fs] #aboutCard .abPill,html[data-fs] #aboutCard .abGrpH{font-size:calc(10.5px * var(--fss))}
 </style>
@@ -497,6 +482,11 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
 <symbol id="i-repeat1" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M12.4 9.5v5.2"/><path d="M10.9 9.8 12.4 9.5v1.6"/></symbol>
 <symbol id="i-dice" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M12 21c3.75 0 5.625 0 6.939-.955a5 5 0 0 0 1.106-1.106C21 17.625 21 15.749 21 12s0-5.625-.955-6.939a5 5 0 0 0-1.106-1.106C17.625 3 15.749 3 12 3s-5.625 0-6.939.955A5 5 0 0 0 3.955 5.06C3 6.375 3 8.251 3 12s0 5.625.955 6.939a5 5 0 0 0 1.106 1.106C6.375 21 8.251 21 12 21"/><path d="M8.25 8H8m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm-.25 8H8m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm7.75 0H16m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm-4.25-4H12m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Zm3.75-4H16m.5 0a.5.5 0 1 1-1 0a.5.5 0 0 1 1 0Z"/></symbol>
 <symbol id="i-dots" viewBox="0 0 24 24"><circle class="f" cx="12" cy="5" r="1.7"/><circle class="f" cx="12" cy="12" r="1.7"/><circle class="f" cx="12" cy="19" r="1.7"/></symbol>
+<!-- WAVE 30 — the Up-next lock (closed / open, keyhole dot in the body) and the two-bar drag
+     handle. Stroke glyphs like the rest of the sprite: .ic svg paints them at 1.8px, round caps. -->
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="3.2" y="10" width="17.6" height="10.8" rx="2.6"/><path d="M7.4 10V7a4.6 4.6 0 0 1 9.2 0v3"/><circle class="f" cx="12" cy="15.4" r="1.15"/></symbol>
+<symbol id="i-lock-open" viewBox="0 0 24 24"><rect x="3.2" y="10" width="17.6" height="10.8" rx="2.6"/><path d="M7.4 10V7a4.6 4.6 0 0 1 8.7-2.3"/><circle class="f" cx="12" cy="15.4" r="1.15"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M4.6 9.6h14.8M4.6 14.4h14.8"/></symbol>
 <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 17v1.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V17"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
 <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
@@ -563,6 +553,16 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
     <div id="homeSec"></div>
     <div id="dynSec" hidden></div>
   </div>
+
+  <!-- WAVE 26 — THE TOP OF THE FEED. Eight masked blur bands stacked over the first 230px of the
+       window, where the feed now scrolls on behind the header: the header (search field, radio +
+       settings) and the filter chips paint ABOVE this at z-index 4, so only the content is blurred.
+       See #v26topblurcss at the end of the file; the JS behind it is #v26topblurjs. -->
+  <div id="topBlur" aria-hidden="true">
+    <i class="tpFade"></i>
+    <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    <i class="tpShade"></i>
+  </div>
 </div>
 
 <!-- MINI PLAYER -->
@@ -622,8 +622,7 @@ html[data-fs] #shist .shlbl,html[data-fs] .shgrp,html[data-fs] #setPanel .setGrp
         <button class="tab on" data-tab="up">Up next</button>
         <button class="tab" data-tab="lyr">Lyrics</button>
       </div>
-      <div class="pvctx" id="pvCtx"></div>
-      <div class="pvhead" id="pvHead"><button class="go" id="clearQ">Clear</button></div>
+      <div class="pvhead" id="pvHead"><button class="go qlock" id="qLock" type="button" title="Queue locked"><span class="ic"><svg><use href="#i-lock"/></svg></span></button><button class="go" id="clearQ">Clear</button></div>
       <div id="pvQueue"></div>
       <div id="pvLyrics" hidden></div>
     </aside>
@@ -647,7 +646,7 @@ let hist=LSget('ml_history',{});          // your listening history (kept from b
 let favs=LSget('sv_favs',{});
 let pls=LSget('sv_pls',{});
 let shist=LSget('sv_shist',[]);
-let lyrPref=LSget('sv_lyr','lrclib');   /* WAVE 14 — LRClib is the first-run default (was 'ytm') */
+let lyrPref=LSget('sv_lyr','auto');   /* WAVE 35 — Auto is the first-run default: the synced pool first, YouTube Music's words after it */
 const idItem={};
 let toastT;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
@@ -679,6 +678,10 @@ function onAudio(ev,fn){
 let queue=[],seq=[],cur=-1;           // seq = play order as queue indexes
 let repeat='off',shuffle=false,volume=80,wasVol=80;
 let curList=[],quickList=[],curPage='home';        // curList = list rows in main area; quickList = Home Quick picks
+/* the playlist whose page is on screen right now — set by openPl(), cleared by every other view
+   (showDyn/goHome). It is what lets the row's ⋮ menu offer "Remove from …": the same listHTML()
+   rows are shared by playlists, Liked music, search and history, so the row alone cannot say. */
+var plCtx=null;
 let lyr={plain:'',synced:'',cur:-1,timer:null,loadedFor:null};
 
 /* ============ nav / views ============ */
@@ -691,23 +694,12 @@ function setNav(on){
    boot path that lasted until #v3js's homeLine() first ran, 600ms in. The markup now boots the row
    in its idle state and every later visit is repainted by the showDyn/goHome wrapper (which calls
    homeLine() in the same tick as this function), so nothing has to blank it any more. */
-function goHome(){curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
-/* WAVE 14 — a dyn page can now say HOW to rebuild itself. `list` = {head, cls}: the page's own bar
-   (if it has one) plus the class its listHTML() list was built with. A repaint — a Like, an unlike,
-   anything that calls refreshHearts() — then rebuilds the page the user is actually looking at.
-   Without it, refreshHearts() fell back to a bare listHTML(curList): that is exactly what turned
-   the Quick picks page's grid back into a plain list and dropped its Back / Play all bar. */
-var dynList=null;
-function showDyn(title,sub,html,list){dynList=(list&&typeof list==='object')?list:null;curPage='dyn';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
-/* Rebuild the current dyn page from the same recipe it was built with. Returns false when the page
-   never registered one, so the caller keeps the rebuild it had before this wave. */
-function repaintDyn(){
-  if(!dynList||!curList||!curList.length) return false;
-  var h=(typeof dynList.head==='function')?dynList.head():(dynList.head||'');
-  $('#dynSec').innerHTML=h+listHTML(curList,dynList.cls||'');
-  register(curList);
-  return true;
-}
+function goHome(){plCtx=null;curPage='home';curList=[];setNav('home');$('#dynSec').hidden=true;$('#homeSec').hidden=false;renderHome();updatePlRows();}
+/* WAVE 34 — the WAVE 14 "how to rebuild myself" recipe (`list` = {head, cls}) is gone with the
+   rebuild it fed: repaintDyn() was its only reader, its only caller was the like-triggered
+   refreshHearts() repaint that WAVE 34 removed, and no page passes a 4th argument any more.
+   A Like only changes a glyph now (see refreshHearts), so there is no recipe to hand over. */
+function showDyn(title,sub,html){plCtx=null;curPage='dyn';window.__songListPage='';$('#homeSec').hidden=true;$('#dynSec').hidden=false;pgTitle.hidden=false;pgSub.hidden=false;pgTitle.innerHTML=title;pgSub.textContent=sub||'';$('#dynSec').innerHTML=html;setNav(null);updatePlRows();}
 
 /* ============ sidebar playlists ============ */
 function updatePlRows(){
@@ -718,8 +710,11 @@ function updatePlRows(){
   names.forEach(n=>{h+=`<button class="plrow" data-lib="pl:${esc(n)}"><span class="ic">${ic('i-list')}</span>${esc(n)}<span class="cnt">${pls[n].length}</span></button>`});
   $('#plList').innerHTML=h+'<div class="sbt" style="opacity:.35">Library opens here</div>';
 }
-function openLiked(){const items=Object.values(favs).filter(x=>x&&x.id);if(!items.length){toast('No liked songs yet — tap the ♥');return}showDyn('Liked music',items.length+' songs',listHTML(items));curList=items;register(items);}
-function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlist is empty');return}showDyn(esc(name),items.length+' songs · '+esc('click ⋮ to remove'),listHTML(items));curList=items;register(items);}
+function openLiked(){const items=Object.values(favs).filter(x=>x&&x.id);if(!items.length){toast('No liked songs yet — tap the ♥');return}showDyn('Liked music',items.length+' songs',listHTML(items));curList=items;register(items);window.__songListPage='liked';}
+function openPl(name){const items=pls[name]||[];if(!items.length){toast('Playlist is empty');return}
+  showDyn(esc(name),items.length+' songs · '+esc('click ⋮ to remove'),listHTML(items));
+  plCtx=name;                                   /* showDyn cleared it; this page is the playlist */
+  curList=items;register(items);}
 
 /* ============ rows & rails ============ */
 /* Wave 4AD — the size token is now context-specific. thumb(it) with no size still means
@@ -778,6 +773,9 @@ function topArtists(n){
   return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n||3).map(x=>x[0]);
 }
 function topRecent(n){return Object.values(hist).sort((a,b)=>b.last-a.last).slice(0,n||12)}
+/* One history entry by id — what a rail card falls back to when the list it was painted from no
+   longer holds it (an id-less legacy entry simply resolves to null and nothing is played). */
+function histItem(id){return (id&&hist[id])?hist[id]:null}
 function topScored(n){
   const now=Date.now();
   return Object.values(hist)
@@ -1178,10 +1176,17 @@ window.svaraFeed={
   state:function(){ return { qpShown:qpShown, page:QP_PAGE, trend:(trendArr||[]).length, pop:(popArr||[]).length, cached:Object.keys(feedCache).length, trendQ:trendQueries(), win:popWindow() } }
 };
 var homeGen=0;
+/* WAVE 37 — the Listen again row AS PAINTED, and the list its clicks play. The handler used to
+   rebuild topRecent(12) at click time, but every play bumps that track's `last`: the fresh list
+   re-orders and can push the oldest card out of the 12 entirely. The id then missed, and the
+   fallback `playList(arr,0)` started index 0 — normally the song already playing, from the top.
+   A shifted index was the same bug in friendlier clothes: a neighbour played instead of the card. */
+var homeLaArr=[];
 async function renderHome(){
   var gen=++homeGen;
   const sec=$('#homeSec');
   const recent=topRecent(12),scored=topScored(qpShown),arts=topArtists(FEED_ARTISTS);
+  homeLaArr=recent;
   /* Home shows the row with NO active pill (the shared builder, no second copy of the markup). */
   let h=chipRowHTML(null);
   const none=!Object.keys(hist).length;
@@ -1275,7 +1280,6 @@ function setNowUI(it){
   const ma=$('#mArt'),pa=$('#pvImg');
   if(art){ma.src=art;ma.style.display='';pa.src=art;$('#pvArtBg').style.backgroundImage=`url("${art}")`;$('#mArtPh').style.display='none'}
   else{ma.style.display='none';pa.removeAttribute('src');$('#pvArtBg').style.backgroundImage='';$('#mArtPh').style.display='flex'}
-  $('#pvCtx').textContent=queue.length?`Playing from ${queue[seq[cur]]?.artist||'your queue'}`:'';
   paintFavs();setTheme(art);resetLyrics();
 }
 function loadAt(seqPos,autoplay=true){
@@ -1360,22 +1364,10 @@ function paintFavs(){
 function paintRowCursor(){document.querySelectorAll('.row.cur').forEach(r=>{if(!r.closest('#pvQueue'))r.classList.remove('cur')})}
 
 /* queue ui */
-function renderQueue(){
-  const el=$('#pvQueue');
-  const it=nowItem();
-  $('#pvCtx').textContent=it?`Playing from ${it.artist||'your queue'}`:'Nothing playing';
-  if(!queue.length){el.innerHTML='<div class="empty">Queue is empty — add songs from ⋮ → “Add to queue”.</div>';return}
-  el.innerHTML=queue.map((x,i)=>{
-    const isCur=it&&it.id===x.id;
-    return `<div class="row ${isCur?'cur':''}" data-q="${i}">
-      <div class="rt"><img loading="lazy" src="${esc(thumb(x))}" onerror="this.style.display='none'">
-        <div class="ov"><span class="ic">${ic(isCur?'i-vol':'i-play')}</span></div></div>
-      <div class="rm"><div class="rtitle">${esc(x.title)}</div><div class="rsub">${isCur&&startingNow()?'Starting…':esc(subOf(x))}</div></div>
-      <div class="rr"><button class="dots" data-menu="${esc(x.id)}"><span class="ic">${ic('i-dots')}</span></button></div></div>`;
-  }).join('');
-  register(queue);
-  if($('#pvFab'))syncFab();
-}
+/* Forward declaration: the play-order renderer is INSTALLED by the v3/v30 layers below
+   (`renderQueue = function(){…}` inside their strict-mode blocks), so the global binding has
+   to exist here or that assignment throws and the rest of the layer never runs. */
+var renderQueue;
 function addQueue(it,start){
   if(!it)return;
   queue.push(it);
@@ -1412,13 +1404,41 @@ function toggleFav(it){
   saveAll();paintFavs();updatePlRows();refreshHearts();
   toast(favs[it.id]?'Added to Liked music':'Removed from Liked music');
 }
+/* WAVE 34 — A LIKE IS A FLAG, NOT A RELOAD.
+   Reported: tapping ♥ on a Trending card or a Quick picks row (or liking the same song from a row
+   further down Home) threw the page back to the top. Root cause: liking is a global state change,
+   so refreshHearts() rebuilt whatever was on screen — on Home that is renderHome(), whose first
+   write replaces #homeSec wholesale. WAVE 19 tried to keep the carousel offsets across that
+   rebuild, which fixed how far a RAIL was scrolled but not the page itself: the sections still
+   went through a skeleton/refetch cycle and #scroll still jumped. Liking an ALBUM never did this
+   because that path repaints its hearts in place (repaintAlbumHearts).
+   THE FIX — repaint the hearts, not the page. Every visible [data-fav] button is repainted from
+   `favs` (class, glyph, label), and Home keeps its DOM, its scroll and its already-painted rails.
+   The ONE page whose CONTENT depends on likes is the Liked music list (a row must disappear when
+   its song is unliked), so only that page is rebuilt — and it is a list, not a feed, so nothing it
+   shows is lost. Every other page (playlist, artist, album, search, queue) only needs the glyph. */
+function paintFavHeart(b){
+  if(!b||!b.getAttribute)return;
+  var id=b.getAttribute('data-fav'); if(!id)return;
+  var on=!!favs[id];
+  b.classList.toggle('on',on);
+  b.setAttribute('aria-label',on?'Remove from Liked music':'Add to Liked music');
+  b.innerHTML='<span class="ic">'+ic(on?'i-heart':'i-heart-o')+'</span>';
+}
 function refreshHearts(){
-  if(!$('#homeSec').hidden){renderHome()}
-  else if(!$('#dynSec').hidden&&curList.length){
-    /* WAVE 14: a page that knows how to rebuild itself keeps its own look (its grid class, its
-       header bar); every other page keeps the plain-list rebuild it always had. */
-    if(!repaintDyn()){ $('#dynSec').innerHTML=listHTML(curList); register(curList) }
+  var nodes=document.querySelectorAll('[data-fav]');
+  for(var i=0;i<nodes.length;i++)paintFavHeart(nodes[i]);
+  if($('#homeSec')&&!$('#homeSec').hidden)return;      // Home: hearts only, never a rebuild
+  if($('#dynSec')&&!$('#dynSec').hidden&&window.__songListPage==='liked'){
+    var sc=$('#scroll'), y=sc?sc.scrollTop:0;
+    var items=Object.values(favs).filter(function(x){return x&&x.id});
+    if(!items.length){ goHome(); return }
+    showDyn('Liked music',items.length+(items.length===1?' song':' songs'),listHTML(items));
+    curList=items; register(items);
+    window.__songListPage='liked';
+    if(sc)sc.scrollTop=y;
   }
+  /* a page that knows how to rebuild itself keeps its own look; the rest only needed the glyphs */
 }
 function addToPlaylist(name,it){
   if(!pls[name])pls[name]=[];
@@ -1437,24 +1457,23 @@ function openPlModal(it){
   $('#npGo').onclick=()=>{const n=$('#npName').value.trim();if(!n)return;addToPlaylist(n,it);closeModal()};
   $('#npName').onkeydown=e=>{if(e.key==='Enter')$('#npGo').click()};
 }
+/* take one song out of a playlist. The queue holds its own copies of these entries, so playback
+   and the upcoming list are untouched — same promise the Delete-playlist confirm makes. */
+function removeFromPlaylist(name,it){
+  var arr=pls[name]; if(!arr||!it)return;
+  var at=arr.findIndex(function(x){return x&&x.id===it.id}); if(at<0)return;
+  arr.splice(at,1);
+  saveAll();
+  if(!arr.length){ plCtx=null; goHome(); toast('Removed from “'+name+'” · playlist is empty'); return }
+  try{ openPl(name) }catch(e){updatePlRows()}      // rebuild the page the row came from
+  updatePlRows();
+  toast('Removed from “'+name+'”');
+}
 function closeModal(){$('#modal').classList.remove('show')}
 
 /* ============ download ============ */
-async function downloadTrack(it){
-  if(!it)return;
-  try{
-    toast('Downloading “'+it.title+'”…');
-    const r=await fetch('/api/download?id='+it.id);
-    if(!r.ok){const j=await r.json().catch(()=>null);throw new Error(j?.error||'download failed')}
-    const blob=await r.blob();
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download=(it.title||'track').replace(/[\\/:*?"<>|]/g,'')+'.m4a';
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-    toast('Downloaded');
-  }catch(e){toast('Download failed: '+e.message)}
-}
+/* installed by the later download layers below (strict-mode assignment) */
+var downloadTrack;
 
 /* ============ ⋮ menu ============ */
 function openMenu(ev,id){
@@ -1465,13 +1484,19 @@ function openMenu(ev,id){
   const cur=nowItem();
   const lines=[];
   const fav=!!favs[id];
+  /* "Remove from playlist" only exists when the row that opened this menu belongs to a playlist
+     page that is actually on screen — a queue row, the player's ⋮ or a search result must not
+     offer it. */
+  const plName=(plCtx&&ev.target&&ev.target.closest&&ev.target.closest('#dynSec'))?plCtx:null;
   const go=cls=>`<button class="mi ${cls||''}" data-a="${id}" data-act="...">`;
   m.innerHTML=`
     <button class="mi" data-a="${esc(id)}" data-act="fav"><span class="ic">${ic(fav?'i-heart-off':'i-heart-o')}</span>${fav?'Remove from Liked music':'Add to Liked music'}</button>
     ${!(cur&&cur.id===id)?`<button class="mi" data-a="${esc(id)}" data-act="now"><span class="ic">${ic('i-play')}</span>Play now</button>`:''}
     <button class="mi" data-a="${esc(id)}" data-act="next"><span class="ic">${ic('i-next')}</span>Play next</button>
-    <button class="mi" data-a="${esc(id)}" data-act="qadd"><span class="ic">${ic('i-plus')}</span>Add to queue</button>
-    ${queued?`<button class="mi dim" data-a="${esc(id)}" data-act="qrm"><span class="ic">${ic('i-x')}</span>Remove from queue</button>`:''}
+    ${queued
+      ?`<button class="mi dim" data-a="${esc(id)}" data-act="qrm"><span class="ic">${ic('i-x')}</span>Remove from queue</button>`
+      :`<button class="mi" data-a="${esc(id)}" data-act="qadd"><span class="ic">${ic('i-plus')}</span>Add to queue</button>`}
+    ${plName?`<button class="mi dim" data-a="${esc(id)}" data-act="plrm" data-pl="${esc(plName)}"><span class="ic">${ic('i-x')}</span>Remove from “${esc(plName)}”</button>`:''}
     ${(typeof tasteExcluded==='function'&&tasteExcluded(id))
       ?`<button class="mi" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-plus')}</span>Add back to taste</button>`
       :`<button class="mi dim" data-a="${esc(id)}" data-act="taste"><span class="ic">${ic('i-x')}</span>Remove from taste</button>`}
@@ -1498,6 +1523,7 @@ document.addEventListener('click',e=>{
     else if(act==='next')insertNext(it);
     else if(act==='qadd'){addQueue(it,true);toast('Added to queue')}
     else if(act==='qrm')removeFromQueue(it.id);
+    else if(act==='plrm')removeFromPlaylist(mm.dataset.pl,it);
     else if(act==='taste')toggleTasteExcluded(it);   /* 4AR */
     else if(act==='pl')openPlModal(it);
     else if(act==='dl')downloadTrack(it);
@@ -1523,9 +1549,14 @@ document.addEventListener('click',e=>{
     if(ctx==='al'){openAlbum(id,rail.dataset.title||'');return}
     /* Wave 7 adds two contexts of its own: 'pop' (Popular right now) and 'trend' (Trending songs).
        The legacy 'start' context is untouched — it is the welcome rail's own re-fetch path. */
-    const arr=ctx==='la'?topRecent(12):ctx==='start'?starterArr:ctx==='pop'?popArr:ctx==='trend'?trendArr:[];
+    /* 'la' plays the row that is on screen (homeLaArr), not a freshly rebuilt one — see its note
+       above renderHome(). A miss now plays the CLICKED track, never index 0. */
+    const arr=ctx==='la'?(homeLaArr.length?homeLaArr:topRecent(12)):ctx==='start'?starterArr:ctx==='pop'?popArr:ctx==='trend'?trendArr:[];
     if(!arr.length)return;
-    const idx=arr.findIndex(x=>x.id===id);playList(arr,idx>=0?idx:0,true);
+    const idx=arr.findIndex(x=>x.id===id);
+    if(idx>=0){playList(arr,idx,true);return}
+    const one=histItem(id);
+    if(one)playList([one].concat(arr),0,true);
   }
   const qr=e.target.closest('[data-q]');
   if(qr&&!e.target.closest('button')){const i=+qr.dataset.q;const np=seq.indexOf(i);if(np>=0)loadAt(np,true)}
@@ -1612,88 +1643,10 @@ function resetLyrics(){
   if(lyr.timer){clearInterval(lyr.timer);lyr.timer=null}
   lyr={plain:'',synced:'',cur:-1,timer:null,loadedFor:null};
   const pl=$('#pvLyrics');
-  if(pl&&!pl.hidden){ensureLyricsUI();renderLyricsState();loadLyrics()}
+  if(pl&&!pl.hidden){ensureLyricsUI();loadLyrics()}
 }
-async function loadLyrics(){
-  const it=nowItem();if(!it)return;
-  const p=lyrPref;
-  const lt=$('#lyrT');if(lt)lt.innerHTML=esc(it.title)+'<span>'+esc(it.artist||'')+'</span>';
-  lyr.loadedFor=it.id+':'+p;
-  $('#lyrBody').innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
-  /* 4AP: a title-only artist string must not be sent as an identity — lrclib would match a
-     same-title DIFFERENT recording. Normalise both and drop the artist when they are equal. */
-  const _nc=s=>String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
-  const lyrArtist=(it.artist && _nc(it.artist)!==_nc(it.title)) ? it.artist : '';
-  const qs=p==='ytm'
-    ?'/api/lyrics?provider=ytm&id='+encodeURIComponent(it.id)
-    :'/api/lyrics?provider=lrclib&id='+encodeURIComponent(it.id)+'&title='+encodeURIComponent(it.title)+'&artist='+encodeURIComponent(lyrArtist)+'&duration='+Math.round(audio.duration||0);
-  try{
-    const r=await fetch(qs);const j=await r.json();
-    if(j.error){
-      // auto fallback ytm -> lrclib
-      if(p==='ytm'&&lyrPref==='ytm'){
-        lyrPref='lrclib';saveAll();$('#lYT').classList.remove('on');$('#lLR').classList.add('on');
-        lyr.loadedFor=null;loadLyrics();return;
-      }
-      $('#lyrBody').innerHTML=`<div class="lyrmissing">${esc(j.error)}<br><br>Tip: switch provider above or try another track.</div>`;
-      return;
-    }
-    lyr.plain=j.plain||'';lyr.synced=j.synced||'';lyr.cur=-1;
-    renderLyricsBody();
-  }catch(e){$('#lyrBody').innerHTML='<div class="lyrmissing">Lyrics failed to load.</div>'}
-}
-function renderLyricsState(){
-  const body=$('#lyrBody');
-  if(!body)return;
-  const it=nowItem();
-  if(!it){body.innerHTML='<div class="lyrmissing">Nothing playing.</div>';return}
-  body.innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
-}
-function renderLyricsBody(){
-  const body=$('#lyrBody');
-  if(!body)return;
-  clearInterval(lyr.timer);lyr.timer=null;
-  const it=nowItem();
-  if(!it){body.innerHTML='<div class="lyrmissing">Nothing playing.</div>';return}
-  if(lyr.synced){
-    const lines=parseLrc(lyr.synced);
-    if(lines.length){
-      body.innerHTML=lines.map((_,i)=>`<div class="l" id="l${i}"></div>`).join('');
-      lyr.cur=-1;
-      const paint=()=>{
-        const t=audio.currentTime||0;
-        let idx=lines.length-1;for(let i=0;i<lines.length;i++){if(t>=lines[i].t)idx=i;else break}
-        if(idx!==lyr.cur){
-          if(lyr.cur>=0)body.children[lyr.cur]?.classList.remove('on');
-          lyr.cur=idx;
-          const el=body.children[idx];if(el){el.classList.add('on');el.textContent=lines[idx].x;if(el.scrollIntoView)el.scrollIntoView({block:'center',behavior:'smooth'})}
-        }
-      };
-      paint();
-      lyr.timer=setInterval(()=>{if(!$('#pv').classList.contains?true:document.body.classList.contains('pv'))paint()},500);
-      body.style.whiteSpace='';
-      return;
-    }
-  }
-  body.innerHTML=lyr.plain
-    ?lyr.plain.split('\n').map(l=>`<div class="l">${esc(l)||'&nbsp;'}</div>`).join('')
-    :'<div class="lyrmissing">No lyrics found for this track.</div>';
-}
-function parseLrc(s){
-  const out=[];
-  (s||'').split('\n').forEach(line=>{
-    const re=/\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]\s*(.*)/;
-    let m=re.exec(line),off=0;
-    while(m){
-      let ms=m[3]?+(m[3].length===2?m[3]+'0':m[3].padEnd(3,'0')):0;
-      out.push({t:(+m[1])*60+(+m[2])+ms/1000,x:m[4]});
-      off=m[0].length;
-      const rest=line.slice(off);m=re.exec(rest);if(!rest)break;
-      if(!m)break;
-    }
-  });
-  return out;
-}
+/* Installed by the lyrics layers below (strict-mode assignments), so the globals must exist: */
+var loadLyrics, renderLyricsBody, ensureLyricsUI;
 
 /* ============ dice (personalized radio) ============ */
 async function diceRadio(){
@@ -1718,7 +1671,6 @@ onAudio('timeupdate',()=>{
   const d=audio.duration||0,ct=audio.currentTime||0;
   const pct=d?ct/d*100:0;
   $('#progFill').style.width=pct+'%';
-  {const tf=$('#trProgFill');if(tf)tf.style.width=pct+'%'}
   $('#pseek').style.setProperty('--v',pct+'%');$('#pseek').value=pct*10;
   $('#tCur').textContent=fmt(ct);$('#tDur').textContent=fmt(d);
 });
@@ -1736,7 +1688,10 @@ onAudio('ended',()=>{
   if(repeat==='all'){loadAt(0);return}
   audio.currentTime=0;paintControls();
 });
-onAudio('error',()=>{toast('Stream error — try the next track')});
+/* WAVE 29 — the generic line is only the FALLBACK. The v28js guard below owns the message (and
+   the retry) for a track load; when it is installed this handler stays silent, so a cancelled or
+   already-retried load can never flash a second, plainer toast over its own. */
+onAudio('error',()=>{ if(!window.__svaraStreamGuard) toast('Stream error — try the next track') });
 
 /* buttons */
 $('#playBtn').onclick=togglePlay;$('#pvPlay').onclick=togglePlay;
@@ -1757,7 +1712,9 @@ $('#pvFab').onclick=()=>{
   if(queue.length)openPV();else toast('Play something first');
 };
 $('#pvMin').onclick=()=>closePV();
-$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;if(typeof AUTO_QUEUE_IDS!=='undefined')AUTO_QUEUE_IDS=[];audio.pause();audio.removeAttribute('src');if(typeof xfStopPreload==='function')xfStopPreload();$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue()};
+$('#clearQ').onclick=()=>{queue=[];seq=[];cur=-1;if(typeof AUTO_QUEUE_IDS!=='undefined')AUTO_QUEUE_IDS=[];audio.pause();audio.removeAttribute('src');if(typeof xfStopPreload==='function')xfStopPreload();$('#mTitle').textContent='Nothing playing';$('#mSub').textContent='';paintControls();renderQueue();/* WAVE 31: clearing empties the page, so close it — the same transition #pvMin uses (body.pv
+   dropped: #pv fades and slides back down over .26s/.34s), never a blank frozen panel. */
+  if(typeof closePV==='function')closePV()};
 $('#mFav').onclick=()=>toggleFav(nowItem());
 $('#pvFav').onclick=()=>toggleFav(nowItem());
 $('#pvMenu').onclick=e=>{const it=nowItem();if(it){idItem[it.id]=it;openMenu(e,it.id)}};
@@ -1778,20 +1735,9 @@ document.addEventListener('click',e=>{const pl=e.target.closest('[data-lib]');if
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
   const lyrOn=t.dataset.tab==='lyr';
-  $('#pvLyrics').hidden=!lyrOn;$('#pvQueue').hidden=lyrOn;$('#pvHead').hidden=lyrOn;$('#pvCtx').hidden=lyrOn;
+  $('#pvLyrics').hidden=!lyrOn;$('#pvQueue').hidden=lyrOn;$('#pvHead').hidden=lyrOn;
   if(lyrOn){ensureLyricsUI();if(!lyr.loadedFor)loadLyrics()}
 });
-/* lyrics provider seg (built on first open of lyrics) */
-function ensureLyricsUI(){
-  if($('#lyrSeg'))return;
-  $('#pvLyrics').innerHTML=`<div class="lyrt" id="lyrT"></div>
-    <div class="lyrseg" id="lyrSeg">
-    <button id="lYT" class="${lyrPref==='ytm'?'on':''}">YouTube Music</button>
-    <button id="lLR" class="${lyrPref==='lrclib'?'on':''}">LRClib</button></div>
-    <div id="lyrBody"></div>`;
-  $('#lYT').onclick=()=>{lyrPref='ytm';saveAll();$('#lYT').classList.add('on');$('#lLR').classList.remove('on');resetLyrics();loadLyrics()};
-  $('#lLR').onclick=()=>{lyrPref='lrclib';saveAll();$('#lLR').classList.add('on');$('#lYT').classList.remove('on');resetLyrics();loadLyrics()};
-}
 /* keyboard */
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'){if(e.key==='Escape')e.target.blur();return}
@@ -1826,7 +1772,7 @@ document.addEventListener('click',async e=>{
 </script>
 <style id="v2css">
 /* ================= Svara v2 layer ================= */
-:root{--acc-tx:#9DF0D8;--on-acc:0,0,0}
+:root{--on-acc:0,0,0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 /* animated mini <-> player (#28) */
 #pv{display:flex;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(20px) scale(.985);
@@ -1855,19 +1801,31 @@ body.pv #mini{display:flex;opacity:0;transform:translateY(110%);pointer-events:n
 /* 4AO: the panel is a three-part column — header (fixed in place) / scroller / jump pill.
    The header lives OUTSIDE the scroller, so it can never scroll away. */
 #pvLyrics:not([hidden]){position:relative;display:flex;flex-direction:column;overflow:hidden}
-.lyrbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t f" "a a" "s s";align-items:center;gap:8px 12px;padding:12px 2px;border-bottom:1px solid var(--line)}
-.lyrbar .lyrt{grid-area:t;min-width:0;margin:0;font-size:17px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* UI-10: 14px -> 17px — the rail (490px at 1784) had room; still nowrap + ellipsis */
-.lyrbar .lyra{grid-area:a;min-width:0;font-size:11.5px;font-weight:500;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lyrbar .lyrchip{grid-area:s}
-.lyrbar #lyrFull{grid-area:f;align-self:center;justify-self:end}
-.lyrchip{display:flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:2px;width:100%}
-.lyrchip button{flex:1;min-width:0;padding:6px 8px;border-radius:99px;font-size:10.5px;font-weight:700;letter-spacing:.4px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* WAVE 31 — ONE header row: [provider pill][fullscreen button], right-aligned, both on the same
+   centre line. #lyrHead is the sliding wrapper: collapsed (0fr) and lifted 8px while the pointer is
+   away from the panel, full height again on hover or keyboard focus. The scroller below it grows /
+   shrinks with it, so the lyrics stay centred (the v2js lyrics layer re-measures every frame). */
+#lyrHead{flex:0 0 auto;display:grid;grid-template-rows:0fr;opacity:0;transform:translateY(-8px);
+  transition:grid-template-rows .3s cubic-bezier(.22,1,.36,1),opacity .22s ease,transform .3s cubic-bezier(.22,1,.36,1)}
+/* :focus-visible (not :focus-within) — a MOUSE click on a pill or the fullscreen button must not
+   pin the header open after the pointer leaves; Tab-through still reveals it. */
+#pvLyrics:hover #lyrHead,#lyrHead:has(:focus-visible){grid-template-rows:1fr;opacity:1;transform:none}
+/* the clipper is a plain box: the bar's own padding + border would keep the 0fr track from
+   collapsing to 0 (an item's padding is part of its minimum contribution) */
+#lyrHead>.lyrclip{min-height:0;overflow:hidden}
+.lyrbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.lyrchip{display:flex;flex:0 0 auto;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:2px;width:auto}
+/* layout only — the pill's type, colours and ring come from the v5 provider-pill layer */
+.lyrchip button{flex:0 0 auto;white-space:nowrap;border-radius:99px}
 .lyrchip button.on{background:var(--panel2);color:var(--tx)}
 .lyrbtn{width:30px;height:30px;flex:0 0 auto;border-radius:50%;color:var(--dim);display:flex;align-items:center;justify-content:center}
 .lyrbtn:hover{background:var(--panel2);color:var(--tx)}
 .lyrbtn .ic{width:16px;height:16px}
-/* the scroller: soft top/bottom fade instead of hard clipping */
-#lyrScroll{flex:1;min-height:0;overflow-y:auto;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 88%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 9%,#000 88%,transparent 100%)}
+/* the scroller: soft fade at BOTH ends instead of hard clipping. The ramps are a fixed pixel
+   length, not a percentage — the old 9%/12% bands shrank to a few pixels on the short side rail
+   and grew huge in fullscreen. The bottom one is the longer of the two, because that is the edge
+   the next line creeps out of while you read down the list. */
+#lyrScroll{flex:1;min-height:0;overflow-y:auto;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 52px,#000 calc(100% - 104px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 52px,#000 calc(100% - 104px),transparent 100%)}
 /* jump-to-current pill: does not scroll with the content */
 #lyrJump{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:5;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);color:var(--tx);font-size:12px;font-weight:600;padding:7px 14px;border-radius:999px;box-shadow:0 8px 26px rgba(0,0,0,.5);cursor:pointer}
 #lyrJump:not([hidden]){display:inline-flex}
@@ -1889,17 +1847,12 @@ body.lyrfull #pvLyrics{position:fixed;inset:0;z-index:80;background:rgba(6,6,10,
 body.lyrfull .pvleft{display:none}
 body.lyrfull .pvbody{padding:0}
 body.lyrfull .pvright{width:auto;flex:1;background:none;border:0;border-radius:0;min-height:0}
-body.lyrfull .tabrow,body.lyrfull .pvctx,body.lyrfull .pvhead,body.lyrfull #pvQueue{display:none!important}
+body.lyrfull .tabrow,body.lyrfull .pvhead,body.lyrfull #pvQueue{display:none!important}
 body.lyrfull .lyrbar{position:fixed;top:0;left:6vw;right:6vw;z-index:86;border-bottom:0;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"t s f" "a s f";gap:6px 12px;padding:18px 0 14px;background:linear-gradient(to bottom,rgba(6,6,10,.92),rgba(6,6,10,0))}
 body.lyrfull .lyrchip{width:auto}
 body.lyrfull .lyrchip button{flex:0 0 auto;padding:6px 12px}
 body.lyrfull #lyrJump{bottom:88px}
 body.lyrfull #lyrBody{font-size:clamp(24px,3.4vw,44px);line-height:1.45;max-width:900px;margin-left:0;margin-right:auto;padding:var(--lpad,44vh) 0 var(--lpad,46vh)}
-#pvTransport{position:fixed;left:0;right:0;bottom:0;z-index:85;display:none;align-items:center;gap:12px;padding:12px 26px;background:rgba(10,10,14,.84);backdrop-filter:blur(16px);border-top:1px solid var(--line)}
-#trProg{position:absolute;top:0;left:0;right:0;height:2px;background:var(--line);cursor:pointer}
-#trProg::after{content:"";position:absolute;left:0;right:0;top:-7px;bottom:-7px}
-#trProgFill{height:100%;width:0%;background:var(--grad)}
-body.lyrfull #pvTransport{display:flex}
 /* ===== Wave 4AO-c — reveal the player page during the fullscreen-lyrics CLOSE ramp =====
    body.lyrfull hides the page (.pvleft/.pvbody padding/.pvright/.tabrow) for the WHOLE ~380 ms
    retract, so only #pvArtBg (the blurred album art) + the .pvtop header were visible — the
@@ -1910,8 +1863,6 @@ body.lyrfull.lyrreveal .pvleft{display:flex}
 body.lyrfull.lyrreveal .pvbody{padding:4px 30px 34px}   /* UI-8: the base padding, re-read */
 body.lyrfull.lyrreveal .pvright{width:var(--pvrail,420px);flex:0 0 auto;background:rgba(15,15,21,.5);border:1px solid var(--line);border-radius:18px}
 body.lyrfull.lyrreveal .tabrow{display:flex!important}
-#pvTransport .mtT{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#pvTransport .mtS{font-size:11.5px;color:var(--dim)}
 /* search suggestions (#21) */
 #shist{max-height:min(470px,64vh);overflow-y:auto;padding:6px}
 .shgrp{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);padding:9px 12px 4px;opacity:.75}
@@ -2029,7 +1980,6 @@ function themeAnimate(acc,acc2,accTx){
     s.setProperty('--grad','rgb('+A.join(',')+')');
     s.setProperty('--amb',A.join(','));
     s.setProperty('--amb2',A.join(','));
-    s.setProperty('--acc-tx','rgb('+T.join(',')+')');
     /* UI-1e: the accent is rewritten per album and spans near-black to pale yellow, so a static
        foreground fails at one end. SNAP --on-acc to whichever extreme contrasts with THIS frame's
        accent — never interpolated, so no grey mid-tones are ever painted. */
@@ -2279,6 +2229,10 @@ function paintLyrChip(){
   var a=$('#lYT'), b=$('#lLR'); if(!a||!b)return;
   a.classList.toggle('on',lyrPref==='ytm');
   b.classList.toggle('on',lyrPref==='lrclib');
+  /* WAVE 32 — the Auto pill lives in this same row, so it is painted here, synchronously.
+     It used to be inserted and repainted by a 600ms timer, which let "Auto" stay lit for up
+     to 0.6s after a click and kept a permanent interval alive for the whole session. */
+  if(typeof window.svPaintAuto==='function')window.svPaintAuto();
 }
 /* 4AO-b: the padding that lets the FIRST and LAST lines reach the centre is exactly half of the
    visible scrollport — computed, because the panel and fullscreen scrollers differ in height. */
@@ -2296,14 +2250,26 @@ function sizeLyrPad(){
   else { top='10px'; bot=Math.round(h/3)+'px'; }
   if(body.style.paddingTop!==top)body.style.paddingTop=top;
   if(body.style.paddingBottom!==bot)body.style.paddingBottom=bot;
-  /* 4AO-e: line 0 sits at the top, so the top fade would dim it — the mask is fully opaque at
-     the top in EVERY state; the bottom fade is kept. */
-  var grad='linear-gradient(to bottom,#000 0,#000 88%,transparent 100%)';
-  if(sc.style.maskImage!==grad){ sc.style.maskImage=grad; sc.style.webkitMaskImage=grad; }
+  paintLyrMask();
   if(!synced){
     if(sc.scrollTop!==0)sc.scrollTop=0;
     var j=$('#lyrJump'); if(j&&!j.hidden)j.hidden=true;
   }
+}
+/* The scroller's edge fade, written here because it depends on the scroll position.
+   TOP is the top ramp and BOT the bottom one, both a fixed number of pixels (the old 12% band was
+   a few px on a short panel and a third of the screen on a tall one). The top ramp GROWS with the
+   first 52px of scrolling instead of fading in at once: at rest (song start) the first line is
+   anchored at the very top and must stay at full strength, but as soon as the list has scrolled
+   under the header its cut-off top line gets the same soft edge as the bottom. That also makes the
+   header's slide honest — nothing pops when the pointer leaves. */
+function paintLyrMask(){
+  var sc=$('#lyrScroll'); if(!sc)return;
+  var TOP=52, BOT=104;
+  var t=sc.scrollTop; if(!(t>0))t=0;
+  var tf=Math.min(TOP, Math.round(t/8)*8);   /* steps of 8px: at most a handful of rewrites */
+  var grad='linear-gradient(to bottom,transparent 0,#000 '+tf+'px,#000 calc(100% - '+BOT+'px),transparent 100%)';
+  if(sc.style.maskImage!==grad){ sc.style.maskImage=grad; sc.style.webkitMaskImage=grad; }
 }
 /* 4AO-e: the anchored scroll target. The active line sits at the TOP while it is above the centre
    (target clamps to 0 -> no scrolling at song start) and then follows at the CENTRE once it
@@ -2370,12 +2336,13 @@ function lyrReopen(){
 ensureLyricsUI=function(){
   var host=$('#pvLyrics'); if(!host)return;
   if($('#lyrBar')){ lyrReopen(); return }
-  host.innerHTML='<div class="lyrbar" id="lyrBar">'+
-      '<div class="lyrt" id="lyrT"></div>'+
-      '<div class="lyra" id="lyrA"></div>'+
-      '<div class="lyrchip" id="lyrSeg"><button id="lYT">YouTube Music</button><button id="lLR">LRClib</button></div>'+
+  /* WAVE 31 — the header is ONE row now: the provider pills and the fullscreen button, side by
+     side. The song title / artist are gone (the player page already shows them, and the lyrics tab
+     needs the room); the row slides down on hover and retracts when the pointer leaves (#lyrHead). */
+  host.innerHTML='<div id="lyrHead"><div class="lyrclip"><div class="lyrbar" id="lyrBar">'+
+      '<div class="lyrchip" id="lyrSeg"><button id="lYT">YouTube Music</button><button id="lLR">LRCLIB</button></div>'+
       '<button class="lyrbtn" id="lyrFull" title="Fullscreen lyrics"><span class="ic">'+ic('i-expand')+'</span></button>'+
-    '</div>'+
+    '</div></div></div>'+
     '<div id="lyrScroll"><div id="lyrBody"></div></div>'+
     '<button id="lyrJump" hidden><span class="ic">'+ic('i-down')+'</span>Jump to current</button>';
   paintLyrChip();
@@ -2383,7 +2350,7 @@ ensureLyricsUI=function(){
   $('#lLR').onclick=function(){lyrPref='lrclib';saveAll();paintLyrChip();lyr.loadedFor=null;loadLyrics()};
   $('#lyrFull').onclick=toggleLyrFull;
   var j=$('#lyrJump'); if(j)j.onclick=lyrJumpToCurrent;
-  var sc=$('#lyrScroll'); if(sc)sc.addEventListener('scroll',updateLyrJump,{passive:true});
+  var sc=$('#lyrScroll'); if(sc)sc.addEventListener('scroll',function(){ updateLyrJump(); paintLyrMask() },{passive:true});
   lyrReopen();
 }
 /* track change: follow again (never leave a stale scroll position / pill) */
@@ -2400,14 +2367,42 @@ window.addEventListener('resize',function(){
   }
   updateLyrJump();
 },{passive:true});
+/* WAVE 31 — the lyrics header (provider pills + fullscreen button) collapses while the pointer is
+   away and slides back in on hover, so #lyrScroll gains / loses ~60px. The centred line is derived
+   from the scrollport height (bottom padding = half of it, follow target = height/2), so both have
+   to follow EVERY frame of that transition or the active line drifts up and slides back and the
+   last line can no longer reach the centre. A ResizeObserver on #lyrScroll fires on exactly those
+   frames; the recompute is on the INSTANT path for the same reason as the resize handler above. */
+var lyrSc=null, lyrRO=null, lyrH=-1;
+function lyrReflow(){
+  if(!lyrSc || !lyrSc.isConnected) return;
+  var h=lyrSc.clientHeight; if(h===lyrH) return;
+  var moved = lyrH >= 0;          /* the FIRST measurement is not a move — tab open keeps its own
+                                     smooth recentre from lyrReopen() */
+  lyrH=h;
+  sizeLyrPad();
+  if(moved && lyrAuto && lyr.mode==='synced' && lyr.lines && lyr.lines.length){
+    lyrInstant=true; try{ lyrRecenter(); } finally { lyrInstant=false; }
+  }
+  updateLyrJump();
+}
+function lyrWatch(){
+  var el=document.getElementById('lyrScroll');
+  if(!el || el===lyrSc) return;
+  lyrSc=el; lyrH=-1;
+  if(!window.ResizeObserver) return;
+  if(lyrRO) lyrRO.disconnect();
+  lyrRO=new ResizeObserver(lyrReflow); lyrRO.observe(el);
+}
+/* the lyrics UI is built lazily, and only once — hook its builder rather than the markup */
+var _ensureLyrUI=ensureLyricsUI;
+ensureLyricsUI=function(){ var r=_ensureLyrUI.apply(this,arguments); lyrWatch(); return r };
 loadLyrics=async function(){
   var body=$('#lyrBody'); if(!body)return;
   var it=nowItem();
   if(!it){lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Nothing playing.</div>'; sizeLyrPad(); return}
   var token=++lyrToken;
   lyr.loadedFor=it.id+':'+(lyrPref||'auto');
-  var t=$('#lyrT'); if(t)t.textContent=it.title||'';
-  var a=$('#lyrA'); if(a)a.textContent=it.artist||'';
   lyr.mode='loading'; lyr.lines=[]; lyr.cur=-1; clearInterval(lyr.timer); lyr.timer=null;
   body.innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
   sizeLyrPad();
@@ -2415,6 +2410,7 @@ loadLyrics=async function(){
   qs.set('provider',(lyrPref==='ytm'||lyrPref==='lrclib')?lyrPref:'auto');
   qs.set('id',it.id); qs.set('title',it.title||''); qs.set('artist',it.artist||'');
   var dur=audio.duration||0; if(dur>0)qs.set('duration',String(Math.round(dur)));
+  qs.set('v','37a');                        /* WAVE 34b: see urlFor — keeps old cached JSON away */
   try{
     var r=await fetch('/api/lyrics?'+qs.toString());
     var j=await r.json();
@@ -2491,36 +2487,6 @@ document.addEventListener('click',function(e){
   audio.currentTime=t;
   paintLyrics(true); paintSeek();
 });
-function buildTransport(){
-  if($('#pvTransport'))return;
-  var d=document.createElement('div'); d.id='pvTransport';
-  d.innerHTML='<div id="trProg"><div id="trProgFill"></div></div>'+
-    '<div style="min-width:0;flex:1"><div class="mtT" id="trT"></div><div class="mtS" id="trS"></div></div>'+
-    '<button class="lyrbtn" id="trPrev"><span class="ic">'+ic('i-prev')+'</span></button>'+
-    '<button class="lyrbtn" id="trPlay"><span class="ic">'+ic('i-play')+'</span></button>'+
-    '<button class="lyrbtn" id="trNext"><span class="ic">'+ic('i-next')+'</span></button>';
-  document.body.appendChild(d);
-  $('#trPrev').onclick=function(){prevTrack()};
-  $('#trNext').onclick=function(){nextTrack(true)};
-  $('#trPlay').onclick=function(){togglePlay()};
-  $('#trProg').onclick=function(e){
-    if(!audio.duration)return;
-    var r=e.currentTarget.getBoundingClientRect();
-    var ratio=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
-    audio.currentTime=ratio*audio.duration;
-    var f=$('#trProgFill'); if(f)f.style.width=(ratio*100)+'%';
-  };
-  var pf=$('#trProgFill'); if(pf&&audio.duration)pf.style.width=(audio.currentTime/audio.duration*100)+'%';
-  paintTransport(); setInterval(paintTransport,600);
-}
-function paintTransport(){
-  var T=$('#trT'); if(!T)return;
-  var it=nowItem();
-  T.textContent=it?it.title:'Nothing playing';
-  var S=$('#trS'); if(S)S.textContent=it?(it.artist||''):'';
-  var b=$('#trPlay'); if(b)b.innerHTML='<span class="ic">'+ic(audio.paused?'i-play':'i-pause')+'</span>';
-  var pf=$('#trProgFill'); if(pf&&audio.duration)pf.style.width=(audio.currentTime/audio.duration*100)+'%';
-}
 /* ===== Wave 4AM — fullscreen lyrics open/close animation =====
    The fullscreen LAYOUT is untouched: this only controls how #pvLyrics enters and leaves.
    Open  = cross-fade (opacity .22s) + horizontal stretch from the RIGHT edge leftward to full
@@ -2535,15 +2501,14 @@ function lfIcon(open){ var b=$('#lyrFull'); if(b)b.innerHTML='<span class="ic">'
 function lyrFullOpen(){
   var tab=document.querySelector('.tab[data-tab="lyr"]');
   if(tab)tab.click();
-  ensureLyricsUI(); buildTransport(); paintTransport();
+  ensureLyricsUI();
   if(!lyr.loadedFor)loadLyrics();
-  var el=$('#pvLyrics'), tr=$('#pvTransport');
+  var el=$('#pvLyrics');
   if(!el){ document.body.classList.add('lyrfull'); document.body.classList.remove('lyrreveal'); LF.open=true; lfIcon(true); return }
   var already=document.body.classList.contains('lyrfull');   // reopen during the close ramp: retarget, no snap
   if(!already){
     if(!lfReduced()){
       el.style.transition='none'; el.style.clipPath='inset(0 0 0 100%)'; el.style.opacity='0';
-      if(tr){ tr.style.transition='none'; tr.style.opacity='0' }
     }
     document.body.classList.add('lyrfull');
   }
@@ -2553,18 +2518,17 @@ function lyrFullOpen(){
     sizeLyrPad(); lyrRecenter();
     updateLyrJump();
   });
-  if(lfReduced()){ document.body.classList.remove('lyrreveal'); lfClear(el); lfClear(tr); return }
+  if(lfReduced()){ document.body.classList.remove('lyrreveal'); lfClear(el); return }
   void el.offsetWidth;                                       // ONE forced reflow: the jump is never seen
   el.style.transition='opacity .22s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';
   el.style.clipPath='inset(0 0 0 0)'; el.style.opacity='1';
-  if(tr){ tr.style.transition='opacity .22s ease'; tr.style.opacity='1' }
   var token=++LF.token;
-  LF.timer=setTimeout(function(){ if(token!==LF.token)return; document.body.classList.remove('lyrreveal'); lfClear(el); lfClear(tr) },380);
+  LF.timer=setTimeout(function(){ if(token!==LF.token)return; document.body.classList.remove('lyrreveal'); lfClear(el) },380);
 }
 function lyrFullClose(){
   if(!LF.open && !document.body.classList.contains('lyrfull'))return;   // idempotent
   LF.open=false;
-  var el=$('#pvLyrics'), tr=$('#pvTransport'), reduced=lfReduced();
+  var el=$('#pvLyrics'), reduced=lfReduced();
   document.body.classList.add('lyrreveal');   // 4AO-c: reveal the page for the whole retract (overlay still fully covers here)
   if(!reduced){
     if(el){
@@ -2575,20 +2539,18 @@ function lyrFullClose(){
          interpolates to the target on its own, so a rapid reopen/close stays smooth. */
       if(getComputedStyle(el).clipPath==='none'){
         el.style.transition='none'; el.style.clipPath='inset(0 0 0 0)'; el.style.opacity='1';
-        if(tr){ tr.style.transition='none'; tr.style.opacity='1' }
         void el.offsetWidth;
       }
       el.style.transition='opacity .34s ease, clip-path .34s cubic-bezier(.22,1,.36,1)';   // 4AO-c: close only — frost survives the whole retract
       el.style.clipPath='inset(0 0 0 100%)'; el.style.opacity='0';
     }
-    if(tr){ tr.style.transition='opacity .34s ease'; tr.style.opacity='0' }   // 4AO-c: close only — matches the clip
   }
   var token=++LF.token;
   function finish(){
     if(token!==LF.token)return;
     document.body.classList.remove('lyrfull');
     document.body.classList.remove('lyrreveal');
-    lfClear(el); lfClear(tr);
+    lfClear(el);
     sizeLyrPad(); updateLyrJump();
     lfIcon(false);
     try{ var b=$('#lyrFull'); if(b)b.focus() }catch(e){}
@@ -2601,7 +2563,7 @@ function lyrFullKill(){
   LF.token++; clearTimeout(LF.timer); LF.open=false;
   document.body.classList.remove('lyrfull');
   document.body.classList.remove('lyrreveal');
-  lfClear($('#pvLyrics')); lfClear($('#pvTransport'));
+  lfClear($('#pvLyrics'));
   sizeLyrPad(); updateLyrJump();
   lfIcon(false);
 }
@@ -2704,30 +2666,6 @@ document.addEventListener('click',function(e){
 });
 
 /* 10) correct download extension (#41) */
-downloadTrack=async function(it){
-  if(!it)return;
-  try{
-    toast('Downloading “'+it.title+'”…');
-    var r=await fetch('/api/download?id='+it.id);
-    if(!r.ok){var j=await r.json().catch(function(){return null});throw new Error((j&&j.error)||'download failed')}
-    var name=it.title||'track';
-    var cd=r.headers.get('content-disposition')||'';
-    var m=cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-    if(m){name=decodeURIComponent(m[1])}
-    else{
-      var ct=(r.headers.get('content-type')||'').toLowerCase();
-      var ext=ct.indexOf('webm')>=0?'webm':ct.indexOf('ogg')>=0?'opus':ct.indexOf('mpeg')>=0?'mp3':'m4a';
-      name=name+'.'+ext;
-    }
-    var blob=await r.blob();
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download=name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){URL.revokeObjectURL(a.href)},4000);
-    toast('Downloaded');
-  }catch(e){toast('Download failed: '+e.message)}
-};
-
 /* 11) startup */
 updatePlRows();
 paintLyrChip();
@@ -2817,22 +2755,32 @@ if(!$('#homeSec').hidden)renderHome();
       localStorage.setItem('sv_lyr_v2','1');
     }catch(e){}
   }
-  setInterval(function(){
-    var chip=document.getElementById('lyrSeg'); if(!chip)return;
+  /* WAVE 32 — the pill used to be inserted and painted by a 600ms interval: it could lag up to
+     0.6s behind a click, and the timer ran for the life of the app. Both steps now happen inside
+     paintLyrChip(), which every lyrics control already goes through. */
+  function build(){
+    var chip=document.getElementById('lyrSeg'); if(!chip) return null;
     if(!document.getElementById('lAU')){
       var b=document.createElement('button');
       b.id='lAU'; b.textContent='Auto';
       b.onclick=function(){
+        /* paintLyrChip() lives in the lyrics layer's closure and is NOT reachable from here —
+           the global painter it publishes is (and it repaints all three pills anyway). */
         lyrPref='auto'; saveAll(); lyr.loadedFor=null; loadLyrics();
-        Array.prototype.forEach.call(chip.children,function(x){x.classList.toggle('on',x.id==='lAU')});
+        if(typeof window.svPaintAuto==='function')window.svPaintAuto();
       };
       chip.insertBefore(b,chip.firstChild);
     }
+    return chip;
+  }
+  window.svPaintAuto=function(){
+    var chip=build(); if(!chip) return;
     var explicit=(lyrPref==='ytm'||lyrPref==='lrclib');
     Array.prototype.forEach.call(chip.children,function(x){
       x.classList.toggle('on', explicit ? (x.id===(lyrPref==='ytm'?'lYT':'lLR')) : (x.id==='lAU'));
     });
-  },600);
+  };
+  window.svPaintAuto();
 })();
 </script>
 <style id="v3css">
@@ -2966,8 +2914,6 @@ if(!$('#homeSec').hidden)renderHome();
 #setPanel .setPill{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim);flex-shrink:0}
 #setPanel .setPill.ok{color:#7ef0b0;border-color:rgba(126,240,176,.35)}
 #setPanel .setPill.no{color:var(--acc);border-color:rgba(var(--amb),.35)}
-#setPanel .setLink{font-size:12px;color:var(--acc2);text-decoration:none;flex-shrink:0}
-#setPanel .setLink:hover{text-decoration:underline}
 /* Wave 5 (UI-2) — the old .setSeg / .setSw rules that used to live here were REPLACED by the two
    dedicated port blocks at the end of the document (#v5segcss, #v5swcss), so each control has a
    single source of truth. Same tokens in, same rows out; nothing else in the panel moved. */
@@ -3012,8 +2958,6 @@ if(!$('#homeSec').hidden)renderHome();
 #aboutCard .abCardTop{display:flex;align-items:center;gap:12px}
 #aboutCard .abMark{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:8px;color:#f4f4f7}
 #aboutCard .abMark svg{display:block;flex:0 1 auto;min-width:0;height:20px;width:auto;aspect-ratio:370/69}
-#aboutCard .abGlyphBox{flex:0 0 auto}
-#aboutCard .abGlyphBox .abGlyph{width:22px;height:22px}
 #aboutCard .abGlyph{display:block;width:30px;height:30px;background-size:contain;background-position:center;background-repeat:no-repeat;
   filter:drop-shadow(0 -1.5px 2.5px rgba(43,231,166,.55))}
 #aboutCard .abName{font-size:22px;font-weight:800;line-height:1.25;color:#f4f4f7}
@@ -3089,7 +3033,6 @@ var LS = {
 };
 
 /* ---------- BUG #1: recent searches ---------- */
-var _renderSHist = renderSHist;
 renderSHist = function(){
   var el = $('#shist'); if(!el) return;
   if(!shist || !shist.length){ el.hidden = true; return }
@@ -3125,29 +3068,26 @@ paintSeek = function(){
 renderQueue = function(){
   var el = $('#pvQueue'); if(!el) return;
   var it = nowItem();
-  var ctx = $('#pvCtx'); if(ctx) ctx.textContent = it ? ('Playing from '+(it.artist||'your queue')) : 'Nothing playing';
   if(!queue.length){ el.innerHTML = '<div class="empty">Queue is empty — add songs from ⋮ → “Add to queue”.</div>';
     if($('#pvFab')) syncFab(); return }
-  var curQi = it ? queue.findIndex(function(x){ return x.id===it.id }) : -1;
+  var curQi = (cur>=0 && cur<seq.length && queue[seq[cur]]) ? seq[cur]
+            : (it ? queue.findIndex(function(x){ return x.id===it.id }) : -1);
+  /* WAVE 30 — the queue now KEEPS what it has played. Wave 5 showed only “now + upcoming”, so a
+     finished track vanished from the list; the row order is now the PLAY ORDER itself (`seq`), which
+     puts the tracks already heard ABOVE the now-playing row and the ones still to come below it.
+     Nothing is dropped from `queue` (that was already true — only the view filtered them out), so
+     repeat-all and a click on a past row behave exactly as before. `seq` stays the single source of
+     truth for the order, which is what the unlocked drag handle rewrites (see #v30qjs). */
   var order = [];
-  if(curQi>=0) order.push(curQi);
-  var ci = seq.indexOf(curQi);
-  /* Wave 5 (UI-5): “Up next” now lists only the tracks that have NOT played yet, in playback
-     order. It used to WRAP the play order around (seq.slice(ci+1).concat(seq.slice(0,ci))), which
-     parked every already-played track at the BOTTOM of the list — i.e. behind the songs autoplay
-     keeps appending at the tail — so with autoplay on they could never be reached again: they just
-     piled up at the end and only played once nothing new was being added. The wrap is kept ONLY
-     for repeat-all, the one mode where playback genuinely does return to them. */
-  var walk = ci>=0 ? seq.slice(ci+1).concat(repeat==='all' ? seq.slice(0,ci) : []) : seq.slice();
-  walk.forEach(function(qi){ if(qi>=0 && qi<queue.length && order.indexOf(qi)<0) order.push(qi) });
-  /* safety net — only entries the play order never mentions at all (never played, never upcoming) */
-  queue.forEach(function(_,i){ if(order.indexOf(i)<0 && seq.indexOf(i)<0) order.push(i) });
-  el.innerHTML = order.map(function(qi,pos){
+  seq.forEach(function(qi){ if(qi>=0 && qi<queue.length && order.indexOf(qi)<0) order.push(qi) });
+  /* safety net — an entry the play order never mentions still has to be reachable */
+  queue.forEach(function(_,i){ if(order.indexOf(i)<0) order.push(i) });
+  el.innerHTML = order.map(function(qi){
     var x = queue[qi]; if(!x) return '';
-    var isCur = (pos===0 && curQi>=0);
+    var isCur = (curQi>=0 && qi===curQi);
     var A = artistLinksHTML(x);   // 4Z-b: computed once — an empty artist must not leave a stray " • "
     if(isCur && startingNow()) A = 'Starting…';   // 4AE: the now-playing row mirrors the stream state
-    return '<div class="row '+(isCur?'cur':'')+'" data-q="'+qi+'" data-qid="'+esc(x.id)+'">'+
+    return '<div class="row '+(isCur?'cur':'')+'" data-q="'+qi+'">'+
       '<div class="rt"><img loading="lazy" src="'+esc(thumb(x))+'" onerror="this.style.display=\'none\'">'+
         '<div class="ov"><span class="ic">'+ic(isCur?'i-vol':'i-play')+'</span></div></div>'+
       '<div class="rm"><div class="rtitle">'+esc(x.title)+'</div>'+
@@ -3161,11 +3101,15 @@ renderQueue = function(){
 (function bindQueueClicks(){
   var q = document.getElementById('pvQueue'); if(!q) return;
   q.addEventListener('click', function(e){
+    /* these three own their own click/pointer behaviour — without the guard the capture
+       handler below would "play this row" instead of liking it / starting a drag. */
     if(e.target.closest('[data-menu]')) return;              // ⋮ still works
-    var row = e.target.closest('[data-qid]'); if(!row) return;
+    if(e.target.closest('[data-fav]')) return;               // heart keeps its own toggle
+    if(e.target.closest('[data-qgrip]')) return;             // drag handle never plays the row
+    var row = e.target.closest('[data-q]'); if(!row) return;
     e.preventDefault(); e.stopPropagation();
-    var id = row.getAttribute('data-qid');
-    var qi = queue.findIndex(function(x){ return x.id===id }); if(qi<0) return;
+    var qi = parseInt(row.getAttribute('data-q'), 10);
+    if(!(qi >= 0) || !queue[qi]) return;
     var pos = seq.indexOf(qi); if(pos<0){ seq.push(qi); pos=seq.length-1 }
     cur = pos; loadAt(pos, true); renderQueue();
   }, true);
@@ -3178,9 +3122,7 @@ showDyn = function(t,s,h){
      immediately before this call; every other showDyn() caller (liked music, playlists, the
      artist “show all” list) leaves it down, so the chips stay hidden on those views. */
   sView = _sPaint; _sPaint = false;
-  /* WAVE 14: this wrapper used to call through with (t,s,h) only, which silently dropped a page's
-     own rebuild recipe (the 4th argument) and left repaintDyn() with nothing to rebuild from. */
-  _showDyn(t,s,h,arguments[3]);
+  _showDyn(t,s,h);
   hideArtist();
   hideAlbum();                                // 4AL: the album page is its own section
   try{ document.title = String(t).replace(/<[^>]+>/g,'') + ' · Svara' }catch(e){}
@@ -3315,10 +3257,9 @@ function artSongRowHTML(it){
     '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
 }
 function artSongsHTML(items){ return '<div class="list">'+(items||[]).map(artSongRowHTML).join('')+'</div>' }
-/* rowHTML lives in the base layer and is used by search results, home rows,
-   liked/playlists and the artist top-songs list. Same markup, artist names
+/* The row renderer used by search results, home rows, liked/playlists and the artist
+   top-songs list. It REPLACES the base layer's plain-text row: same markup, artist names
    become links. */
-var _rowHTML = rowHTML;
 rowHTML = function(it){
   var cur = (typeof nowItem === 'function') && nowItem() && nowItem().id === it.id;
   return '<div class="row ' + (cur ? 'cur' : '') + '" data-play="1" data-id="'+esc(it.id)+'">'+
@@ -3328,14 +3269,12 @@ rowHTML = function(it){
     '<div class="rr">'+'<button class="favh'+(favs[it.id]?' on':'')+'" type="button" data-fav="'+esc(it.id)+'" aria-label="'+(favs[it.id]?'Remove from Liked music':'Add to Liked music')+'"><span class="ic">'+ic(favs[it.id]?'i-heart':'i-heart-o')+'</span></button>'+
     '<button class="dots" data-menu="'+esc(it.id)+'"><span class="ic">'+ic('i-dots')+'</span></button></div></div>';
 };
-/* railCard lives in the base layer and is used by the Home rails ("Listen again",
-   "Albums for you", the trending rail) — and by railHTML(). Same markup, the artist
-   line under each cover becomes links. Same delegated handler as rows/search/pvA. */
-var _railCard = railCard;
-/* WAVE 13: this wrapper is the card the Home rails actually use, so it must forward the base
-   layer's new optional SIZE argument — without it the Trending row kept asking for the 256px rail
-   token (the pixelated hero) however the base railCard was called. Undefined still means THUMB_RAIL
-   for every other row. */
+/* The Home-rail card ("Listen again", "Albums for you", the trending rail) and what railHTML()
+   draws. It REPLACES the base layer's card: same markup, the artist line under each cover becomes
+   links. Same delegated handler as rows/search/pvA. */
+/* WAVE 13: it must forward the optional SIZE argument — without it the Trending row kept asking for
+   the 256px rail token (the pixelated hero) however railCard was called. Undefined still means
+   THUMB_RAIL for every other row. */
 railCard = function(it, ctx, size){
   var sz = size || THUMB_RAIL;
   var ph = thumb(it,sz) ? '' : '<div class="ph"><span class="ic">'+ic('i-disc')+'</span></div>';
@@ -4438,7 +4377,7 @@ downloadTrack = async function(it){
 /* Every localStorage key this app owns (WAVE0-NOTES inventory) + the frozen settings
    keys (PLAN §8). Export/import use this list; nothing else is accepted on import. */
 var SET_LIVE = ['ml_history','sv_favs','sv_pls','sv_shist','sv_lyr','sv_lyr_v2','sv_pins','sv_tracks','sv_recent_ids','sv_dice_last','sv_auto','sv_liked_albums','sv_taste_excluded'];   /* 4AQ + 4AR */
-var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_crossfade','sv_set_lyricsProvider','sv_set_downloadFolder','sv_set_confirmClear','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_set_gfxLevel','sv_set_typeScale','sv_logo'];   /* UI-5: crossfade · UI-7: text size */
+var SET_NEW  = ['sv_set_volume','sv_set_autoplay','sv_set_shuffle','sv_set_repeat','sv_set_crossfade','sv_set_reduceMotion','sv_set_shaderIntensity','sv_set_lowPower','sv_set_gfxLevel','sv_set_typeScale'];   /* UI-5: crossfade · UI-7: text size */
 var SET_KEYS = SET_LIVE.concat(SET_NEW);
 var setOpen = false, setCfm = '', setSys = null, setSysAsked = false, setPend = null, aboutOpen = false;
 
@@ -4537,7 +4476,7 @@ function setRender(){
      column beside it. setRow's `stack` variant already existed (#setPanel .setRow.stack); the only
      new CSS is the 10px gap above the control (v5segcss). Playback / Downloads rows are unchanged. */
   h += '<div class="setGrp"><h3>Lyrics</h3>'+
-    setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRClib']], setLive('provider')), true)+
+    setRow('Default provider','Used for the next lyrics fetch', setSeg('provider',[['auto','Auto'],['ytm','YouTube Music'],['lrclib','LRCLIB']], setLive('provider')), true)+
   '</div>';
   /* ===== Wave 5 — Appearance / graphics level =====
      The ONLY entry point for the graphics level: no top-bar button, no Home card, no shortcut.
@@ -4573,9 +4512,15 @@ function setRender(){
     ? setCfmRow('Remove every liked song?','Clear','likes_yes')
     : setRow('Clear likes','Empties Liked music ('+Object.keys(favs||{}).length+' songs)','<button class="setAct danger" type="button" data-setact="likes">Clear</button>');
   h += (setCfm==='import')
-    ? setCfmRow('Replace your Svara data with '+(setPend?Object.keys(setPend).length:0)+' keys from the file?','Import','import_yes')
+    ? setCfmRow('Replace your Svara data with '+(setPend?Object.keys(setPend).length:0)+' keys ('+(setPend?setAlbumCount(setPend['sv_liked_albums']):0)+' liked albums) from the file?','Import','import_yes')
     : setRow('Export','Downloads every Svara localStorage key as JSON','<button class="setAct" type="button" data-setact="export">Export</button>')+
       setRow('Import','Restores a file exported here — nothing is written unless it validates','<button class="setAct" type="button" data-setact="import">Import</button>');
+  /* WAVE 28 — the factory reset. The LAST row of the panel's most destructive group, behind a
+     confirm like its two siblings above, and it keeps exactly ONE key (sv_onboard_seen) so the
+     first-run setup cannot come back — a reset is "start empty", not "new install". */
+  h += (setCfm==='reset')
+    ? setCfmRow('Erase everything and restart Svara?','Reset','reset_yes')
+    : setRow('Reset app','Resetting the app restarts Svara with its defaults. The first-run setup does not come back; Export first if you want a copy.','<button class="setAct danger" type="button" data-setact="reset">Reset…</button>');
   h += '</div>';
   /* Wave 4F — the About group is now ONE full-width button at the BOTTOM of the panel; the
      version / name / links it used to hold live in the #aboutCard overlay it opens. No group
@@ -4766,7 +4711,6 @@ function setProvider(p){
   var b = document.getElementById(p==='auto' ? 'lAU' : p==='ytm' ? 'lYT' : 'lLR');
   if(b) b.click();
   else { lyrPref = p; saveAll() }    // chips not built yet: same state, no fetch to redo
-  setPut('sv_set_lyricsProvider', lyrPref);
 }
 function setClearHist(){
   hist = {};
@@ -4783,7 +4727,18 @@ function setClearLikes(){
   try{ refreshHearts() }catch(e){}
   toast('Liked music cleared');
 }
+/* how many albums a stored/raw sv_liked_albums value holds. Export, the Import preview and the
+   Import toast all report this same number, so the panel and the file can never disagree. */
+function setAlbumCount(raw){
+  try{
+    var o = typeof raw==='string' ? JSON.parse(raw) : raw;
+    return (o && typeof o==='object' && !Array.isArray(o)) ? Object.keys(o).length : 0;
+  }catch(e){ return 0 }
+}
 function setExport(){
+  /* liked albums live in their own layer and are only written to storage when a heart is tapped.
+     Flush that layer first, so a file can never miss an album this session is showing. */
+  try{ if(typeof saveLikedAlbums==='function') saveLikedAlbums() }catch(e){}
   var keys = {}, n = 0, k;
   try{
     for(var i=0;i<localStorage.length;i++){
@@ -4800,7 +4755,7 @@ function setExport(){
     a.download = 'svara-data-'+new Date().toISOString().slice(0,10)+'.json';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href) }, 5000);
-    toast('Exported '+n+' keys');
+    toast('Exported '+n+' keys · '+setAlbumCount(keys['sv_liked_albums'])+' liked albums');
   }catch(e){ toast('Export failed: '+e.message) }
 }
 function setImportFile(file){
@@ -4824,7 +4779,7 @@ function setImportFile(file){
     var n = Object.keys(out).length;
     if(!n){ toast('Import failed: no Svara data in the file'); return }
     setPend = out; setCfm = 'import'; setRender();
-    toast('Loaded '+n+' keys — press Import to apply');
+    toast('Loaded '+n+' keys ('+setAlbumCount(out['sv_liked_albums'])+' liked albums) — press Import to apply');
   };
   fr.onerror = function(){ toast('Import failed: could not read the file') };
   fr.readAsText(file);
@@ -4847,7 +4802,43 @@ function setImportApply(){
     return;
   }
   setRefresh();
-  toast('Imported '+n+' keys');
+  toast('Imported '+n+' keys · '+setAlbumCount(out['sv_liked_albums'])+' liked albums');
+}
+/* ===== WAVE 28 — RESET APP =====================================================
+   Erases every key this app owns — the same `sv_`/`ml_` allowlist Export and Import use, so a key
+   the app does not own can never be touched — and then reloads, which is what makes the wipe real:
+   the boot layer re-reads localStorage from scratch, so no live state (queue, history, likes,
+   playlists, texture cache) survives in memory either.
+   ONE KEY IS KEPT: sv_onboard_seen. That is the first-run gate — the personalisation flow opens only
+   when there is no history, no profile AND no seen flag — so keeping the flag is exactly what makes
+   "erase everything" different from "a new install": the user gets an empty library AND never sees
+   the welcome flow again. Its raw value is re-written untouched (the boot layer reads it as JSON,
+   and this function never parses or re-encodes it). sv_profile and the three handover keys ARE
+   erased: the shelves they describe live in ml_history, which is going away with them.
+   Playback is stopped so no stream keeps feeding a document that is about to be thrown away, and
+   the reload is DELAYED only long enough for the toast to be read. The panel is deliberately NOT
+   redrawn: its counts are live variables, not storage, so a repaint here would show the old
+   numbers for the last 700 ms — the reload is what makes every count zero. */
+function setResetAll(){
+  var n = 0, keep = null, doomed = [], k, i;
+  try{
+    keep = localStorage.getItem('sv_onboard_seen');
+    for(i=0;i<localStorage.length;i++){
+      k = localStorage.key(i);
+      if(!k || !/^(sv_|ml_)[a-z_0-9]*$/i.test(k)) continue;
+      if(k === 'sv_onboard_seen') continue;
+      doomed.push(k);
+    }
+    for(i=0;i<doomed.length;i++){ try{ localStorage.removeItem(doomed[i]); n++ }catch(e2){} }
+    /* the gate reads this as JSON, so `1` is the canonical "seen" value. Written even if it was
+       absent before: the point of the reset is an empty library, never a second first-run. */
+    try{ localStorage.setItem('sv_onboard_seen', keep !== null ? keep : '1') }catch(e2){}
+  }catch(e){}
+  try{ if(audio && audio.pause) audio.pause() }catch(e){}
+  try{ if(audioAlt && audioAlt.pause) audioAlt.pause() }catch(e){}
+  setCfm = ''; setPend = null; setSys = null; setSysAsked = false;
+  toast('Erased '+n+' keys — restarting Svara');
+  setTimeout(function(){ try{ location.reload() }catch(e){} }, 700);
 }
 /* after an import: re-read localStorage into the live state and repaint */
 function setRefresh(){
@@ -4855,6 +4846,19 @@ function setRefresh(){
   favs = LSget('sv_favs', {}) || {};
   pls  = LSget('sv_pls', {}) || {};
   shist = LSget('sv_shist', []) || [];
+  /* Liked albums (4AQ) and the taste-exclusion list (4AR) are globals read once at boot. Re-read
+     them BEFORE updatePlRows() below, because its sidebar count comes from likedAlbumCount(). */
+  try{ if(typeof reloadLikedAlbums==='function') reloadLikedAlbums() }catch(e){}
+  try{
+    if(typeof TASTE_EXCLUDED !== 'undefined'){
+      var te = LSget('sv_taste_excluded', []);
+      TASTE_EXCLUDED = Array.isArray(te) ? te : [];
+    }
+  }catch(e){}
+  try{ if(typeof repaintAlbumHearts==='function') repaintAlbumHearts() }catch(e){}
+  try{ if(typeof refreshSidebar==='function') refreshSidebar() }catch(e){}
+  /* the Liked albums page, if it is the page on screen, must be rebuilt from the imported set */
+  try{ if(typeof isLikedAlbumsViewOpen==='function' && isLikedAlbumsViewOpen() && typeof renderLikedAlbumsView==='function') renderLikedAlbumsView() }catch(e){}
   var lp = LSget('sv_lyr', null); if(lp) lyrPref = lp;
   recentTracks = LS.get('sv_tracks', []) || [];
   recentIds = LS.get('sv_recent_ids', []) || [];
@@ -4940,6 +4944,8 @@ document.addEventListener('click', function(e){
     if(act==='export'){ setExport(); return }
     if(act==='import'){ var f = document.getElementById('setFile'); if(f) f.click(); return }
     if(act==='import_yes'){ setImportApply(); return }
+    if(act==='reset'){ setCfm='reset'; setRender(); return }
+    if(act==='reset_yes'){ setResetAll(); return }
     return;
   }
   /* click outside closes — but only for real clicks: a programmatic click (the lyrics
@@ -6247,6 +6253,22 @@ function refreshSidebar(){
 }
 function isAlbumLiked(id){ return !!(id && LIKED_ALBUMS[id]) }
 function saveLikedAlbums(){ LSset('sv_liked_albums', LIKED_ALBUMS) }
+/* IMPORT/EXPORT — LIKED_ALBUMS is read ONCE, when this layer boots. An import writes the key
+   straight into localStorage, so without this the hearts, the sidebar count and the Liked albums
+   page kept reading the OLD object until a restart — and the first heart tap afterwards then wrote
+   that stale object back over the imported albums. setRefresh() calls this after every import. */
+function reloadLikedAlbums(){
+  LIKED_ALBUMS = LSget('sv_liked_albums', {}) || {};
+  if(typeof LIKED_ALBUMS !== 'object' || Array.isArray(LIKED_ALBUMS)) LIKED_ALBUMS = {};
+  return LIKED_ALBUMS;
+}
+/* repaint every album heart currently on screen from the (just re-read) state */
+function repaintAlbumHearts(){
+  try{
+    var ns = document.querySelectorAll('[data-albheart]');
+    for(var i=0;i<ns.length;i++) paintAlbHeart(ns[i]);
+  }catch(e){}
+}
 function likedAlbumList(){ return Object.keys(LIKED_ALBUMS).map(function(k){ return LIKED_ALBUMS[k] }).filter(function(x){ return x && x.id }) }
 /* Wave 20 — one heart button, TWO glyphs. Both are painted into every album heart; CSS (v4aqcss)
    shows the plain heart at rest and swaps the slashed one in on hover/focus of a LIKED album, so
@@ -6357,19 +6379,17 @@ try{ if(typeof curPage !== 'undefined' && curPage === 'home') renderHome() }catc
 .hrm{width:30px;height:30px;border-radius:50%;color:var(--dim);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .hrm:hover{color:#ffb3c1;background:var(--panel2)}
 .hrm .ic{width:15px;height:15px}
-/* STEP 2 - a bigger fullscreen toggle, on BOTH surfaces (panel + fullscreen). Only #lyrFull,
-   never the transport's .lyrbtn buttons. */
+/* STEP 2 - a bigger fullscreen toggle, on BOTH surfaces (panel + fullscreen). */
 #lyrFull{width:38px;height:38px}
 #lyrFull .ic{width:20px;height:20px}
 /* STEP 3 - in FULLSCREEN only, the header keeps nothing but the collapse button. The side
-   panel (.lyrbar at rest) is untouched: title, artist and chips stay exactly as before. */
-body.lyrfull #lyrT,body.lyrfull #lyrA,body.lyrfull #lyrSeg{display:none}
+   panel (.lyrbar at rest) is untouched: the provider pills stay exactly as before. */
+body.lyrfull #lyrSeg{display:none}
 body.lyrfull .lyrbar{display:flex;align-items:center;justify-content:flex-end;padding:18px 0 14px}
 /* STEP 4 - the REAL mini player (art, clickable title/artist, live progress, transport)
-   at the bottom of the fullscreen lyrics view; the old text-only #pvTransport is hidden.
-   Overrides the v2css "hidden while player open" state and sits ABOVE #pvLyrics (80)/#pvTransport (85). */
+   at the bottom of the fullscreen lyrics view.
+   Overrides the v2css "hidden while player open" state and sits ABOVE #pvLyrics (80). */
 body.lyrfull #mini{display:flex;opacity:1;transform:none;pointer-events:auto;left:0;right:0;z-index:90}
-body.lyrfull #pvTransport{display:none!important}
 /* keep the lyrics scroller - and its bottom fade - clear of the bar */
 body.lyrfull #pvLyrics{padding-bottom:76px}
 /* during the 4AO-c close ramp, fade the mini with the retracting overlay */
@@ -6588,12 +6608,12 @@ function animShuffle(btn){
 
 /* ---------- skip / shuffle button wiring ---------- */
 var SKIP_TARGETS={
-  prevBtn:SKIP_BACK, pPrev:SKIP_BACK, trPrev:SKIP_BACK,
-  nextBtn:SKIP_FWD,  pNext:SKIP_FWD,  trNext:SKIP_FWD,
+  prevBtn:SKIP_BACK, pPrev:SKIP_BACK,
+  nextBtn:SKIP_FWD,  pNext:SKIP_FWD,
   pShuffle:SHUFFLE,  miniShuf:SHUFFLE
 };
-var ANIM={ prevBtn:animSkipBack, pPrev:animSkipBack, trPrev:animSkipBack,
-           nextBtn:animSkipForward, pNext:animSkipForward, trNext:animSkipForward,
+var ANIM={ prevBtn:animSkipBack, pPrev:animSkipBack,
+           nextBtn:animSkipForward, pNext:animSkipForward,
            pShuffle:animShuffle, miniShuf:animShuffle };
 function applyOne(id){
   var b=document.getElementById(id); if(!b) return;
@@ -7196,7 +7216,8 @@ body{font-family:'Svara UI',system-ui,'Segoe UI',Roboto,Arial,sans-serif}
    the shader's own shape sizing. Route (c) (u_shape:0 + u_scale:2) removed the gap but the visible
    2px band sits where the shader's alpha fades, so it stayed dark (max luminance ~99/255) — it did
    not read as chrome. Per the wave addendum we therefore SHIPPED THE CSS CHROME RING (A1+ fallback):
-   `@property --lm-angle` + a conic silver/white gradient masked to the outer 2px, with sv-lm-spin. */
+   `@property --lm-angle` + a conic silver/white gradient masked to the outer 2px. The angle is
+   fixed: the ring is chrome, not a spinner (the old sv-lm-spin class was never applied to it). */
 @property --lm-angle{ syntax:"<angle>"; inherits:false; initial-value:0deg; }
 .lm{position:relative;isolation:isolate;border-radius:999px;background:linear-gradient(180deg,#202020 0%,#000 100%);border:0}
 #setPanel .setAbout.lm{border-radius:999px;border:0;background:linear-gradient(180deg,#202020 0%,#000 100%)}
@@ -7215,9 +7236,6 @@ body{font-family:'Svara UI',system-ui,'Segoe UI',Roboto,Arial,sans-serif}
   mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
   mask-composite:exclude;
   transition:transform .14s ease}
-.sv-lm-ring.sv-lm-spin{animation:sv-lm-spin 6s linear infinite}
-@keyframes sv-lm-spin{ to{ --lm-angle:360deg; } }
-@media (prefers-reduced-motion:reduce){ .sv-lm-ring.sv-lm-spin{ animation:none; } }
 .lm-ripple-wrap{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none;z-index:1}
 .lm-ripple{position:absolute;width:20px;height:20px;border-radius:50%;pointer-events:none;
   background:radial-gradient(circle,rgba(255,255,255,.4) 0%,rgba(255,255,255,0) 70%);
@@ -9358,9 +9376,13 @@ html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
     var items = pls[n] || [], cov = items.length ? thumb(items[0], THUMB_RAIL) : '';
     var ph = cov ? '' : '<div class="ph"><span class="ic">'+ic('i-list')+'</span></div>';
     var pinned = pinList().indexOf(n) >= 0;
+    /* WAVE 34 — the hover badge is a PLAY button, like every other card's. It used to be i-list,
+       a STROKE glyph, inside .rail .ov .pb — whose rule paints the icon with fill and stroke:none
+       for i-play's solid triangle. That killed the three lines and left only the three little
+       dots, so a playlist card showed ":" instead of play (the reported three-dots icon). */
     return '<div class="rail" data-lib="pl:'+esc(n)+'" data-title="'+esc(n)+'">'+
       '<div class="art libart">'+ph+(cov ? '<img loading="lazy" alt="" src="'+esc(cov)+'" onerror="this.style.display=\'none\'">' : '')+
-      '<div class="ov"><span class="pb">'+ic('i-list')+'</span></div></div>'+
+      '<div class="ov"><span class="pb">'+ic('i-play')+'</span></div></div>'+
       '<div class="rname">'+esc(n)+'</div>'+
       '<div class="rsub2">'+(pinned?'Pinned · ':'')+'Playlist · '+items.length+(items.length===1?' song':' songs')+'</div></div>';
   }
@@ -9485,7 +9507,7 @@ html[data-gfx="reduced"] #setPanel .setSw svg circle{transition:none}
    plus a top light when selected), so they read as part of the same family without dissolving
    into the trough. Blur sits on the trough only, and the app's own chrome (#sb, #mini) keeps
    backdrop-filter at every level, so this is not a new exception to the low-power rule.
-   NOT part of the Text-size scale, by design: no rule for .lyrt/.lyra/.lyrchip exists in
+   NOT part of the Text-size scale, by design: no rule for .lyra/.lyrchip exists in
    #v5typecss, so Settings -> Appearance -> Text size cannot resize these pills.
 
    (2) THE MINI PLAYER. "Nothing playing" is not a state the bar should occupy: it is now HIDDEN
@@ -10668,7 +10690,11 @@ html[data-gfx="reduced"] .oncDots i.beat{animation:none;opacity:.85}
   text-shadow:0 1px 10px rgba(0,0,0,.55)}
 .heroSec .rail .rname{bottom:31px;font-size:17px;font-weight:750}
 .heroSec .rail .rsub2{bottom:14px;font-size:12.5px;color:rgba(255,255,255,.72)}
-.heroSec .rail .ov{padding:12px}
+/* WAVE 34 — THE PLAY BUTTON SITS ON TOP OF THE FADE, NOT UNDER IT. .art::after (the bottom
+   gradient that keeps the title legible) is the last child of .art, so it paints AFTER the .ov
+   overlay that holds the play button: the button was washed out by its own card's shadow. The text
+   lines already lift themselves above it (z-index:2); the button gets 3 so it is always crisp. */
+.heroSec .rail .ov{padding:12px;z-index:3}
 .heroSec .rail .ov .pb{width:40px;height:40px}
 @media(max-width:1000px){.heroSec .railwrap{--herocols:2.2}}
 @media(max-width:660px){.heroSec .railwrap{--herocols:1.2}}
@@ -11005,8 +11031,8 @@ if(sc && window.MutationObserver){ try{ new MutationObserver(scan).observe(sc, {
 <style id="v16pancss">
 /* ===== WAVE 16 — the player panel: an Up next ⇄ Lyrics slide, and the fullscreen crossfade ====
    (1) THE PANEL SLIDE. The two tab LABELS are untouched — they are the affordance, and the request
-   was to leave them exactly as they are. What moves is what sits UNDER them: the Up next trio
-   (#pvCtx "Playing from …", #pvHead "Autoplay similar / Clear", #pvQueue the list) on one side and
+   was to leave them exactly as they are.   What moves is what sits UNDER them: the Up next pair
+   (#pvHead "Autoplay similar / Clear", #pvQueue the list) on one side and
    #pvLyrics on the other. #v16panjs reads the side from `#pvLyrics.hidden`, which the app's own tab
    handler has already flipped by the time its observer runs.
    DIRECTION: Lyrics is the RIGHT-hand tab, so it arrives from the RIGHT and Up next arrives from the
@@ -11022,10 +11048,10 @@ if(sc && window.MutationObserver){ try{ new MutationObserver(scan).observe(sc, {
    the class in the same case, and the rule below covers a level change mid-session. */
 @keyframes svPanInL{from{transform:translateX(calc(-1 * var(--sv-pan-dx,44px)));opacity:.001}to{transform:none;opacity:1}}
 @keyframes svPanInR{from{transform:translateX(var(--sv-pan-dx,44px));opacity:.001}to{transform:none;opacity:1}}
-#pvQueue.svPanL,#pvCtx.svPanL,#pvHead.svPanL,#pvLyrics.svPanL{animation:svPanInL var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
-#pvQueue.svPanR,#pvCtx.svPanR,#pvHead.svPanR,#pvLyrics.svPanR{animation:svPanInR var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
-html[data-gfx="reduced"] #pvQueue.svPanL,html[data-gfx="reduced"] #pvCtx.svPanL,html[data-gfx="reduced"] #pvHead.svPanL,html[data-gfx="reduced"] #pvLyrics.svPanL,
-html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvCtx.svPanR,html[data-gfx="reduced"] #pvHead.svPanR,html[data-gfx="reduced"] #pvLyrics.svPanR{animation:none}
+#pvQueue.svPanL,#pvHead.svPanL,#pvLyrics.svPanL{animation:svPanInL var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+#pvQueue.svPanR,#pvHead.svPanR,#pvLyrics.svPanR{animation:svPanInR var(--sv-pan-ms,240ms) cubic-bezier(.22,.61,.36,1) both}
+html[data-gfx="reduced"] #pvQueue.svPanL,html[data-gfx="reduced"] #pvHead.svPanL,html[data-gfx="reduced"] #pvLyrics.svPanL,
+html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvHead.svPanR,html[data-gfx="reduced"] #pvLyrics.svPanR{animation:none}
 
 /* (2) THE FULLSCREEN CROSSFADE — the mini player's "Up next" while the fullscreen lyrics overlay
    is open. The reported bug is "it just switches", and the cause is a cascade accident, not a
@@ -11047,7 +11073,7 @@ html[data-gfx="reduced"] #pvQueue.svPanR,html[data-gfx="reduced"] #pvCtx.svPanR,
    did. Reduced motion never adds the class at all: lyrFullClose() then finishes in one step. */
 @keyframes svXfadeIn{from{opacity:0}to{opacity:1}}
 body.lyrfull.svxcross #pvLyrics{display:flex!important}
-body.lyrfull.svxcross .pvctx,body.lyrfull.svxcross #pvQueue{display:block!important;animation:svXfadeIn .3s ease both}
+body.lyrfull.svxcross #pvQueue{display:block!important;animation:svXfadeIn .3s ease both}
 body.lyrfull.svxcross .pvhead{display:flex!important;animation:svXfadeIn .3s ease both}
 </style>
 
@@ -11079,9 +11105,9 @@ function reduced(){
 }
 function byId(id){ return document.getElementById(id) }
 
-/* the two views: Lyrics is ONE box, Up next is THREE sibling blocks that the tab handler shows and
-   hides together (the "Playing from …" line, the Clear bar, the list) */
-var UP = ['pvCtx','pvHead','pvQueue'];
+/* the two views: Lyrics is ONE box, Up next is TWO sibling blocks that the tab handler shows and
+   hides together (the Clear bar, the list — WAVE 31 dropped the "Playing from …" line above them) */
+var UP = ['pvHead','pvQueue'];
 
 function oneShot(node, cls){
   if(!node) return;
@@ -11340,84 +11366,1347 @@ body.lyrfull #lyrFull{pointer-events:auto;filter:drop-shadow(0 1px 4px rgba(0,0,
 .oncPill[aria-pressed="true"]:hover{background:rgba(var(--amb),.20);border-color:var(--acc2);color:var(--acc2)}
 </style>
 
-<script id="v19oncui">
+<script id="v34likejs">
+/* WAVE 34 — the WAVE 19 rail-offset restore is gone with the rebuild it protected.
+   It existed to put a Home carousel back where the user left it after a like-triggered
+   renderHome(). WAVE 34 removed that renderHome() (see refreshHearts: a Like now repaints the
+   hearts in place), so there is no rebuild left to restore an offset after — keeping the wrapper
+   would reintroduce the very page rebuild this fixes. Verified: liking on Home leaves #homeSec
+   untouched, every rail at its offset and #scroll where it was. */
+</script>
+<style id="v20cwcss">
+/* ================= WAVE 20 — arrows on every horizontal carousel =================
+   WHY THIS LAYER EXISTS. Every rail on Home (Trending songs, Listen again, Popular right now,
+   Albums for you and the picked shelves), the Quick picks grid, the artist page's "Fans might also
+   like" and the album page's rows are all `overflow-x:auto` scrollers with
+   `::-webkit-scrollbar{width:0}` — so the ONLY way to move them was a trackpad, a tilt wheel or
+   shift+wheel. On a desktop mouse with a plain wheel they could not be scrolled at all, which is
+   the report this wave answers.
+
+   1) ARROWS, NOT A SCROLLBAR. Each carousel gets a left and a right pill, modelled on Apple Music's
+      own: a 30x54 stadium with a tall, heavy chevron, vertically centred on the COVER — the pill
+      sits at the middle of the artwork, not of the card, because every card carries a title and an
+      artist line under its cover and centring on the card drops the arrow ~28px too low. A row that
+      stacks several cards per column (Quick picks) has no single cover to centre on, so it keeps the
+      middle of the row box. The pill is a translucent white glass over a 20px backdrop blur, so it
+      reads over any album art and over both the page background and a light cover.
+
+   2) FADE IN ON THE ROW'S OWN HOVER. `opacity:0` is the resting state and `.cwWrap:hover` is what
+      reveals the pair — each carousel reveals only its own arrows, never a neighbour's. There is
+      no always-on chrome anywhere, which is what the reference does. On a touch device (no hover)
+      they are simply always visible.
+      CLICK MUST NOT PIN THEM OPEN. A pointer click would otherwise leave the button focused, and
+      `.cwWrap:focus-within` kept the pair lit after the cursor left the row; the mousedown default
+      is cancelled (so a click never focuses the pill) and only `:focus-visible` — keyboard focus —
+      reveals them without hover.
+
+   3) AN ARROW IS ABSENT, NOT DISABLED, WHEN THERE IS NOTHING THERE. Visibility is computed from
+      the scroller's real offsets — `scrollLeft > 2` for left, `scrollLeft < scrollWidth -
+      clientWidth - 2` for right — so it is honest in every case that matters:
+        · at the far left, the left arrow is gone and only the right one shows;
+        · at the far right, the reverse;
+        · mid-row, both show;
+        · a row that fits entirely (or only a few cards) shows NEITHER, because it is not scrollable;
+        · a row with four cards at a narrow window is STILL scrollable, so its arrows still appear —
+          the test is remaining scroll distance, never a card count.
+
+   4) ONE CLICK MOVES ONE PAGE, CLAMPED. The step is measured from the row itself: the smallest
+      horizontal pitch between two distinct card positions (which works for both the flex rails and
+      the column-major Quick picks grid) times however many whole cards fit. Trending's 3.2-wide row
+      therefore steps 3 cards, a cover row of 6.4 steps 6, Quick picks steps 3 columns. The target
+      is clamped to `scrollWidth - clientWidth`, so the last click lands the final card flush with
+      the right edge — it is not centred, and it does not stop short.
+
+   NOTHING IN THE ROWS IS REBUILT. The scroller keeps its markup, its children and its handlers; the
+   only DOM change is a `.cwWrap` box around it (a plain block, so every `%`-width rule inside —
+   `.rail{width:calc((100% - …)/var(--railcols))}` included — measures exactly as before) holding the
+   two buttons. Grids that merely LOOK like rails (.railwrap.algrid, .libgrid, #dynSec .list.qpAll)
+   have `overflow:visible` and are skipped by the computed-style test, so they are never touched.
+
+   WAVE 21 — THE PILL AND CHEVRON ARE THE REFERENCE'S PROPORTIONS, NOT EYEBALLED. The two screenshots
+   that prompted this were measured pixel by pixel (flood-fill the pill, then the brighter stroke
+   inside it). The reference pill is 28x51 and fully rounded (the row widths at its top edge follow
+   a 14px corner arc exactly), and its chevron is 8x29 — 29% of the pill's width, 57% of its height,
+   with a 3.4px stroke whose arms run 4.2 across for 12.8 down, i.e. a ~41° apex. The old pill was
+   34x62 with a 20px glyph whose path spanned 5.8x11.7 (7x13 painted) at a 90° apex: the pill's own
+   aspect (0.548)
+   matched the reference's (0.549), so what actually read as "a small thin arrow in a fat button" was
+   the glyph, not the box — it filled only 21% of the pill's height against 57%.
+   Hence: pill 30x54 (same 0.555 aspect, 4px slimmer in width), chevron 8.6x30.7 at 3.6px stroke
+   with round caps. The ratios are the reference's; only the scale is ours. */
+.cwWrap{position:relative;min-width:0}
+.cwBtn{
+  position:absolute;top:var(--cwt,50%);z-index:7;
+  width:30px;height:54px;padding:0;margin:0;
+  border:1px solid rgba(255,255,255,.1);border-radius:15px;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.09));
+  -webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
+  color:#fff;cursor:pointer;
+  box-shadow:0 8px 22px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.12);
+  transform:translateY(-50%);
+  opacity:0;pointer-events:none;
+  transition:opacity .16s ease,background .16s ease,box-shadow .16s ease;
+}
+/* FLUSH, NOT OVERHANGING. Three of Home's rows (Trending, Popular, Albums for you) are a rail
+   INSIDE a rail: skRail's placeholder `.railwrap` is the outer box and the fill that replaces it
+   keeps that nesting, so the outer `overflow-x:auto` clips anything drawn past its content edge —
+   measured, a `left:-12px` pill showed as a 22px sliver with no chevron. Sitting at 0 is inside
+   every host, clips in none of them, and is the same edge Apple's arrows sit on. */
+.cwBtn.cwL{left:0}
+.cwBtn.cwR{right:0}
+/* the svg IS the glyph's bounding box (8.6x30.7), so its viewBox and its px size are the same numbers
+   and `stroke-width` here is CSS pixels: 3.6 is 12% of the pill's width, as in the reference (3.4/28) */
+.cwBtn svg{width:8.6px;height:30.7px;overflow:visible;fill:none;stroke:currentColor;stroke-width:3.6;
+  stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+.cwWrap.cwOn:hover>.cwBtn{opacity:1;pointer-events:auto}
+.cwWrap.cwOn:hover>.cwBtn:hover{background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,.15));
+  box-shadow:0 10px 26px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.18)}
+/* the edge test is absolute: an arrow with nothing to reveal is removed from hit-testing too, so a
+   click can never land on a button that would not move the row */
+.cwWrap.cwNoL>.cwL,.cwWrap.cwNoR>.cwR{opacity:0!important;pointer-events:none!important}
+.cwBtn:focus-visible{outline:2px solid var(--acc);outline-offset:3px;opacity:1;pointer-events:auto}
+@media (hover:none){.cwWrap.cwOn>.cwBtn{opacity:1;pointer-events:auto}}
+/* MAGNETIC SNAP (see snap() below) rides the same preference switches as the arrows themselves. */
+/* the graphics-level setting must be able to turn the blur off — a solid pill is the fallback, and
+   it is a hair darker so the chevron keeps the same contrast the glass gave it */
+html[data-gfx="low"] .cwBtn,html[data-gfx="reduced"] .cwBtn{
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  background:rgba(34,34,38,.92);transition:none}
+html[data-gfx="low"] .cwBtn svg,html[data-gfx="reduced"] .cwBtn svg{filter:none}
+</style>
+<script id="v20cwjs">
 /* ================================================================================================
-   WAVE 19 — AND THE OTHER THING A LIKE DOES: it must not throw the user back to the start of a rail.
-   Reported: scrolling a long way into the Quick picks carousel on Home, tapping ♥ on a song, and
-   landing back at the FIRST card with the whole carousel reset — every time. Root cause: liking is a
-   GLOBAL state change (the same track can sit in Listen again, a picked shelf and the queue at once),
-   so refreshHearts() rebuilds the current page, and on Home that is renderHome(), whose first write
-   is sec.innerHTML = h: #homeSec is replaced wholesale, and a fresh grid/rail starts at scrollLeft 0
-   by definition — which is exactly where the user found themselves, every time.
-   THE FIX — put the offsets back, not the markup back. Before the rebuild this reads every scrolled
-   or scrollable node (.railwrap, .list, .chiprow) in each section, keyed by the section’s own <h2>
-   text, which survives a rebuild because it is what renderHome writes; after it, the same nodes are
-   found again by that key and their offsets are written back. renderHome paints its synchronous half
-   (the Quick picks grid among it) before it returns, so one restore call covers the reported case,
-   and the three discovery rails — which fill AFTER their fetch settles — are covered by the two
-   follow-ups below. Nothing is keyed by index alone: a section whose scrollers changed shape is
-   simply skipped (its node is missing) rather than restoring an unrelated offset.
-   ONLY the like/unlike path is wrapped: a repaint the user ASKED for (a chip, a sort) is still free
-   to start its rows where it likes, because it is the same wrapper renderHome()/goHome() call. */
+   WAVE 20 — the behaviour behind the arrows above. Deliberately generic: it finds every element
+   that is ACTUALLY a horizontal scroller (computed `overflow-x:auto|scroll` AND real overflow), so
+   a new row — or a row the app starts building tomorrow — needs no registration here. Rows that
+   are grids at rest, hidden pages and skeletons that happen to fit are all ignored by the same test.
+
+   RE-DECORATION. Home is repainted wholesale (`#homeSec.innerHTML = …`) whenever a like, a chip or
+   a page switch happens, and the rails then fill asynchronously, so every wrapper dies with its
+   DOM. One MutationObserver on #scroll (childList + subtree + the `hidden` attribute, because a
+   page shown from `display:none` has zero width until it is visible) schedules a scan on the next
+   animation frame; the scan is idempotent and re-syncs the rows it already knows. A resize debounce
+   and three bounded late passes cover layout and lazily-filled rows.
+
+   EDGE STATE IS RECOMPUTED, NEVER ASSUMED: after a click, on the row's own scroll event, on every
+   scan and on resize. That is what keeps the arrows correct when the row is scrolled with a
+   trackpad first, when the window changes width, and when the last page is reached by clamping.
+
+   MAGNETIC SNAP. A trackpad or a wheel leaves a row wherever the momentum died, which is usually
+   with the leftmost card half cut off at the left edge. Once scrolling stops, snap() rounds the
+   offset to the nearest card boundary: a card more than half visible stays (the row rounds DOWN to
+   its edge, so it is shown whole) and a card less than half visible is pushed away (the row rounds
+   UP to the next edge). It is the same 50% rule the reference uses, applied to the leading edge of
+   every rail and to every column of the Quick picks grid — the pitch is measured from the row, so
+   nothing is hard-coded. A tail shorter than half a card (the very end of a row that is not an
+   exact multiple of the pitch) snaps flush to the end instead of hiding that sliver. */
+
 (function(){
-  var SCROLLERS = ".railwrap,.list,.chiprow";
-  function textKey(sec){
-    var h = sec.querySelector("h2"); if(!h) return "";
-    var first = h.firstChild;                                   /* skips the Play all / Show more buttons */
-    var t = (first && first.nodeType === 3) ? first.textContent : h.textContent;
-    return String(t || "").replace(/s+/g, " ").trim();
+'use strict';
+var SEL='.railwrap,.list,.art-rel';
+var RM=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)');
+var raf=0, rt=0;
+
+function hmax(el){ return el.scrollWidth - el.clientWidth }
+function isHScroll(el){
+  var cs; try{ cs=getComputedStyle(el) }catch(e){ return false }
+  if(!/(auto|scroll)/.test(cs.overflowX)) return false;      /* visible/hidden rows are not carousels */
+  return hmax(el) > 2;                                        /* and neither is one that fits */
+}
+/* The pitch between two cards: the smallest positive gap between distinct left edges. Works for a
+   flex rail (card, card, card…) and for the column-major Quick picks grid (four rows per column),
+   where the first four children share one left edge and the fifth starts the next column. */
+function pitch(el){
+  var kids=el.children, lefts=[], i, r, l;
+  for(i=0;i<kids.length&&lefts.length<10;i++){
+    if(!kids[i].getClientRects().length) continue;
+    r=kids[i].getBoundingClientRect();
+    if(r.width<=0) continue;
+    l=Math.round(r.left*10)/10;
+    if(lefts.indexOf(l)<0) lefts.push(l);
   }
-  function scrollers(sec){
-    var out = [];
-    Array.prototype.forEach.call(sec.querySelectorAll(SCROLLERS), function(n){
-      if(n.scrollWidth - n.clientWidth > 2 || n.scrollTop) out.push(n);
-    });
-    return out;
+  if(lefts.length<2) return el.clientWidth||1;
+  lefts.sort(function(a,b){ return a-b });
+  var min=Infinity,d;
+  for(i=1;i<lefts.length;i++){ d=lefts[i]-lefts[i-1]; if(d>0.5&&d<min) min=d }
+  return min===Infinity?(el.clientWidth||1):min;
+}
+/* WAVE 22 — a full-bleed row carries its content inset as PADDING (see the v22bleedcss note), so a
+   "page" is the cards that fit INSIDE that inset. Counting clientWidth instead would step one card
+   too far on every click, because 284px of the row is now the sidebar's column plus the right gutter. */
+function padX(el){
+  var cs=getComputedStyle(el);
+  return (parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+}
+function pageOf(el){
+  var p=pitch(el), n=Math.floor((el.clientWidth-padX(el))/p);
+  return Math.max(1,n)*p;
+}
+/* Where the pills sit vertically: the middle of the COVER, and only on the cover carousels
+   (Listen again, Popular right now, Albums for you and the picked shelves). Their cards put a title
+   and an artist line under the artwork, so the card's own middle is ~28px lower than the cover's and
+   the pill must ride the artwork instead. Two kinds of row keep the middle of the row box:
+     · Quick picks — a grid with several songs per column, so its first cover sits in the top row and
+       there is no single cover to centre on;
+     · Trending songs — a wide 16:9 tile whose title is printed over the artwork, so the artwork IS
+       the card and the two centres already coincide (the `ab.height >= cb.height-4` test). */
+function artCentre(el){
+  var card=el.children[0]; if(!card||!card.querySelector) return 0;
+  var art=card.querySelector('.art,.rt,.ring');
+  if(!art) return 0;
+  var eb=el.getBoundingClientRect(), cb=card.getBoundingClientRect(), ab=art.getBoundingClientRect();
+  if(eb.height<=0||ab.height<=0) return 0;
+  if(cb.height<eb.height*0.6) return 0;          /* several cards per column: use the row's middle */
+  if(ab.height>=cb.height-4) return 0;           /* the artwork IS the card: no title lines below */
+  return ab.top-eb.top+ab.height/2;
+}
+function sync(el){
+  var w=el.__cwWrap; if(!w) return;
+  var max=hmax(el), can=max>2, l=el.scrollLeft;
+  w.classList.toggle('cwOn',can);
+  w.classList.toggle('cwNoL',!can||l<=2);
+  w.classList.toggle('cwNoR',!can||l>=max-2);
+  var c=artCentre(el);
+  if(c>0) w.style.setProperty('--cwt',Math.round(c)+'px');
+  else w.style.removeProperty('--cwt');
+}
+function smoothOk(){
+  var gfx=document.documentElement.getAttribute('data-gfx');
+  return !(RM&&RM.matches)&&gfx!=='reduced';
+}
+/* The 50% rule. One card's pitch p, and the row's own lead-in `off` (0 for a flex rail; a grid can
+   start its columns a few pixels in). Nearest edge = off + k*p. The one exception is the tail: if
+   the distance from that edge to the end is shorter than half a card, the tail is shown whole
+   instead, because rounding down there would hide most of the last card. */
+function snap(el){
+  var max=hmax(el); if(max<=2) return;
+  var l=el.scrollLeft;
+  if(l<=2||l>=max-2) return;                       /* both ends are already as flush as they get */
+  var p=pitch(el); if(!(p>1)) return;
+  var kid=el.children[0], off=0;
+  if(kid&&kid.getClientRects().length){
+    off=Math.round((kid.getBoundingClientRect().left-el.getBoundingClientRect().left+l)*10)/10;
+    /* WAVE 22 — subtract the row's own padding. A full-bleed row (see v22bleedcss) carries the
+       sidebar column as PADDING-LEFT, which is not a lead-in: the first card still sits at
+       scrollLeft 0, and the boundaries we want are the scroll offsets at which a card edge meets
+       the CONTENT edge. Measured before this line: 260px of padding passed the `p*0.9` guard on a
+       416px pitch, so a 500px resting offset snapped to 676 (260 + one pitch) and left a card cut
+       flush against the window edge under the glass instead of aligned with the first column. */
+    off-=parseFloat(getComputedStyle(el).paddingLeft)||0;
+    if(off<0||off>p*0.9) off=0;                    /* not a real lead-in — do not shift a resting row */
   }
-  function snapshot(rootEl){
-    var snap = [];
-    if(!rootEl) return snap;
-    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
-      var key = textKey(sec); if(!key) return;
-      var list = scrollers(sec); if(!list.length) return;
-      snap.push({ key:key, at:list.map(function(n){ return { l:n.scrollLeft, t:n.scrollTop } }) });
-    });
-    return snap;
+  var to=off+Math.round((l-off)/p)*p;
+  if(to<0) to=0;
+  if(to>max||max-to<p*0.5) to=max;                 /* a tail under half a card: reveal it, flush */
+  if(Math.abs(to-l)<2) return;                     /* under 2px is invisible: do not micro-correct */
+  goTo(el,to);
+}
+/* ONE writer for programmatic scrolling, with TWO separate timers. `__cwA` is the "the animation is
+   still running" flag's own timer; `__cwT` is the settle debounce. They were sharing a slot at
+   first, so every scroll event of an arrow's smooth animation cancelled the flag's reset, the flag
+   stayed true for ever and settle() re-polled it on an endless 120ms loop. */
+function goTo(el,to){
+  var smooth=smoothOk();
+  el.__cwAnim=true;
+  try{ el.scrollTo({left:to,behavior:smooth?'smooth':'auto'}) }catch(e){ el.scrollLeft=to }
+  clearTimeout(el.__cwA);
+  /* scrollend clears this early where the platform emits it (Chromium does); the timer is only the
+     fallback so the flag can never be stuck. */
+  el.__cwA=setTimeout(function(){ el.__cwAnim=false; sync(el) },smooth?700:40);
+}
+/* settling debounce: a trackpad's momentum fires scroll events long after the fingers lift, so the
+   snap waits for a short quiet gap. A row that is mid-way through an arrow's own scroll is left
+   alone until that animation reports done. */
+function settle(el){
+  if(el.__cwAnim){ el.__cwT=setTimeout(function(){ settle(el) },120); return }
+  snap(el);
+}
+function touched(el){
+  sync(el);
+  clearTimeout(el.__cwT);
+  el.__cwT=setTimeout(function(){ settle(el) },170);
+}
+function step(el,dir){
+  var max=hmax(el); if(max<=2) return;
+  goTo(el,Math.max(0,Math.min(max,el.scrollLeft+dir*pageOf(el))));
+  sync(el);
+}
+/* The reference glyph, in its own units: viewBox 8.6 wide by 30.7 tall, stroke 3.6, round caps. Every
+   point is inset by half the stroke (1.8), because a round cap at (1.8, y) is what puts the drawn
+   edge exactly at 0 — so the painted chevron measures 8.6x30.7 and no more. The apex is at 6.8, i.e.
+   the arms climb 13.55 for 5.0 across: 2·atan(5/13.55) = 40.6°, the reference's ~41°. */
+function chevron(dir){
+  var d = dir==='L' ? 'M6.8 1.8L1.8 15.35L6.8 28.9' : 'M1.8 1.8L6.8 15.35L1.8 28.9';
+  return '<svg viewBox="0 0 8.6 30.7" aria-hidden="true" focusable="false"><path d="'+d+'"/></svg>';
+}
+function mkBtn(dir){
+  var b=document.createElement('button');
+  b.type='button';
+  b.className='cwBtn cw'+dir;
+  b.title=dir==='L'?'Scroll left':'Scroll right';
+  b.setAttribute('aria-label',b.title);
+  b.innerHTML=chevron(dir);
+  /* a mouse click must not leave the pill focused — that is what kept the pair lit after the
+     cursor left the row. Focus from Tab is untouched, so the keyboard path still shows them. */
+  b.addEventListener('mousedown',function(ev){ ev.preventDefault() });
+  return b;
+}
+function wrap(el){
+  if(el.__cwWrap){ sync(el); return }
+  if(!el.parentNode) return;
+  var w=document.createElement('div');
+  w.className='cwWrap';
+  el.parentNode.insertBefore(w,el);
+  w.appendChild(el);
+  el.__cwWrap=w;
+  var L=mkBtn('L'),R=mkBtn('R');
+  L.addEventListener('click',function(ev){ ev.preventDefault(); ev.stopPropagation(); step(el,-1) });
+  R.addEventListener('click',function(ev){ ev.preventDefault(); ev.stopPropagation(); step(el,1) });
+  w.appendChild(L); w.appendChild(R);
+  el.addEventListener('scroll',function(){ touched(el) },{passive:true});
+  el.addEventListener('scrollend',function(){ el.__cwAnim=false; clearTimeout(el.__cwA); sync(el) });
+  sync(el);
+}
+function scan(){
+  raf=0;
+  var list=document.querySelectorAll(SEL), i, el;
+  for(i=0;i<list.length;i++){
+    el=list[i];
+    if(el.__cwWrap){ sync(el); continue }
+    /* skeletons are never a carousel: the outer loader is a railwrap whose only child is the
+       .sk-region band, and the placeholder rail INSIDE that band is sized by a direct-child rule
+       (.railwrap>.sk-region>.railwrap) a wrapper would hide — which measurably let it run 4663px
+       wide instead of the row. Both are skipped, and the fill that replaces the band is a childList
+       mutation, so the real row is decorated the moment it exists. */
+    if(el.querySelector('.sk-card,.sk-bar,.sk-region')) continue;   /* still a skeleton row */
+    if(el.querySelector('.cwWrap')) continue;                       /* the rail inside it IS the row */
+    if(el.children.length===1&&el.children[0].classList.contains('railwrap')) continue; /* loader
+       passthrough: #trendRail / #popRail / #albRail hold skRail's own `.railwrap`, and the fill that
+       lands in it makes THAT the scroller — the outer box only ever overflows by a rounding pixel */
+    if(isHScroll(el)) wrap(el);
   }
-  function restore(rootEl, snap){
-    if(!rootEl || !snap || !snap.length) return 0;
-    var byKey = {};
-    Array.prototype.forEach.call(rootEl.querySelectorAll(".sec"), function(sec){
-      var k = textKey(sec); if(k && !byKey[k]) byKey[k] = sec;
+}
+function schedule(){ if(!raf) raf=requestAnimationFrame(scan) }
+function boot(){
+  scan();
+  var root=document.getElementById('scroll')||document.body;
+  try{
+    new MutationObserver(schedule).observe(root,{
+      childList:true,subtree:true,attributes:true,attributeFilter:['hidden']
     });
-    var n = 0;
-    snap.forEach(function(s){
-      var sec = byKey[s.key]; if(!sec) return;
-      var list = scrollers(sec);
-      s.at.forEach(function(p, i){
-        var node = list[i]; if(!node) return;
-        if(node.scrollLeft !== p.l){ node.scrollLeft = p.l; n++ }
-        if(p.t && node.scrollTop !== p.t) node.scrollTop = p.t;
-      });
-    });
-    return n;
-  }
-  var inner = (typeof refreshHearts === "function") ? refreshHearts : null;
-  if(!inner) return;
-  refreshHearts = function(){
-    var home = document.getElementById("homeSec");
-    if(!home || home.hidden || typeof renderHome !== "function") return inner.apply(this, arguments);
-    var snap = snapshot(home);
-    var out = renderHome();
-    restore(home, snap);
-    var again = function(){ restore(home, snap) };
-    if(out && typeof out.then === "function") out.then(again, again);
-    setTimeout(again, 60); setTimeout(again, 260);
-    return out;
-  };
-  window.svaraRailScroll = { keep: function(){ var h=document.getElementById("homeSec"); return snapshot(h) },
-                             put: function(s){ return restore(document.getElementById("homeSec"), s) } };
+  }catch(e){}
+  window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(scan,140) });
+  document.addEventListener('scroll',function(ev){
+    var t=ev.target; if(t&&t.__cwWrap) sync(t);
+  },true);
+  setTimeout(scan,400); setTimeout(scan,1200); setTimeout(scan,3000);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot);
+else boot();
+window.svaraCarousel={ rescan:scan, step:step, sync:sync, snap:snap };
 })();
 </script>
+<script id="v20lyrjs">
+/* ===== WAVE 25 — the lyrics are already there when the tab is opened ================================
+   THE REPORT: lyrics only started loading when the Lyrics tab was opened, so every open began with
+   "Loading lyrics…" and a network wait, and the next song had the same wait again.
+
+   WHAT THIS LAYER DOES. It prefetches. The moment a track BECOMES the playing track (setNowUI runs
+   for it — the one path every play, skip, queue jump and shuffle re-order goes through) it asks
+   /api/lyrics for that track AND for the one that will follow it in `seq`, and keeps both answers
+   in memory. The tab therefore has nothing to wait for: its loader finds the entry and paints it in
+   the same frame. Because the following track is fetched while the current one still plays, reaching
+   the end of a song and opening lyrics is instant too — the same "next track is already ready"
+   promise the stream prefetch in v5xfjs makes for audio.
+
+   A CACHE, NOT A SECOND FETCH PATH. One entry per `provider|videoId`. /api/lyrics answers with
+   `private, max-age=86400`, so a repeat ask would be a silent disk-cache hit anyway; keeping the
+   parsed JSON in memory removes even that round trip and, crucially, the "Loading…" flash. Entries
+   are capped at 60 tracks (oldest dropped) so a long session cannot grow without bound.
+
+   DURATION IS PART OF THE MATCH. LRClib picks a recording by title + artist + length, and the
+   server refuses a candidate whose length disagrees by more than max(30s, 25%) — that guard is what
+   stops a 9:57 upload borrowing a 4:14 master's clock. A row's printed duration ("2:47") and the
+   stream's own `audio.duration` can differ by a second or two, so an entry stays valid within 8s of
+   the length it was fetched with and is silently refetched past that. A prefetch for an unplayed
+   track uses the row's duration; a fetch for the playing track prefers the element's real one.
+
+   PROVIDER IS PART OF THE KEY. Auto / YouTube Music / LRClib each cache separately, so switching the
+   pill re-fetches only what it has to, and the prefetch for the NEXT track is made under whichever
+   provider is selected when that track starts.
+
+   NOTHING ELSE CHANGES. The render path (renderLyricsBody, the karaoke timer, padding, jump pill),
+   the provider pills, the fullscreen view and the error notes are the same code as before — this
+   layer only replaces loadLyrics() so that it reads the cache first, and wraps setNowUI() to warm
+   the cache. Every failure degrades to the old behaviour: a rejected fetch is retried on the next
+   open, and a cache miss simply loads as it used to. */
+(function(){
+'use strict';
+if(window.svaraLyrics) return;
+var CACHE={}, ORDER=[], PENDING={}, GEN=0, CAP=60;
+/* our OWN staleness token. The app's `lyrToken` is declared inside the v2js closure, not on
+   `window`, so the replacement loader below cannot read it (a measured ReferenceError); it does
+   not need to — the only writer of that counter was the loader this layer replaces. */
+var TOKEN=0;
+function prov(){ return (lyrPref==='ytm'||lyrPref==='lrclib')?lyrPref:'auto' }
+function durOf(it){ try{ return (typeof durSecs==='function'&&durSecs(it&&it.duration))||0 }catch(e){ return 0 } }
+/* the playing track's real length when the element is actually on it, else the row's printed one */
+function durNow(it){
+  var d=0;
+  try{
+    var src=String((audio&&(audio.currentSrc||audio.getAttribute('src')))||'');
+    if(src.indexOf(it.id)>=0&&isFinite(audio.duration)) d=audio.duration;
+  }catch(e){}
+  if(!(d>0)) d=durOf(it);
+  return Math.round(d)||0;
+}
+function keyOf(it,p){ return p+'|'+it.id }
+function urlFor(it,p,d){
+  var qs=new URLSearchParams();
+  qs.set('provider',p);
+  qs.set('id',it.id); qs.set('title',it.title||''); qs.set('artist',it.artist||'');
+  if(d>0) qs.set('duration',String(d));
+  /* WAVE 34b — a cache axis, not a parameter the server reads. Lyrics responses used to be sent
+     with max-age=86400, so a browser/Electron profile that fetched a track before this build keeps
+     serving that old JSON for a day: the range-form raw line and the no-duration row both survived
+     a server fix in testing. A new `v` makes every older entry unreachable without clearing the
+     user's cache. Bump it whenever the shape of /api/lyrics changes. */
+  qs.set('v','37a');
+  return '/api/lyrics?'+qs.toString();
+}
+function remember(k,d,j){
+  if(CACHE[k]){ CACHE[k].d=d; CACHE[k].j=j; return }
+  CACHE[k]={d:d,j:j}; ORDER.push(k);
+  while(ORDER.length>CAP){ delete CACHE[ORDER.shift()] }
+}
+function hit(it,p,d){
+  var e=CACHE[keyOf(it,p)]; if(!e) return null;
+  /* WAVE 34b: a payload fetched before the audio length was known was never re-asked, so the
+     weaker no-duration row (AZUL: 36 lines, range-form) stayed on screen where the duration-aware
+     pick has the full 52. Once the length is known, that entry is stale. */
+  if(d>0&&!(e.d>0)) return null;
+  if(d>0&&e.d>0&&Math.abs(e.d-d)>8) return null;   /* a different recording — refetch */
+  return e.j;
+}
+function ask(it,p,d){
+  var k=keyOf(it,p), e=CACHE[k];
+  if(e&&!(d>0&&!(e.d>0))&&!(d>0&&e.d>0&&Math.abs(e.d-d)>8)) return Promise.resolve(e.j);
+  if(PENDING[k]) return PENDING[k];
+  var pr=fetch(urlFor(it,p,d)).then(function(r){ return r.json() }).then(function(j){
+    delete PENDING[k];
+    if(j&&typeof j==='object') remember(k,d,j);
+    return j;
+  },function(err){ delete PENDING[k]; throw err });
+  PENDING[k]=pr;
+  return pr;
+}
+/* sizeLyrPad lives inside the v2js closure too — call it only when it is reachable, so this layer
+   can never break the panel it is meant to speed up. */
+function pad(){ try{ if(typeof sizeLyrPad==='function') sizeLyrPad() }catch(e){} }
+function apply(j){
+  lyr.plain=(j&&j.plain)||'';
+  lyr.synced=(j&&j.synced)||'';
+  lyr.note=(j&&j.note)||'';
+  lyr.error=(j&&j.error)||'';
+  lyr.lines=[];
+  renderLyricsBody();
+}
+/* the one the FOLLOWING track is, exactly as nextTrack() would pick it */
+function nextInQueue(){
+  try{
+    if(!queue||!queue.length||cur<0) return null;
+    if(cur+1<seq.length) return queue[seq[cur+1]]||null;
+    if(typeof repeat==='string'&&repeat!=='off') return queue[seq[0]]||null;
+  }catch(e){}
+  return null;
+}
+function prefetch(){
+  var it=(typeof nowItem==='function')?nowItem():null;
+  if(!it||!it.id) return;
+  var p=prov(), d=durNow(it), nx=nextInQueue();
+  ask(it,p,d).catch(function(){});                 /* current track — the tab's next request */
+  if(nx&&nx.id&&nx.id!==it.id) ask(nx,p,durOf(nx)).catch(function(){});   /* and the one after it */
+}
+loadLyrics=async function(){
+  var body=$('#lyrBody'); if(!body) return;          /* the panel has never been built: nothing to paint */
+  var it=(typeof nowItem==='function')?nowItem():null;
+  if(!it){ lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Nothing playing.</div>'; pad(); return }
+  var token=++TOKEN, p=prov(), d=durNow(it);
+  lyr.loadedFor=it.id+':'+p;
+  var c=hit(it,p,d);
+  if(c){ apply(c); return }                          /* already fetched: paint, do not blink "Loading…" */
+  lyr.mode='loading'; lyr.lines=[]; lyr.cur=-1; clearInterval(lyr.timer); lyr.timer=null;
+  body.innerHTML='<div class="lyrmissing">Loading lyrics…</div>';
+  pad();
+  try{
+    var j=await ask(it,p,d);
+    if(token!==TOKEN) return;
+    apply(j);
+  }catch(e){
+    if(token!==TOKEN) return;
+    lyr.mode='note'; body.innerHTML='<div class="lyrmissing">Lyrics failed to load.</div>'; pad();
+  }
+};
+/* every track change goes through setNowUI: warm the cache for it and for what follows */
+if(typeof setNowUI==='function'){
+  var _setNowUI=setNowUI;
+  setNowUI=function(it){
+    var r=_setNowUI.apply(this,arguments);
+    var g=++GEN;
+    setTimeout(function(){ if(g===GEN) prefetch() },0);
+    return r;
+  };
+}
+window.svaraLyrics={ cache:CACHE, prefetch:prefetch, ask:ask, load:function(){ return loadLyrics.apply(this,arguments) } };
+})();
+</script>
+<style id="v22bleedcss">
+/* ================= WAVE 22 — full-bleed content: glass sidebar, window-edge carousels =============
+   THE TWO REPORTS ARE ONE CHANGE.
+   (a) THE RIGHT-HAND GUTTER. #scroll carries `padding:4px 24px 130px`, so every row stopped 24px
+       short of the window's edge and a strip of plain background sat there with the arrow pill
+       floating in it (measured at a 718px window: exactly 24px of nothing — the strip ringed in
+       green). A row is now FULL-BLEED to the window edge: its cards run under the edge and are cut
+       by the window itself, which is what the reference does, and the pill sits in that corner.
+   (b) THE LEFT EDGE. Content could never pass the sidebar, because #app was a flex sibling that
+       STARTED at 236px — the sidebar was a wall, so a scrolled row showed a hard vertical cut at
+       its edge. #app now starts at x=0 and slides 236px under the sidebar, which becomes the dark
+       glass slab: translucent, heavily blurred, hairline border. Scrolled cards therefore travel
+       UNDER it and read as blurred shapes behind the panel, as in the reference's library slab,
+       instead of vanishing at a line.
+
+   HOW THE 24px INSET SURVIVES. Both come from ONE number, --cwInL (sidebar + the app's own gutter).
+   #scroll keeps that as its padding-left, so headings, lists and grids sit exactly where they did.
+   A carousel wrap cancels the padding with negative margins and its scroller puts the same 284px
+   back as PADDING-LEFT/RIGHT. Because `*{box-sizing:border-box}` and the box grows by precisely the
+   padding it gains, the CONTENT box is unchanged — so `.rail`, `.heroSec .rail` and the Quick picks
+   `grid-auto-columns` (all `%` of that content box) keep the exact card sizes they have today. That
+   padding is inside the scrollport, so scrolled cards paint all the way to x=0, under the glass.
+
+   THE ARROWS FOLLOW, AND THEY MOVE IN BY A GAP, NOT TO THE EDGE. Both pills now stand --cwPill
+   (10px) inside the VISIBLE edge of the row: the left one 10px right of the glass slab, the right
+   one 10px left of the window edge — equal gaps to the two surfaces they sit between, where before
+   the left pill sat on the content edge (over the first card) and the right pill touched the window.
+   Both read their inset off --cwPill, so the pair is symmetric at any width.
+   pageOf() in v20cwjs counts a page from the CONTENT box, not from clientWidth (which now includes
+   the 284px of bleed) — otherwise one click would step a card too far. snap()
+   needed no change: the padding shifts where cards are PAINTED, not their scroll coordinates, so
+   cards still snap to the content edge exactly as before. */
+:root{--cwSide:236px;--cwPad:24px;--cwPill:10px;--cwInL:calc(var(--cwSide) + var(--cwPad))}
+#app{margin-left:calc(-1 * var(--cwSide))}
+#top{margin-left:0;width:100%}
+#searchFilters{padding-left:calc(var(--cwSide) + 22px)}
+#scroll{padding-left:var(--cwInL)}
+/* THE THREE LOADER PASS-THROUGHS. Trending / Popular right now / Albums for you boot from a
+   skeleton: their row is `#trendRail` / `#popRail` / `#albRail`, which is ITSELF a `.railwrap`
+   (overflow-x:auto) holding the real, wrapped row inside it. That outer box is only the content
+   column wide (1316), so it stayed a scrollport of its own and CLIPPED the bleeding row at the
+   content edge: measured on all three, `scrollWidth - clientWidth` was exactly 24 — the same 24px
+   strip of background the report circled — and their cards never reached the glass on the left
+   either, because the clip sat at 260. A pass-through is not a carousel; it just carries one. With
+   it out of the overflow business the row inside paints to both window edges like every other row,
+   and the outer box can no longer be scrolled by a stray horizontal wheel. */
+#scroll .sec > .railwrap:has(> .cwWrap){overflow:visible}
+/* the carousels bleed; every other block keeps #scroll's insets untouched */
+#scroll .cwWrap{margin-left:calc(-1 * var(--cwInL));margin-right:calc(-1 * var(--cwPad))}
+#scroll .cwWrap>:not(.cwBtn){padding-left:var(--cwInL);padding-right:var(--cwPad)}
+/* the pair is symmetric: 10px from the glass on the left, 10px from the window on the right */
+#scroll .cwWrap>.cwBtn.cwL{left:calc(var(--cwSide) + var(--cwPill))}
+#scroll .cwWrap>.cwBtn.cwR{right:var(--cwPill)}
+/* THE GLASS SLAB. The old .72 alpha over blur(8px) was enough while nothing could pass under it;
+   with covers sliding behind it the panel has to read as glass (the artwork visible as a soft wash)
+   AND keep every label legible over a white cover — and the first try got the second half wrong: at
+   .42/.56 over blur(20px) a white sleeve behind "Liked albums" left the muted rows and their counts
+   unreadable. So the backdrop is DIMMED before the film is laid over it, and the film stays deep
+   enough that a white sleeve behind a muted row still reads: wave 22 settled on brightness .62 with
+   a .58/.7 film (a white sleeve composited to ~72/255 against the panel's own ~20, #f4f4f7 text at
+   ~8:1, the muted rows at ~3.5:1).
+   WAVE 23 — ONE STEP LIGHTER, AND THAT IS THE ONLY TONE. The .62 film was dark enough that a card
+   scrolled under the panel all but vanished, so the three bleeding rows looked CLIPPED at the glass
+   edge rather than sliding behind it. The film is now a lighter slate (28,28,38 at .62 → 19,19,28 at
+   .71) over a .76-dimmed backdrop: a white sleeve lands at ~91 at the top of the panel and ~70 at
+   the bottom — no worse than before where legibility matters — while the panel's own empty surface
+   lifts from ~9 to ~19 against the page, so covers read as a pale wash behind the labels instead of
+   disappearing into a black wall. There is no second tone and no setting: these are the values.
+   The low graphics levels keep a near-solid panel (a 24px backdrop blur over moving artwork is the
+   most expensive thing this page could ask for) and every glyph keeps its contrast. */
+/* WAVE 32 — THE SLAB'S GLASS ENDS IN A 3px FADE, NOT IN A ONE-PIXEL SEAM.
+   THE BUG: a full-height BLACK VERTICAL LINE at the panel's right edge, on every page, until a track
+   had been loaded. Measured, not guessed: the border was innocent (removing it changed nothing), so
+   were `box-shadow`, `#topBlur` and the shade. The line is the LAST DEVICE PIXEL OF ANY
+   BACKDROP-FILTERED ELEMENT at a fractional display scale: the filter's backdrop stops one pixel
+   short of the element's edge, so that column composes the film over the RAW page instead of over
+   the blurred backdrop. Where a bright hero starts right at the panel's edge the blurred backdrop is
+   bright (the 24px blur pulls the hero in) and the raw column is the near-black page — 17 against the
+   interior's 26 at 175%, nothing at 100/125/150/200%, which is why it came and went with display
+   scaling. It disappeared the moment playback started because the album wash (#ambGlow, z-index -1)
+   lights exactly that column: the line was a HOLE, not a paint.
+
+   WHY A FADE AND NOT A CLIP. `clip-path`, `mask` with a hard stop, a transparent border and
+   `overflow:hidden` were all tried on the panel and all measure IDENTICAL to the bug: Chromium
+   truncates the filter region exactly where the visible edge is, so the short column simply follows
+   the edge wherever it is put. A GRADUAL mask is the one thing that works — the leak is multiplied by
+   an alpha of ~0 at the edge, so it cannot show. Verified at 175% on an artist page: the profile
+   across the edge goes 26, 26, 26, 26, | 17 | 171 (a black hairline) before, and 24, 24, 23, 43, 75,
+   108, 141, 178 after — one continuous gradient into the artwork, no step and no line.
+
+   SHAPE OF THE CHANGE. The glass moved off the panel element onto #sb::before, which is 3px WIDER
+   than the slab and fades out over exactly those 3px, so the panel's own surface is untouched up to
+   its edge and the fade lands on the content beside it — over a gutter, a hero's left edge or a
+   cover sliding under (the carousels already bleed behind the panel, and a 3px fade there is
+   invisible). z-index -1 keeps the film under the rows and above the page, and the pseudo is not a
+   real element, so the playlist ⋮ menus, the ripple hosts and the falloff shadow are untouched. The
+   film gradient, the .76 dimming and the wave-23 shadow are unchanged — this is an edge fix, not a
+   retune. */
+#sb{background:none;position:relative;box-shadow:10px 0 34px -22px rgba(0,0,0,.95);
+  -webkit-backdrop-filter:none;backdrop-filter:none}
+#sb::before{content:'';position:absolute;inset:0 -3px 0 0;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(28,28,38,.62),rgba(19,19,28,.71));
+  -webkit-backdrop-filter:blur(24px) saturate(140%) brightness(.76);
+  backdrop-filter:blur(24px) saturate(140%) brightness(.76);
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 3px),rgba(0,0,0,0) 100%);
+  mask-image:linear-gradient(to right,#000 calc(100% - 3px),rgba(0,0,0,0) 100%)}
+html[data-gfx="low"] #sb::before,html[data-gfx="reduced"] #sb::before{
+  -webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(20,20,28,.97)}
+</style>
+<style id="v26topblurcss">
+/* ================= WAVE 26 — the top of the feed blurs as it slides under the search bar ==========
+   THE REPORT: scrolling ran every cover into a hard horizontal line at the bottom of the header — the
+   feed was clipped by a scrollport that STARTED there, so the top of the page read as a guillotine.
+   The reference (a Framer site) does the opposite of a hard edge twice over: its content keeps going
+   BEHIND the floating bar and turns into a blur as it leaves. Both halves are done here.
+
+   (a) THE FEED KEEPS GOING. #scroll is pulled up under the header (negative margin) and given that
+       height back as PADDING-TOP, so the content sits at exactly the y it always did at rest and
+       scrolls ON past it — behind the search field, behind the radio and the settings icon, to the
+       window's top edge. The header, the chip row and the sidebar all paint above it; the search
+       field itself is opaque, so what shows between them is the blurred wash of a cover leaving.
+       The lead is MEASURED (header + filter chips, #v26topblurjs) and re-measured on resize, so a
+       text-size change or a chip row appearing can never leave the content sitting too low.
+
+   (b) IT BLURS ON THE WAY OUT. Eight absolutely positioned layers, each with a slightly stronger
+       backdrop-filter, each revealed only inside its slice of the height by its own mask gradient.
+       Because a backdrop-filter blurs everything PAINTED BEHIND the layer and its mask eases that
+       contribution in and out, the slices compose into ONE continuous ramp — 0.5px at the soft end,
+       53px at the window's edge. The reference's stops are used verbatim, MIRRORED (`to top` instead
+       of `to bottom`), because its effect sits at the bottom of its viewport and ours at the top.
+       Eight slices and not one: a single masked `blur(20px)` fades the FINISH of a blur but never its
+       STRENGTH — a flat veil, which is exactly what this replaces.
+
+   STACKING. #topBlur is a child of #app at z-index 3. The header is 4 and the filter chips 4, so the
+   search field, radio, settings and chips are never blurred; #scroll is 2, one number below, so the
+   whole feed (the arrow pills' own z-index 7 included) is inside this layer's backdrop. The layer
+   starts at the sidebar's right edge — blurring behind the glass slab costs GPU and shows nothing.
+
+   OFF AT THE TOP OF THE PAGE, IN OVER 50px. At scrollTop 0 nothing has left yet, and the first
+   sections sit exactly where they were before this layer existed, so the ramp is driven by the scroll
+   position (#v26topblurjs): parked above the window until 8px, fully in place by 60px, sliding in
+   between.
+
+   WHY IT SLIDES IN AND DOES NOT FADE IN — measured, not assumed. The first version faded the ramp
+   with `opacity`, and at 0.45 Chromium DROPPED the whole effect: a backdrop-filter's backdrop is
+   taken from its nearest BACKDROP ROOT, and an ancestor with opacity (or a mask, or a filter)
+   becomes one — so the layers were blurring the inside of an empty box, and an untouched feed showed
+   through. `filter:opacity()` and a flat alpha mask on the parent failed the same way. A transform
+   does not create a backdrop root, so the gate is a TRANSLATE: `--tpgate` 1 = in place, 0 = one
+   height above the window. Verified on the desktop build (Chromium 152) over a hard checkerboard:
+   at 0.45 the contrast still drops (blur alive), where opacity at 0.45 left it at full contrast.
+
+   THE ONE THING THAT DOES NOT BLUR: THE MOOD PILLS. They sit ~4px under the header, so they reach the
+   soft end of the ramp almost immediately, where a 1–2px blur reads as a smudge rather than as depth.
+   They FADE instead — same scroll value, straight opacity — and are gone by the time they are up
+   behind the search field. Everything that follows them (titles, covers, rows) gets the blur.
+
+   GRAPHICS LEVEL. Eight live backdrop-filters over moving artwork is the most expensive thing this
+   page could ask for, so `low` and `reduced` swap the stack for ONE static fade to the page colour
+   (.tpFade): still no hard cut, no per-frame blur. */
+:root{--tpLead:74px}   /* header height; #v26topblurjs replaces it with the measured value */
+#app{position:relative}
+#scroll{position:relative;z-index:2;margin-top:calc(-1 * var(--tpLead));padding-top:calc(var(--tpLead) + 4px)}
+#searchFilters{position:relative;z-index:4}   /* the chips stay sharp: they sit inside the ramp's reach */
+#topBlur{position:absolute;left:var(--cwSide);right:0;top:0;height:230px;z-index:3;
+  pointer-events:none;--tpgate:1;transform:translateY(calc((1 - var(--tpgate)) * -100%))}
+#topBlur>i{position:absolute;inset:0;display:block;pointer-events:none}
+/* the ramp, softest first — each band's stops are the reference's, mirrored */
+#topBlur>i:nth-child(2){-webkit-backdrop-filter:blur(.5px);backdrop-filter:blur(.5px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 0%,#000 12.5%,#000 25%,rgba(0,0,0,0) 37.5%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 0%,#000 12.5%,#000 25%,rgba(0,0,0,0) 37.5%)}
+#topBlur>i:nth-child(3){-webkit-backdrop-filter:blur(.83px);backdrop-filter:blur(.83px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 12.5%,#000 25%,#000 37.5%,rgba(0,0,0,0) 50%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 12.5%,#000 25%,#000 37.5%,rgba(0,0,0,0) 50%)}
+#topBlur>i:nth-child(4){-webkit-backdrop-filter:blur(1.66px);backdrop-filter:blur(1.66px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 25%,#000 37.5%,#000 50%,rgba(0,0,0,0) 62.5%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 25%,#000 37.5%,#000 50%,rgba(0,0,0,0) 62.5%)}
+#topBlur>i:nth-child(5){-webkit-backdrop-filter:blur(3.31px);backdrop-filter:blur(3.31px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 37.5%,#000 50%,#000 62.5%,rgba(0,0,0,0) 75%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 37.5%,#000 50%,#000 62.5%,rgba(0,0,0,0) 75%)}
+#topBlur>i:nth-child(6){-webkit-backdrop-filter:blur(6.63px);backdrop-filter:blur(6.63px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 50%,#000 62.5%,#000 75%,rgba(0,0,0,0) 87.5%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 50%,#000 62.5%,#000 75%,rgba(0,0,0,0) 87.5%)}
+#topBlur>i:nth-child(7){-webkit-backdrop-filter:blur(13.25px);backdrop-filter:blur(13.25px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 62.5%,#000 75%,#000 87.5%,rgba(0,0,0,0) 100%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 62.5%,#000 75%,#000 87.5%,rgba(0,0,0,0) 100%)}
+#topBlur>i:nth-child(8){-webkit-backdrop-filter:blur(26.5px);backdrop-filter:blur(26.5px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 75%,#000 87.5%,#000 100%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 75%,#000 87.5%,#000 100%)}
+#topBlur>i:nth-child(9){-webkit-backdrop-filter:blur(53px);backdrop-filter:blur(53px);
+  -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,0) 87.5%,#000 100%);
+  mask-image:linear-gradient(to top,rgba(0,0,0,0) 87.5%,#000 100%)}
+/* the low-graphics stand-in: one fade to the page colour, no live blur at all */
+#topBlur>.tpFade{display:none;height:150px;background:linear-gradient(to bottom,var(--bg) 0%,var(--bg) 46%,rgba(7,7,10,0) 100%)}
+html[data-gfx="low"] #topBlur>i:not(.tpFade),html[data-gfx="reduced"] #topBlur>i:not(.tpFade){display:none}
+html[data-gfx="low"] #topBlur>.tpFade,html[data-gfx="reduced"] #topBlur>.tpFade{display:block}
+</style>
+<script id="v26topblurjs">
+/* ===== WAVE 26 — how far the feed tucks under the header, and how much blur is showing ===========
+   Two jobs, both cheap:
+   1) LEAD. `--tpLead` is how much of the feed is hidden under the header: the header's own height
+      plus, when they are on screen, the search filter chips. #scroll is pulled up by exactly that and
+      padded by it again, so the first section sits where it always did and scrolls ON behind them.
+      It is MEASURED (offsetHeight, the one place this layer costs layout) and re-measured on resize
+      and whenever the header or the chip row changes size — a text-size change or a chip row
+      appearing therefore never leaves the content sitting a few pixels too low.
+   2) TONE. One number, `gate`, from the scroll position: 0 until 8px, 1 by 60px. It drives the ramp's
+      opacity AND the mood pills' fade (1 - gate). Two inline styles per scroll event, no layout read
+      and no query beyond one cached #homeSec .chips lookup — the element is remembered until the home
+      page is re-rendered, which is the only time the node changes. */
+(function(){
+  'use strict';
+  if(window.svaraTopBlur) return;
+  var root = document.documentElement, app = document.getElementById('app'),
+      sc = document.getElementById('scroll'), tp = document.getElementById('topBlur'),
+      top = document.getElementById('top');
+  if(!app || !sc || !tp || !top) return;
+  var chips = null;
+  function tone(){
+    var y = sc.scrollTop || 0;
+    var gate = y <= 8 ? 0 : (y >= 60 ? 1 : (y - 8) / 52);
+    /* a TRANSFORM, not opacity — an ancestor with opacity becomes a backdrop root and Chromium then
+       throws the whole ramp away (see the head of #v26topblurcss) */
+    tp.style.setProperty('--tpgate', gate >= 1 ? '1' : gate.toFixed(3));
+    /* the mood pills fade out instead of blurring — see the head of #v26topblurcss */
+    var c = document.querySelector('#homeSec .chips');
+    if(c !== chips){ if(chips) chips.style.opacity = ''; chips = c; }
+    if(chips) chips.style.opacity = gate >= 1 ? '0' : (1 - gate).toFixed(3);
+  }
+  function place(){
+    var f = document.getElementById('searchFilters');
+    var lead = top.offsetHeight + ((f && !f.hidden) ? f.offsetHeight : 0);
+    root.style.setProperty('--tpLead', lead + 'px');
+    tone();
+  }
+  sc.addEventListener('scroll', tone, { passive:true });
+  window.addEventListener('resize', place);
+  try{
+    var ro = new ResizeObserver(place);
+    ro.observe(top);
+    var f2 = document.getElementById('searchFilters'); if(f2) ro.observe(f2);
+  }catch(e){}
+  place();
+  window.svaraTopBlur = { place: place, tone: tone };
+})();
+</script>
+<style id="v27polishcss">
+/* ================= WAVE 27 — the shade, the blurred-target rule, and "open at the top" ==========
+   THREE SMALL POLISHES, all of them consequences of the Wave 26 top ramp.
+
+   (1) THE SHADE. Over a bright cover (a white sleeve, a pale film still) the ramp's blurred wash
+       is still BRIGHT, and the search field — an opaque --panel pill on a bright wash — loses its
+       edge exactly where the artwork behind it is lightest (reported: "the search bar is not that
+       clearly visible"). The blur is left exactly as it is; one flat, transparent-to-clear
+       gradient is laid over the top of the ramp instead: 0.60 of the page colour at the window's
+       edge, still ~0.58 behind the field (the header's own 74px), easing to nothing by the bottom
+       of the ramp. 0.60 is a LITTLE darker than the art, not a black band: measured over a bright
+       rail, the header band's mean luminance drops 45.7 -> 26.3 — still clearly artwork, and now
+       below the field's own edge. The gradient reaches 0 at the ramp's bottom, so the feed below
+       230px is not dimmed at all.
+       WAVE 28 — ONE HAIRLINE, AND NOTHING ELSE CHANGED. The old stops held 0.60/0.58 all the way
+       to 32% and then jumped: that 0.02 alpha step sat exactly on the header's bottom edge (32% of
+       230px = 74px), which over a bright sleeve rendered as the 1px line reported above the All
+       pill. Measured on a flat bright plate: 90.1 -> 95.1 luminance in one row. The step is now a
+       continuous ramp spread over 30.4-33.9% (8px), which reads as the same tone with no line at
+       all; every other stop is the original curve, untouched. It is the ramp's LAST child, so it
+       paints OVER the eight backdrop bands (it tones the blurred result, not the sharp source), it
+       inherits the ramp's translateY gate, and it is pointer-events:none like the rest of the
+       layer. At rest the whole ramp is parked above the window, so a page that has never scrolled
+       is dimmed by exactly nothing. Low / reduced graphics keep their single opaque .tpFade instead
+       (the :not(.tpFade) rule in #v26topblurcss already hides this one).
+       WAVE 29 — LIGHTER. 0.60 was chosen for a dark feed; over a WHITE sleeve it read as a grey
+       slab sitting on the artwork, and the first scrolled frame showed that slab arriving. The
+       whole curve is scaled to 0.50/0.48 (mean over a flat white plate: 106 -> 132, still below
+       the search field's own edge, so legibility is kept) and the fade-out stops are scaled with
+       it (.40 -> .33, .14 -> .12) so the shape — and the hairline fix above — is unchanged. */
+#topBlur>i.tpShade{background:linear-gradient(to bottom,
+  rgba(7,7,10,.50) 0%,
+  rgba(7,7,10,.50) 30.4%,
+  rgba(7,7,10,.49) 32.2%,
+  rgba(7,7,10,.48) 33.9%,
+  rgba(7,7,10,.33) 55%,
+  rgba(7,7,10,.12) 80%,
+  rgba(7,7,10,0) 100%)}
+</style>
+<script id="v27polishjs">
+/* ===== WAVE 27 — (2) a blurred target scrolls into view instead of firing =====================
+   THE REPORT: with the feed scrolled under the search bar, the top rail's covers are half gone in
+   the blur — and they were still live. A click on one of them played / opened a card the user
+   could barely see, and a mood pill that had faded to 0 was still clickable.
+
+   THE RULE (one capture listener on window, so it runs before EVERY handler the app has — the
+   document-level ones, the capture ones and the per-element ones alike): if a click lands inside
+   the part of the ramp where the blur is real, the click does not happen. The page scrolls the
+   clicked block back out of the blur instead, top of the block just below the ramp. No handler is
+   reached at all (preventDefault + stopPropagation), so nothing can play, open or navigate.
+   "SLIGHTLY blurred still opens": the test is the CLICK POINT against 68% of the ramp's visible
+   height — the last third of the ramp is the 0.5–0.9px bands, where a cover is only a little soft,
+   and it stays clickable. It is the CLICK POINT and not the block's whole box on purpose: a tall
+   card with its cover under the bar and its title sharp below is opened by clicking the title and
+   scrolled by clicking the cover.
+
+   WHICH CLICKS: any element the app made clickable — a button or link, a row ([data-play]), a
+   rail card ([data-rail]/[data-id]), a chip, a library card, the artist/album affordances. Plain
+   text and the page background are not targets, so clicking a blurred heading still does nothing.
+   The guard is armed only while the ramp is really over something: its own --tpgate (0 until 8px
+   of scroll, 1 by 60px). Low / reduced graphics obey the same rule against their static fade —
+   that band is just as obscured there, by the page colour instead of a blur. A drag that ends in
+   a click (a horizontal rail flick) is left alone, and keyboard activation (detail 0) is never
+   touched, so Tab + Enter still works on a pill whose row happens to be scrolled under the bar.
+
+   (3) OPEN AT THE TOP. Home / the wordmark / Library / Liked music / a playlist / Liked albums /
+   History / a new search / a filter pill all reused the SAME scrolled #scroll, so the new page
+   opened wherever the old one was left (reported). Every one of them paints through showDyn() or
+   goHome(), so the two are wrapped here — AFTER the app and every other wave has had its say.
+   The reset is on the PAGE'S IDENTITY, not on the call: showDyn() puts #scroll back at 0 only when
+   the title it is given differs from the page already on screen. PAGING IS NOT A PAGE CHANGE —
+   loadMore() -> paintSearch() -> showDyn() repaints the SAME results under the same title, so a
+   reader half-way down a forty-result list keeps their place while page two arrives. A filter pill
+   (or a mood, or Search pressed again) repaints under that same title too, which is exactly why
+   doSearch() — the only thing that starts a NEW list — is wrapped as well and resets at the call.
+   goHome() always resets, so re-clicking Home while Home is already open takes the page back to
+   the top. Back from an album or artist page is left alone on purpose: those restore the
+   remembered position (albRestoreView / restoreView). */
+(function(){
+  'use strict';
+  var doc = document;
+  var sc = doc.getElementById('scroll'), tp = doc.getElementById('topBlur');
+  if(!sc) return;
+
+  var EDGE = 0.68;          /* the part of the visible ramp that is too blurred to click */
+
+  function gate(){
+    if(!tp) return 0;
+    var g = parseFloat(getComputedStyle(tp).getPropertyValue('--tpgate'));
+    return isFinite(g) ? g : 0;
+  }
+  function restMotion(){
+    try{ if(window.svaraGfx && typeof window.svaraGfx.reduced === 'function') return !!window.svaraGfx.reduced() }catch(e){}
+    try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) }catch(e){}
+    return false;
+  }
+
+  /* every element the app treats as a control; anything else is not a target */
+  var TARGETS = 'button,a,[role="button"],[data-play],[data-rail],[data-chip],[data-id],' +
+    '[data-artist-id],[data-artist-name],[data-lib],[data-libtab],[data-libsort],[data-sfilter],' +
+    '[data-qp],[data-qpmore],[data-qpall],[data-qpback],[data-trshuffle],[data-trmix],' +
+    '[data-artplay],[data-artmix],[data-artshowall],[data-artback],[data-albplay],[data-albback],' +
+    '.chip,.row,.rail';
+
+  var down = null;
+  window.addEventListener('pointerdown', function(e){
+    down = (e && e.pointerType !== 'mouse') ? null : { x:e.clientX, y:e.clientY };
+  }, true);
+
+  window.addEventListener('click', function(e){
+    if(!e || e.button) return;                           /* a plain left click only */
+    if(!e.clientY && !e.clientX) return;                 /* keyboard activation: never block */
+    if(down && (Math.abs(e.clientX - down.x) > 8 || Math.abs(e.clientY - down.y) > 8)) return;
+    var g = gate(); if(g <= 0.02) return;
+    var ramp = tp.offsetHeight || 230;
+    if(e.clientY >= ramp * g * EDGE) return;             /* only slightly blurred: let it through */
+    var t = e.target;
+    if(!t || !t.closest) return;
+    var el = t.closest(TARGETS);
+    if(!el || !sc.contains(el)) return;
+    /* scroll the whole card/row into view, not the little heart or dots button that was clicked */
+    var block = el.closest('.row,.rail') || el;
+    if(!sc.contains(block)) block = el;
+    /* the block's own top, in the feed's scroll space, parked just below the ramp */
+    var r = block.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    var target = r.top - sr.top + sc.scrollTop - (ramp + 10);
+    if(target < 0) target = 0;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    try{ sc.scrollTo({ top:target, behavior: restMotion() ? 'auto' : 'smooth' }) }
+    catch(err){ sc.scrollTop = target }
+  }, true);
+
+  /* ---------- every page change opens at the top ---------- */
+  function toTop(){ try{ if(sc.scrollTop) sc.scrollTop = 0 }catch(e){} }
+  /* The page's identity as showDyn() receives it — its title, with any markup stripped. A REPAINT
+     of the page already on screen keeps it; that is the test, not "a function was called". It
+     matters because paging repaints the results through paintSearch() -> showDyn() with the same
+     title: no jump, the rows simply arrive under the reader. */
+  function pageKey(t){
+    /* the Library's own tab and sort strips repaint under the SAME "Library" title, so they are
+       part of the identity: switching Songs -> Albums is a new list and opens at the top too */
+    var k = '', a = doc.querySelector('#dynSec [data-libtab].on'), b = doc.querySelector('#dynSec [data-libsort].on');
+    if(a) k += '|' + a.getAttribute('data-libtab');
+    if(b) k += '|' + b.getAttribute('data-libsort');
+    return String(t == null ? '' : t).replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim() + k;
+  }
+  var lastPage = '';
+
+  var _showDyn = window.showDyn, _goHome = window.goHome;
+  if(typeof _showDyn === 'function'){
+    window.showDyn = function(title){
+      var out = _showDyn.apply(this, arguments);
+      var key = pageKey(title);                     /* read AFTER the paint: the new tab is live */
+      if(key !== lastPage){ lastPage = key; toTop() }
+      return out;
+    };
+  }
+  if(typeof _goHome === 'function'){
+    window.goHome = function(){
+      var out = _goHome.apply(this, arguments);
+      lastPage = '\u0000home';
+      toTop();
+      return out;
+    };
+  }
+  /* A NEW SEARCH IS A NEW LIST even when it repaints under the SAME title — the filter pills
+     (All / Songs / Albums / Artists), a mood pill, or Search pressed again. doSearch() paints
+     "Searching…" synchronously before its fetch, so the reset belongs here, at the call. */
+  var _doSearch = window.doSearch;
+  if(typeof _doSearch === 'function'){
+    window.doSearch = function(){
+      var out = _doSearch.apply(this, arguments);
+      toTop();
+      return out;
+    };
+  }
+})();
+</script>
+<script id="v28js">
+/* ===== WAVE 28 — a stream that fails once is RETRIED, not silently dead =========================
+   THE EVIDENCE (the app's own console): `stream: upstream 403 for ju4KQTOwLOI (host rr2---sn-gwpa-pmfl)
+   — refreshing URL and retrying once` followed by `stream: upstream 403 again … — giving up`. The
+   route then answers 502. On the CLIENT that 502 was the end of the story: setNowUI() had already
+   run, the audio element fired `error`, the "Starting…" flag was cleared — and nothing else
+   happened. The player sat on a track it would never play, with no message, until the user pressed
+   next. googlevideo 403s are not deterministic (the same id resolves and plays on the next attempt —
+   that is why the server keeps a retry at all), so one client-side retry is worth having.
+
+   WAVE 29 — WHY THE RETRY NEVER RAN. This block used to hold a reference to `#audio`, the FIRST
+   media element, and compare that element's src with the current track. The app plays on TWO
+   elements: a hand-off or a crossfade swaps the active one to `#audioAlt`, and the idle `#audio`
+   is then immediately pointed at the FOLLOWING track's stream by the preloader. From the second
+   track onward the old check therefore compared the wrong stream, returned early, and the only
+   thing the listener heard about a failed load was the generic "Stream error — try the next track"
+   from the base handler — exactly the report ("a few songs play, then a failure, and pressing the
+   track again plays it"). It now uses the element the event fired on (`this`, already filtered to
+   the active one by onAudio) and always acts through the live `audio` reference.
+
+   WHAT THIS DOES: on the ACTIVE element's `error`, if the loaded stream is the one belonging to the
+   current queue item, reload that same /api/stream URL. By then the server has already dropped the
+   dead URL from its cache (it does that before its own retry), so the reload is a real re-resolve,
+   not the same 403 again. The budget is TWO retries per track per failure episode, 700 ms then
+   1.8 s apart, because the 403s the server logs are bursts that clear in a second or two; a
+   successful `playing` wipes that track's history, so a later, unrelated failure gets its full
+   budget again (it used to be a one-shot flag that never reset). MEDIA_ERR_ABORTED is ignored
+   outright — a load cancelled by picking another row is not a stream failure. When both retries
+   fail the app says so out loud and, if the queue has a next track, moves to it (at most two
+   auto-skips in a row, so a dead network cannot walk through a whole playlist).
+
+   The cache-buster `&r=` only stops a stopped-but-cached media load from being reused; /api/stream
+   reads `id` and ignores everything else. onAudio() above only lets the ACTIVE element through, so a
+   failed crossfade into audioAlt is still handled by the crossfade's own onErr, exactly as before. */
+(function(){
+  'use strict';
+  if(!window.onAudio) return;
+  window.__svaraStreamGuard = true;   // the base `error` toast stands down: this block speaks instead
+  var tries = {};        // video id -> retries already spent in its current failure episode
+  var MAX_TRIES = 2;
+  var skips = 0;         // consecutive auto-skips; reset by any successful start
+
+  function curItem(){
+    try{ if(!queue || !seq || cur < 0 || cur >= seq.length) return null; return queue[seq[cur]] || null }
+    catch(e){ return null }
+  }
+  function sameStream(it, el){
+    try{
+      if(!it || !el) return false;
+      var s = el.getAttribute('src') || '', base = '/api/stream?id=' + it.id;
+      /* the retry's own URL carries `&r=<stamp>` — this must still count as THE SAME stream, or the
+         second failure would be ignored and the player would sit dead on a track it cannot play. */
+      return s === base || s.indexOf(base + '&') === 0;
+    }catch(e){ return false }
+  }
+  function label(it){
+    var t = String((it && it.title) || 'this track').replace(/\s+/g,' ').trim();
+    return t.length > 42 ? t.slice(0,41) + '…' : t;
+  }
+
+  onAudio('playing', function(){
+    skips = 0;
+    var it = curItem();
+    if(it && it.id) delete tries[it.id];   // a good start wipes that track's failure history
+  });
+  onAudio('error', function(){
+    var el = this;                          // the ACTIVE element the event fired on (see the head)
+    var e = el && el.error;
+    if(e && e.code === 1) return;           // MEDIA_ERR_ABORTED — a cancelled load is not a failure
+    var it = curItem();
+    if(!it || !it.id || !sameStream(it, el)) return;      // not a failed track load (empty src, a probe)
+    var n = tries[it.id] || 0;
+    if(n >= MAX_TRIES){
+      if(cur + 1 < seq.length && skips < 2){
+        skips++;
+        toast('Couldn’t play “' + label(it) + '” — trying the next track');
+        setTimeout(function(){ try{ nextTrack(false) }catch(e){} }, 350);
+      } else {
+        toast('Couldn’t play “' + label(it) + '” — check your connection and try again');
+      }
+      return;
+    }
+    var id = it.id, wait = n ? 1800 : 700;
+    tries[id] = n + 1;
+    toast((n ? 'Retrying “' : 'Reconnecting “') + label(it) + '”…');
+    setTimeout(function(){
+      var now = curItem();
+      if(!now || now.id !== id) return;                   // the user moved on while we waited
+      var target = (typeof audio !== 'undefined' && audio) ? audio : el;
+      /* WAVE 29: clear first, then load. Assigning `src` alone leaves a failed MEDIA load's error
+         state readable for a moment; load() starts the new resource from a clean slate. */
+      try{ target.src = '/api/stream?id=' + id + '&r=' + Date.now(); target.load() }catch(e){ return }
+      var p = target.play();
+      if(p && p.catch) p.catch(function(){});             // a refusal is reported by `error`, not here
+    }, wait);
+  });
+})();
+</script>
+
+<style id="v30qcss">
+/* ===== WAVE 30 — Up next: the lock, the drag handle, and a queue that keeps its history ===== */
+/* Autoplay similar sits in the CENTRE of the bar; the lock + Clear stay right-aligned. Centring is
+   done out of flow (the button is inserted by the v3js layer at runtime, so a 3-column grid cannot
+   count on it): the flex row is just [lock][Clear] pushed right, and #v3auto is pinned to 50%.
+   `max-width` keeps it clear of the right-hand pair on a narrow rail. */
+#pvHead{position:relative}
+#v3auto{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;max-width:calc(100% - 170px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pvHead .go{margin-left:0}
+#pvHead .go#qLock{margin-left:auto}      /* id+class: must outrank the .go reset above */
+#qLock{padding:5px;border-radius:8px;color:var(--dim);display:inline-flex;align-items:center;justify-content:center;transition:color .12s,background .12s}
+#qLock .ic{width:17px;height:17px}
+#qLock:hover{color:var(--tx);background:var(--panel)}
+#qLock.un{color:var(--acc)}
+/* The two-bar handle: hidden while the queue is LOCKED (the default), and the only thing that
+   replaces the row's Like heart once it is unlocked. `disabled` = a row that cannot be dragged
+   (already played, or the one playing now). */
+#pvQueue .qgrip{display:none;padding:7px;border-radius:50%;color:var(--dim);cursor:grab;touch-action:none}
+#pvQueue .qgrip .ic{width:17px;height:17px}
+#pvQueue .qgrip:hover{color:var(--tx);background:var(--panel)}
+#pvQueue .qgrip[disabled]{cursor:default;opacity:.26}
+#pvQueue .qgrip[disabled]:hover{color:var(--dim);background:none}
+html[data-qunlock="1"] #pvQueue .qgrip{display:inline-flex}
+html[data-qunlock="1"] #pvQueue .favh{display:none}
+/* Rows above the playing one: already heard (or dragged there on purpose) — dimmed until the
+   pointer is on them, exactly like a normal row brightens on hover. */
+#pvQueue .row.qp{opacity:.5;transition:opacity .12s ease}
+#pvQueue .row.qp:hover{opacity:1}
+/* the lifted row, while it is being carried */
+#pvQueue .row.qdrag{background:var(--panel2);box-shadow:0 10px 26px rgba(0,0,0,.5);position:relative;z-index:2}
+#pvQueue.qdragging,#pvQueue.qdragging .row{cursor:grabbing}
+</style>
+<script id="v30qjs">
+/* ===== WAVE 30 — unlock the Up-next list =====
+   (1) LOCK / UNLOCK. The padlock next to Clear is CLOSED by default. Unlocked, a queue row swaps
+       its Like heart for the two-bar drag handle — ⋮ stays, one slot to the left, now the last
+       button in the row. The state is a display preference for THIS RUN only: it is written
+       nowhere and never touches `queue`, `seq` or `cur`. Changing song, opening the player page
+       or leaving the queue unlocked all keep it, but every launch starts locked again.
+   (2) DRAG TO REORDER. Every row with a live handle can be dragged anywhere in the list — only the
+       playing row itself is pinned. Crossing it is what moves a song in or out of the part already
+       heard: a played song dropped below it plays again, an unplayed one dropped above it is
+       skipped, and rows above the playing row stay dimmed (brightening on hover) to say so. The
+       drop rewrites `seq` — playback order — so the next track follows exactly what the list shows.
+   (3) The list itself now draws in seq order (see renderQueue): played rows stay above the now-
+       playing row, and the panel parks that row at the top whenever the track changes, so the
+       history is one scroll up rather than gone. */
+(function(){
+'use strict';
+/* UNLOCK IS PER RUN — it used to be persisted under 'sv_q_unlock', so a restart came back still
+   unlocked. The lock is now closed on every launch. The old key is cleared once so a profile
+   that unlocked before this change cannot carry the state into this build. */
+try{ localStorage.removeItem('sv_q_unlock') }catch(e){}
+var unlocked = false;
+var lastScrollId = null;
+
+function box(){ return document.getElementById('pvQueue') }
+
+function paintLock(){
+  document.documentElement.setAttribute('data-qunlock', unlocked ? '1' : '0');
+  var b = document.getElementById('qLock'); if(!b) return;
+  b.classList.toggle('un', unlocked);
+  b.setAttribute('aria-pressed', unlocked ? 'true' : 'false');
+  b.title = unlocked ? 'Queue unlocked' : 'Queue locked';
+  b.innerHTML = '<span class="ic">' + ic(unlocked ? 'i-lock-open' : 'i-lock') + '</span>';
+}
+
+/* Rows before the playing one are the part of the queue that has already been heard: dim them (the
+   row brightens on hover) and let them dim/brighten live while a drag rewrites that boundary. */
+function markPast(){
+  var el = box(); if(!el) return;
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var ci = -1;
+  for(var i=0;i<rows.length;i++){ if(rows[i].classList.contains('cur')){ ci = i; break } }
+  rows.forEach(function(r, i){ r.classList.toggle('qp', ci >= 0 && i < ci) });
+}
+
+/* Put a handle on every queue row. Every song can be dragged — only the one that is playing right
+   now is pinned (moving it would move the ‘currently playing’ divider for no reason). Runs after
+   each renderQueue(), so it survives every repaint (a track change, a Like, a credit repair). */
+function decorate(){
+  var el = box(); if(!el) return;
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var ci = -1;
+  for(var i=0;i<rows.length;i++){ if(rows[i].classList.contains('cur')){ ci = i; break } }
+  rows.forEach(function(r, i){
+    var rr = r.querySelector('.rr'); if(!rr) return;
+    var g = rr.querySelector('[data-qgrip]');
+    if(!g){
+      g = document.createElement('button');
+      g.type = 'button';
+      g.className = 'qgrip';
+      g.setAttribute('data-qgrip', '1');
+      g.innerHTML = '<span class="ic">' + ic('i-grip') + '</span>';
+      rr.appendChild(g);
+    }
+    var movable = (ci < 0) || (i !== ci);
+    g.disabled = !movable;
+    g.title = movable ? 'Drag to move this song' : 'Playing now';
+  });
+  markPast();
+}
+
+/* Park the now-playing row at the top of the panel. Only the panel's own scroll, only while the
+   player page and the Up next tab are actually on screen. */
+function scrollToCurrent(){
+  var el = box(); if(!el || el.hidden) return;
+  if(!document.body.classList.contains('pv')) return;
+  var row = el.querySelector('.row.cur'); if(!row) return;
+  var top = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 4;
+  el.scrollTop = Math.max(0, top);
+}
+
+var _rq30 = renderQueue;
+renderQueue = function(){
+  _rq30.apply(this, arguments);
+  decorate();
+  var it = (typeof nowItem === 'function') ? nowItem() : null;
+  var id = it ? it.id : null;
+  if(id !== lastScrollId){ lastScrollId = id; scrollToCurrent() }
+};
+
+/* A fresh open of the player page always re-parks the playing row (the panel may have been left
+   scrolled into the history), and so does switching back from the Lyrics tab. */
+var _openPV30 = openPV;
+openPV = function(){ lastScrollId = null; return _openPV30.apply(this, arguments) };
+try{
+  document.querySelectorAll('.tab').forEach(function(t){
+    if(t.dataset.tab !== 'up') return;
+    t.addEventListener('click', function(){ lastScrollId = null; renderQueue(); setTimeout(scrollToCurrent, 0) });
+  });
+}catch(e){}
+
+/* ---------- the lock ---------- */
+try{
+  var lockBtn = document.getElementById('qLock');
+  if(lockBtn) lockBtn.addEventListener('click', function(){
+    unlocked = !unlocked;
+    paintLock();
+  });
+}catch(e){}
+
+/* ---------- drag to reorder ---------- */
+var dragRow = null, dragPointer = null;
+
+function rowOf(n){ try{ return n && n.closest ? n.closest('.row[data-q]') : null }catch(e){ return null } }
+
+document.addEventListener('pointerdown', function(e){
+  if(!unlocked || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  var g = null; try{ g = e.target.closest ? e.target.closest('[data-qgrip]') : null }catch(err){}
+  if(!g || g.disabled) return;
+  var row = rowOf(g); if(!row) return;
+  e.preventDefault(); e.stopPropagation();   // never let the row's own click start playback
+  dragRow = row; dragPointer = e.pointerId;
+  row.classList.add('qdrag');
+  var el = box(); if(el) el.classList.add('qdragging');
+  try{ g.setPointerCapture(e.pointerId) }catch(err){}
+}, true);
+
+/* FLIP for the rows that give way. Before the list is re-ordered, every row's DRAWN top is
+   remembered; after the DOM change, each row that moved is animated from that old position back
+   to its new one — so the list slides into its new shape instead of snapping. Rows still gliding
+   from the previous swap are read where they are DRAWN (a running transform is part of the rect);
+   then every animation is cancelled before the new delta is taken, so a quick drag continues from
+   the current picture rather than yanking a half-finished row back to its slot. The carried row
+   is skipped on purpose: it has to stay under the pointer, not lag behind it. */
+function flipRows(rows, from, skip){
+  if(!rows.length) return;
+  var calm = false;
+  try{ calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches }catch(e){}
+  rows.forEach(function(r){ if(r._flip){ r._flip.cancel(); r._flip = null } });
+  if(calm) return;
+  rows.forEach(function(r){
+    if(r === skip) return;
+    var a = from.get(r); if(a == null) return;
+    var dy = a - r.getBoundingClientRect().top;
+    if(!(Math.abs(dy) > 0.5)) return;
+    try{
+      var an = r.animate([{transform:'translateY(' + dy.toFixed(2) + 'px)'},{transform:'translateY(0)'}],
+        {duration:220, easing:'cubic-bezier(.22,1,.36,1)'});
+      an.onfinish = function(){ if(r._flip === an) r._flip = null };
+      r._flip = an;
+    }catch(e){}
+  });
+}
+
+/* Put the carried row where the pointer is. Split out of the pointermove handler so the auto-
+   scroller can re-run it every frame: the list moves under a still pointer, and the row has to
+   follow that movement (and the dim boundary be repainted) without a fresh pointermove. */
+function placeAt(y){
+  var el = box(); if(!el || !dragRow || !dragRow.parentNode) return;
+  /* WAVE 30 · 2 — the whole list is a drop zone now: a song can cross the playing row in either
+     direction. Dragging an unplayed song ABOVE it parks that song in the part already heard (it
+     will not play on its own), and dragging a played one BELOW it puts it back in the rotation. */
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var from = new Map(), target = null, moved = false;
+  rows.forEach(function(r){ from.set(r, r.getBoundingClientRect().top) });
+  for(var j=0;j<rows.length;j++){
+    var r = rows[j]; if(r === dragRow) continue;
+    var b = r.getBoundingClientRect();
+    if(y < b.top + b.height / 2){ target = r; break }
+  }
+  if(target){ if(dragRow.nextElementSibling !== target){ el.insertBefore(dragRow, target); moved = true } }
+  else {
+    var last = rows[rows.length - 1];
+    if(last && last !== dragRow && dragRow.nextElementSibling){ el.appendChild(dragRow); moved = true }
+  }
+  if(moved) flipRows(rows, from, dragRow);
+  markPast();
+}
+
+document.addEventListener('pointermove', function(e){
+  if(!dragRow || (dragPointer != null && e.pointerId !== dragPointer)) return;
+  var el = box(); if(!el || !dragRow.parentNode) return;
+  e.preventDefault();
+  dragY = e.clientY;
+  placeAt(dragY);
+  startAutoScroll();
+}, { passive:false });
+
+/* ---------- auto-scroll while the pointer is held at an edge ----------
+   Holding the carried row against the top (or bottom) of the panel scrolls the list on its own, so
+   a song can be taken from far down the queue to the very top in one gesture. The speed ramps up
+   over the last EDGE pixels and is time-based, so it feels the same on a slow and a fast display. */
+var EDGE = 72, MAX_STEP = 19, dragY = 0, scrollRaf = 0, scrollT = 0;
+
+function autoScrollFrame(t){
+  scrollRaf = 0;
+  if(!dragRow) return;
+  var el = box(); if(!el) return;
+  var r = el.getBoundingClientRect(), d = 0;
+  if(dragY < r.top + EDGE) d = -(r.top + EDGE - dragY) / EDGE;             /* -1 … 0 */
+  else if(dragY > r.bottom - EDGE) d = (dragY - (r.bottom - EDGE)) / EDGE; /*  0 … 1 */
+  if(d){
+    var dt = scrollT ? Math.min(64, t - scrollT) : 16;
+    var step = Math.sign(d) * Math.max(2.5, Math.min(1, Math.abs(d)) * MAX_STEP) * (dt / 16);
+    var before = el.scrollTop;
+    el.scrollTop = before + step;
+    if(el.scrollTop !== before) placeAt(dragY);   /* the row rides the scroll, no pointer input */
+  }
+  scrollT = t;
+  scrollRaf = requestAnimationFrame(autoScrollFrame);
+}
+function startAutoScroll(){
+  if(scrollRaf || !dragRow) return;
+  scrollT = 0;
+  scrollRaf = requestAnimationFrame(autoScrollFrame);
+}
+function stopAutoScroll(){
+  if(scrollRaf) cancelAnimationFrame(scrollRaf);
+  scrollRaf = 0;
+}
+
+function endDrag(commit){
+  if(!dragRow) return;
+  stopAutoScroll();
+  var row = dragRow; dragRow = null; dragPointer = null;
+  row.classList.remove('qdrag');
+  var el = box(); if(el) el.classList.remove('qdragging');
+  if(commit) commitOrder(); else renderQueue();
+}
+
+document.addEventListener('pointerup', function(e){
+  if(dragPointer != null && e.pointerId !== dragPointer) return;
+  endDrag(true);
+});
+document.addEventListener('pointercancel', function(){ endDrag(true) });
+
+/* Turn the on-screen order back into `seq`. `queue` itself is not touched: its indexes are the
+   entries' identity for the whole engine, so only the play order (and `cur`'s place in it) moves. */
+function commitOrder(){
+  var el = box(); if(!el) return;
+  var rows = [].slice.call(el.querySelectorAll('.row[data-q]'));
+  var curQ = (cur >= 0 && cur < seq.length) ? seq[cur] : -1;
+  var seen = {}, out = [];
+  rows.forEach(function(r){
+    var n = parseInt(r.getAttribute('data-q'), 10);
+    if(!(n >= 0) || n >= queue.length || seen[n]) return;
+    seen[n] = 1; out.push(n);
+  });
+  queue.forEach(function(_, i){ if(!seen[i]){ seen[i] = 1; out.push(i) } });
+  var same = out.length === seq.length && out.every(function(n, i){ return seq[i] === n });
+  if(same) return;
+  seq = out;
+  cur = curQ >= 0 ? out.indexOf(curQ) : 0;
+  if(cur < 0) cur = 0;
+  renderQueue();
+}
+
+/* A click on the handle is not a row click (the capture listener above already stops it, this is
+   the belt-and-braces for any path that gets its own capture listener first). */
+document.addEventListener('click', function(e){
+  var g = null; try{ g = e.target.closest ? e.target.closest('[data-qgrip]') : null }catch(err){}
+  if(!g) return;
+  e.preventDefault(); e.stopPropagation();
+}, true);
+
+paintLock();
+try{ if(box() && box().querySelector('.row[data-q]')) decorate() }catch(e){}
+})();
+</script>
+
+<style id="v31css">
+/* ===== WAVE 31 — lyrics header: pills + fullscreen on one line, and it slides away ===== */
+/* In FULLSCREEN the header is always open: it is the only way back out of that view. The hover
+   rule is for the side panel only, so this must outrank `#pvLyrics:hover #lyrHead` without an
+   !important (two ids beat id + pseudo-class + id). */
+body.lyrfull #pvLyrics #lyrHead{grid-template-rows:1fr;opacity:1;transform:none}
+/* The pill now OWNS the row's free width: it starts at the panel's left edge and runs to the
+   fullscreen button, and the three providers split it into equal thirds. Longer box, taller box,
+   larger type — the fullscreen button keeps its exact 38px box, it is only the row around it that
+   grew. Its height is 34px of button + 3px trough padding + 1px border on each side = 42px. */
+#lyrBar .lyrchip{flex:1 1 auto;min-width:0;padding:3px}
+#lyrBar .lyrchip button{height:34px;display:inline-flex;align-items:center;justify-content:center;
+  padding:0 8px;font-size:13px;letter-spacing:.2px;flex:1 1 0;min-width:0;overflow:hidden}
+/* The rail is 27.5vw (290px floor / 560px ceiling), so the room per button shrinks with the
+   WINDOW: step the type down as it does instead of ellipsising a provider name. */
+@media (max-width:1500px){#lyrBar .lyrchip button{font-size:12px;padding:0 6px}}
+@media (max-width:1380px){#lyrBar .lyrchip button{font-size:11px;padding:0 4px;letter-spacing:.1px}}
+@media (max-width:1250px){#lyrBar .lyrchip button{font-size:10px;padding:0 3px;letter-spacing:0}}
+@media (max-width:1140px){#lyrBar .lyrchip{padding:2px;gap:2px}#lyrBar .lyrchip button{font-size:9px;padding:0 2px}}
+</style>
 </body>
 </html>
