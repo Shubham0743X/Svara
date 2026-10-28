@@ -52,7 +52,7 @@ Every version, with notes, is under [Releases](https://github.com/Shubham0743X/S
   </tr>
   <tr>
     <td width="50%"><img src="Visuals/library-tab.png" alt="Library with playlists, songs, albums and artists" width="100%"></td>
-    <td width="50%"><img src="Visuals/personalization-screen.png" alt="First-run personalisation screen" width="100%"></td>
+    <td width="50%"><img src="Visuals/personalization-screen.png" alt="First-run personalization screen" width="100%"></td>
   </tr>
 </table>
 
@@ -82,7 +82,7 @@ Your liked songs, albums, playlists, listening history, theme, graphics level an
 stored **locally** in `%APPDATA%\Svara`, never inside the app itself.
 
 - There is no account, no sign-in and no analytics.
-- Nothing is sent anywhere except the requests that fetch the music and artwork you asked for.
+- Nothing is sent anywhere except requests to fetch the music, artwork and lyrics you asked for (YouTube and third-party lyrics services such as LRCLIB).
 - Installing, updating, reinstalling or uninstalling Svara never touches your library.
 - The installed and portable versions share the same folder, so they're interchangeable.
 - Downloaded tracks go to your normal Windows **Downloads** folder.
@@ -130,12 +130,14 @@ npx electron-builder --win nsis   # build the installer into dist/
 downloads. The whole UI is a single file, `index.html`.
 
 ```
-electron/main.js   desktop shell: window, security settings, starts the server
-server.js          local API: search, albums, artists, lyrics, streaming, downloads
-index.html         the entire interface
-fonts/             bundled UI fonts (third-party, see licence note below)
-build/             app icon
-Visuals/           screenshots used in this README
+electron/main.js         desktop shell: window, security settings, starts the server
+server.js                local API: search, albums, artists, lyrics, streaming, downloads
+index.html               the entire interface
+fonts/                   bundled UI fonts (third-party; see THIRD_PARTY_NOTICES.md)
+build/                   app icon
+Visuals/                 screenshots used in this README
+LICENSE                  MIT license for the app's code
+THIRD_PARTY_NOTICES.md   fonts, bundled software and trademarks
 ```
 
 ## About
@@ -148,5 +150,7 @@ Service.
 
 ## License
 
-The app's **code** is [MIT licensed](LICENSE). The **bundled UI fonts are third-party and are not
-covered by MIT**. See [`fonts/COPYRIGHT.txt`](fonts/COPYRIGHT.txt).
+Svara's **code** is [MIT licensed](LICENSE). The bundled UI fonts and other
+third-party components are **not** covered by MIT; see
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
+[`fonts/COPYRIGHT.txt`](fonts/COPYRIGHT.txt).
