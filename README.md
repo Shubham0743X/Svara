@@ -44,14 +44,14 @@ Every version, with notes, is under [Releases](https://github.com/Shubham0743X/S
 <table>
   <tr>
     <td width="50%"><img src="Visuals/player-page.png" alt="Now playing: artwork, transport controls and the Up next queue" width="100%"></td>
-    <td width="50%"><img src="Visuals/player-page-up-next.png" alt="Up next queue, reordered by dragging a song" width="100%"></td>
-  </tr>
-  <tr>
     <td width="50%"><img src="Visuals/fullscreen-lyrics.png" alt="Fullscreen synced lyrics with karaoke highlighting" width="100%"></td>
-    <td width="50%"><img src="Visuals/library-tab.png" alt="Library with playlists, songs, albums and artists" width="100%"></td>
   </tr>
   <tr>
     <td width="50%"><img src="Visuals/artist-page.png" alt="Artist page with top songs and albums" width="100%"></td>
+    <td width="50%"><img src="Visuals/player-page-up-next.png" alt="Up next queue, reordered by dragging a song" width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="Visuals/library-tab.png" alt="Library with playlists, songs, albums and artists" width="100%"></td>
     <td width="50%"><img src="Visuals/personalization-screen.png" alt="First-run personalisation screen" width="100%"></td>
   </tr>
 </table>
